@@ -20,6 +20,7 @@ import { CharacterForm, type CharacterFormData } from '@/components/character/ch
 import { DialogFooter } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
+import { QuestMapViewer } from '@/components/shared/quest-map-viewer';
 
 type SortableReaperColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'maxRXP' | `skull-${number}`;
 
@@ -119,6 +120,8 @@ export default function ReaperRewardsPage() {
   const [clickAction, setClickAction] = useState<'none' | 'wiki' | 'map'>('none');
   const [isWikiOpen, setIsWikiOpen] = useState(false);
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
+  const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
+  const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
 
@@ -217,6 +220,13 @@ export default function ReaperRewardsPage() {
             setIsWikiOpen(true);
         } else {
             toast({ title: "No Wiki Link", description: `A wiki link is not available for "${quest.name}".` });
+        }
+    } else if (clickAction === 'map') {
+        if (quest.mapUrls && quest.mapUrls.length > 0) {
+            setSelectedQuestForMap(quest);
+            setIsMapViewerOpen(true);
+        } else {
+            toast({ title: "No Maps Available", description: `Maps are not available for "${quest.name}".` });
         }
     }
   };
@@ -329,6 +339,10 @@ export default function ReaperRewardsPage() {
     return <div className="container mx-auto py-8 text-center"><AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" /><h1 className="text-2xl font-bold">Access Denied</h1><p className="text-muted-foreground mt-2">Please log in to view this page.</p><Button onClick={() => router.push('/login')} className="mt-6">Log In</Button></div>;
   }
   
+  if (!character) { 
+     return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
+  }
+  
   const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
 
   return (
@@ -358,7 +372,7 @@ export default function ReaperRewardsPage() {
               <RadioGroup value={clickAction} onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')} className="flex items-center space-x-4" disabled={pageOverallLoading}>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-reaper" /><Label htmlFor="action-none-reaper" className="font-normal cursor-pointer">None</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-reaper" /><Label htmlFor="action-wiki-reaper" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-reaper" disabled/><Label htmlFor="action-map-reaper" className="font-normal cursor-not-allowed opacity-50 flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-reaper" /><Label htmlFor="action-map-reaper" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
               </RadioGroup>
             </div>
           </div>
@@ -459,6 +473,14 @@ export default function ReaperRewardsPage() {
             onOpenChange={setIsWikiOpen}
             questName={selectedQuest.name}
             wikiUrl={selectedQuest.wikiUrl}
+        />
+      )}
+       {selectedQuestForMap && (
+        <QuestMapViewer
+          isOpen={isMapViewerOpen}
+          onOpenChange={setIsMapViewerOpen}
+          questName={selectedQuestForMap.name}
+          mapUrls={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>

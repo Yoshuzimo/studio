@@ -21,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { CharacterForm, type CharacterFormData } from '@/components/character/character-form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
+import { QuestMapViewer } from '@/components/shared/quest-map-viewer';
 import { Checkbox } from '@/components/ui/checkbox';
 
 type SortableQuestGuideColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'adjustedCasualExp' | 'adjustedNormalExp' | 'adjustedHardExp' | 'adjustedEliteExp' | 'maxExp' | 'experienceScore';
@@ -101,6 +102,8 @@ export default function QuestGuidePage() {
   const [clickAction, setClickAction] = useState<'none' | 'wiki' | 'map'>('none');
   const [isWikiOpen, setIsWikiOpen] = useState(false);
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
+  const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
+  const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
 
@@ -181,6 +184,13 @@ export default function QuestGuidePage() {
             setIsWikiOpen(true);
         } else {
             toast({ title: "No Wiki Link", description: `A wiki link is not available for "${quest.name}".` });
+        }
+    } else if (clickAction === 'map') {
+        if (quest.mapUrls && quest.mapUrls.length > 0) {
+            setSelectedQuestForMap(quest);
+            setIsMapViewerOpen(true);
+        } else {
+            toast({ title: "No Maps Available", description: `Maps are not available for "${quest.name}".` });
         }
     }
   };
@@ -271,7 +281,7 @@ export default function QuestGuidePage() {
     return <ArrowDown className="ml-2 h-3 w-3 text-accent" />; 
   };
   
-  if (authIsLoading || (!currentUser && !authIsLoading) || (!character && isDataLoaded && currentUser)) {
+  if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
   }
   if (!currentUser) { 
@@ -329,15 +339,9 @@ export default function QuestGuidePage() {
               <div className="pt-2 border-t border-border mt-4">
                 <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
                 <RadioGroup value={clickAction} onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')} className="flex items-center space-x-4" disabled={pageOverallLoading}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="none" id="action-none-guide" /><Label htmlFor="action-none-guide" className="font-normal cursor-pointer">None</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="wiki" id="action-wiki-guide" /><Label htmlFor="action-wiki-guide" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="map" id="action-map-guide" disabled/><Label htmlFor="action-map-guide" className="font-normal cursor-not-allowed opacity-50 flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label>
-                  </div>
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-guide" /><Label htmlFor="action-none-guide" className="font-normal cursor-pointer">None</Label></div>
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-guide" /><Label htmlFor="action-wiki-guide" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-guide" /><Label htmlFor="action-map-guide" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
                 </RadioGroup>
               </div>
             </div>
@@ -451,6 +455,14 @@ export default function QuestGuidePage() {
             onOpenChange={setIsWikiOpen}
             questName={selectedQuest.name}
             wikiUrl={selectedQuest.wikiUrl}
+        />
+      )}
+      {selectedQuestForMap && (
+        <QuestMapViewer
+          isOpen={isMapViewerOpen}
+          onOpenChange={setIsMapViewerOpen}
+          questName={selectedQuestForMap.name}
+          mapUrls={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>

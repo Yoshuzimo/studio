@@ -1,4 +1,3 @@
-
 // src/components/shared/quest-map-viewer.tsx
 "use client";
 
@@ -13,8 +12,10 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, Loader2, ExternalLink } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Menu, Loader2, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '../ui/scroll-area';
 
 interface QuestMapViewerProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export function QuestMapViewer({
 }: QuestMapViewerProps) {
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -39,31 +41,53 @@ export function QuestMapViewer({
     }
   }, [isOpen]);
 
-  const handleNext = () => {
-    setIsLoading(true);
-    setCurrentMapIndex((prev) => (prev + 1) % mapUrls.length);
-  };
-
-  const handlePrev = () => {
-    setIsLoading(true);
-    setCurrentMapIndex((prev) => (prev - 1 + mapUrls.length) % mapUrls.length);
-  };
-
   const currentMapUrl = mapUrls[currentMapIndex];
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-2 sm:p-4">
+      <DialogContent className="max-w-7xl w-full h-[95vh] flex flex-col p-2 sm:p-4">
         <DialogHeader className="p-4 pb-2 border-b">
-          <DialogTitle className="font-headline">{questName} - Map ({currentMapIndex + 1} of {mapUrls.length})</DialogTitle>
+          <DialogTitle className="font-headline">{questName} - Map Viewer</DialogTitle>
           <DialogDescription>
-            Map image from the DDO Wiki.
+            Map {currentMapIndex + 1} of {mapUrls.length}. Hover over the menu icon to select a map.
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex-grow relative flex items-center justify-center bg-muted/20 rounded-md overflow-hidden">
+        <div className="flex-grow relative bg-muted/20 rounded-md overflow-hidden">
+          {/* Menu Popover */}
+          <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon" className="absolute top-4 left-4 z-20 bg-background/70 backdrop-blur-sm">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="right" align="start" className="w-auto p-2">
+              <ScrollArea className="h-auto max-h-[70vh]">
+                <div className="space-y-2">
+                  {mapUrls.map((url, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "relative w-40 h-24 rounded-md overflow-hidden cursor-pointer border-2 transition-all",
+                        currentMapIndex === index ? "border-primary" : "border-transparent hover:border-accent"
+                      )}
+                      onClick={() => {
+                        setIsLoading(true);
+                        setCurrentMapIndex(index);
+                        setIsPopoverOpen(false);
+                      }}
+                    >
+                      <Image src={url} alt={`Map thumbnail ${index + 1}`} layout="fill" objectFit="cover" sizes="160px" />
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </PopoverContent>
+          </Popover>
+
+          {/* Main Image */}
           {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+            <div className="absolute inset-0 flex items-center justify-center z-10">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
             </div>
           )}
@@ -71,8 +95,8 @@ export function QuestMapViewer({
             <Image
               src={currentMapUrl}
               alt={`Map ${currentMapIndex + 1} for ${questName}`}
-              layout="fill"
-              objectFit="contain"
+              fill
+              style={{ objectFit: 'contain' }}
               onLoad={() => setIsLoading(false)}
               onError={() => setIsLoading(false)}
               className={cn("transition-opacity duration-300", isLoading ? "opacity-0" : "opacity-100")}
@@ -80,19 +104,7 @@ export function QuestMapViewer({
           )}
         </div>
         
-        <DialogFooter className="flex-row justify-between items-center p-4 pt-2 border-t">
-          <div className="flex gap-2">
-            {mapUrls.length > 1 && (
-              <>
-                <Button variant="outline" size="icon" onClick={handlePrev} disabled={isLoading}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" onClick={handleNext} disabled={isLoading}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </>
-            )}
-          </div>
+        <DialogFooter className="flex-row justify-end items-center p-4 pt-2 border-t">
           <Button variant="ghost" onClick={() => window.open(currentMapUrl, '_blank')}>
             <ExternalLink className="mr-2 h-4 w-4" /> Open Image in New Tab
           </Button>

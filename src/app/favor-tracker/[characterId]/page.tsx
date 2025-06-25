@@ -25,6 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { CharacterForm, type CharacterFormData } from '@/components/character/character-form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
+import { QuestMapViewer } from '@/components/shared/quest-map-viewer';
 
 
 type DifficultyKey = 'casualCompleted' | 'normalCompleted' | 'hardCompleted' | 'eliteCompleted';
@@ -165,6 +166,9 @@ export default function FavorTrackerPage() {
   const [clickAction, setClickAction] = useState<'none' | 'wiki' | 'map'>('none');
   const [isWikiOpen, setIsWikiOpen] = useState(false);
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
+  const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
+  const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
+
 
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
 
@@ -423,8 +427,14 @@ export default function FavorTrackerPage() {
         } else {
             toast({ title: "No Wiki Link", description: `A wiki link is not available for "${quest.name}".` });
         }
+    } else if (clickAction === 'map') {
+        if (quest.mapUrls && quest.mapUrls.length > 0) {
+            setSelectedQuestForMap(quest);
+            setIsMapViewerOpen(true);
+        } else {
+            toast({ title: "No Maps Available", description: `Maps are not available for "${quest.name}".` });
+        }
     }
-    // 'map' and 'none' do nothing as requested.
   };
 
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
@@ -621,8 +631,8 @@ export default function FavorTrackerPage() {
                     <Label htmlFor="action-wiki" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="map" id="action-map" disabled/>
-                    <Label htmlFor="action-map" className="font-normal cursor-not-allowed opacity-50 flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label>
+                    <RadioGroupItem value="map" id="action-map" />
+                    <Label htmlFor="action-map" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label>
                   </div>
                 </RadioGroup>
               </div>
@@ -741,6 +751,14 @@ export default function FavorTrackerPage() {
             onOpenChange={setIsWikiOpen}
             questName={selectedQuest.name}
             wikiUrl={selectedQuest.wikiUrl}
+        />
+      )}
+      {selectedQuestForMap && (
+        <QuestMapViewer
+          isOpen={isMapViewerOpen}
+          onOpenChange={setIsMapViewerOpen}
+          questName={selectedQuestForMap.name}
+          mapUrls={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>
