@@ -1,3 +1,4 @@
+
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -753,12 +754,12 @@ export default function FavorTrackerPage() {
             wikiUrl={selectedQuest.wikiUrl}
         />
       )}
-      {selectedQuestForMap && (
+       {selectedQuestForMap && (
         <QuestMapViewer
           isOpen={isMapViewerOpen}
           onOpenChange={setIsMapViewerOpen}
           questName={selectedQuestForMap.name}
-          mapFileNames={selectedQuestForMap.mapUrls || []}
+          mapUrls={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>

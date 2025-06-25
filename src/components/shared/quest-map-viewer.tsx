@@ -1,3 +1,4 @@
+
 // src/components/shared/quest-map-viewer.tsx
 "use client";
 
@@ -20,26 +21,14 @@ import { ScrollArea } from '../ui/scroll-area';
 interface QuestMapViewerProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  mapFileNames: string[];
+  mapUrls: string[];
   questName: string;
 }
-
-// Function to construct the full Firebase Storage URL
-const getMapUrl = (fileName: string): string => {
-  const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-  if (!bucket) {
-    console.error("Firebase storage bucket URL is not configured in .env");
-    return "https://placehold.co/800x600.png"; // Fallback URL
-  }
-  // Note: a folder name like "maps" is part of the path encoded in the URL.
-  return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/maps%2F${encodeURIComponent(fileName)}?alt=media`;
-};
-
 
 export function QuestMapViewer({
   isOpen,
   onOpenChange,
-  mapFileNames,
+  mapUrls,
   questName,
 }: QuestMapViewerProps) {
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
@@ -53,7 +42,6 @@ export function QuestMapViewer({
     }
   }, [isOpen]);
 
-  const mapUrls = mapFileNames.map(getMapUrl);
   const currentMapUrl = mapUrls[currentMapIndex];
 
   return (
@@ -90,7 +78,7 @@ export function QuestMapViewer({
                         setIsPopoverOpen(false);
                       }}
                     >
-                      <Image src={url} alt={`Map thumbnail ${index + 1}`} layout="fill" objectFit="cover" sizes="160px" />
+                      <Image src={url} alt={`Map thumbnail ${index + 1}`} layout="fill" objectFit="cover" sizes="160px" data-ai-hint="map screenshot" />
                     </div>
                   ))}
                 </div>
@@ -113,6 +101,7 @@ export function QuestMapViewer({
               onLoad={() => setIsLoading(false)}
               onError={() => setIsLoading(false)}
               className={cn("transition-opacity duration-300", isLoading ? "opacity-0" : "opacity-100")}
+              data-ai-hint="map video-game"
             />
           )}
         </div>

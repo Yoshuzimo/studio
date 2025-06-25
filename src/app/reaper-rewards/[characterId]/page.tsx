@@ -1,3 +1,4 @@
+
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
@@ -480,7 +481,7 @@ export default function ReaperRewardsPage() {
           isOpen={isMapViewerOpen}
           onOpenChange={setIsMapViewerOpen}
           questName={selectedQuestForMap.name}
-          mapFileNames={selectedQuestForMap.mapUrls || []}
+          mapUrls={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>

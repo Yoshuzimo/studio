@@ -1,3 +1,4 @@
+
 // src/app/quest-guide/[characterId]/page.tsx
 "use client";
 
@@ -287,7 +288,7 @@ export default function QuestGuidePage() {
   }
   
   if (!currentUser) {
-     return <div className="container mx-auto py-8 text-center"><AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" /><h1 className="text-2xl font-bold">Access Denied</h1><p className="text-muted-foreground mt-2">Please log in to view this page.</p><Button onClick={() => router.push('/login')} className="mt-6">Log In</Button></div>;
+    return <div className="container mx-auto py-8 text-center"><AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" /><h1 className="text-2xl font-bold">Access Denied</h1><p className="text-muted-foreground mt-2">Please log in to view this page.</p><Button onClick={() => router.push('/login')} className="mt-6">Log In</Button></div>;
   }
   
   if (!character) { 
@@ -358,7 +359,7 @@ export default function QuestGuidePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${header.key}`} checked={!!popoverColumnVisibility[header.key as SortableQuestGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key as SortableQuestGuideColumnKey, !!checked)} />
+                          <Checkbox id={`vis-guide-${header.key}`} checked={!!columnVisibility[header.key as SortableQuestGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key as SortableQuestGuideColumnKey, !!checked)} />
                           <Label htmlFor={`vis-guide-${header.key}`} className="font-normal whitespace-nowrap">{header.label}</Label>
                         </div>
                       ))}
@@ -368,7 +369,7 @@ export default function QuestGuidePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {difficultyColumnKeys.map(key => (
                           <div key={key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${key}`} checked={!!popoverColumnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key, !!checked)} />
+                          <Checkbox id={`vis-guide-${key}`} checked={!!columnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key, !!checked)} />
                           <Label htmlFor={`vis-guide-${key}`} className="font-normal whitespace-nowrap">{tableHeaders.find(h=>h.key===key)?.label}</Label>
                           </div>
                       ))}
@@ -408,7 +409,7 @@ export default function QuestGuidePage() {
                         >
                             {header.icon && <header.icon className="mr-1.5 h-4 w-4" />}
                             {header.label}
-                            {header.isSortable && getSortIndicator(header.key as SortableQuestGuideColumnKey)}
+                            {header.isSortable && getSortIndicator(header.key as ActualSortKey)}
                         </Button>
                         </TableHead>
                     ))}
@@ -458,7 +459,7 @@ export default function QuestGuidePage() {
           isOpen={isMapViewerOpen}
           onOpenChange={setIsMapViewerOpen}
           questName={selectedQuestForMap.name}
-          mapFileNames={selectedQuestForMap.mapUrls || []}
+          mapUrls={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>
