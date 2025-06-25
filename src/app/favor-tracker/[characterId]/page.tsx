@@ -20,6 +20,7 @@ import { Download, UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, Arr
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { Separator } from '@/components/ui/separator';
@@ -140,7 +141,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 export default function FavorTrackerPage() {
   const params = useParams();
   const router = useRouter();
-  const { currentUser, isLoading: authIsLoading } = useAuth();
+  const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const {
     characters, quests, ownedPacks,
     batchUpdateUserQuestCompletions,
@@ -160,6 +161,7 @@ export default function FavorTrackerPage() {
   const [showCompletedQuestsWithZeroRemainingFavor, setShowCompletedQuestsWithZeroRemainingFavor] = useState(false);
   const [onCormyr, setOnCormyr] = useState(false);
   const [showRaids, setShowRaids] = useState(false);
+  const [isDebugMode, setIsDebugMode] = useState(false);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isUploadCsvDialogOpen, setIsUploadCsvDialogOpen] = useState(false);
   const [isCsvProcessing, setIsCsvProcessing] = useState(false);
@@ -481,6 +483,19 @@ export default function FavorTrackerPage() {
             return Math.round(remainingFavor * adjustmentFactor);
         };
         
+        const hiddenReasons: string[] = [];
+        const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+        
+        if (!isEligibleLevel) {
+            hiddenReasons.push(`Quest Level (${quest.level}) > Character Level (${character.level})`);
+        }
+        if (!isOwned) {
+            hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
+        }
+        
         return {
             ...quest,
             casualCompleted: getQuestCompletion(quest.id, 'casualCompleted'),
@@ -490,18 +505,24 @@ export default function FavorTrackerPage() {
             remainingPossibleFavor: remainingPossibleFavor,
             adjustedRemainingFavorScore: calculateAdjustedRemainingFavorScore(quest, remainingPossibleFavor),
             maxPotentialFavorSingleQuest: (quest.baseFavor || 0) * 3,
+            hiddenReasons,
         };
     }).filter(quest => {
-      const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
-      const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-      const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-      const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-      const shouldShow = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
       const isNotOnCormyrQuest = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
       const isNotARaidOrShouldBeShown = showRaids || !quest.name.toLowerCase().endsWith('(raid)');
       const isTestQuest = quest.name.toLowerCase().includes("test");
 
-      return isEligibleLevel && isOwned && shouldShow && isNotOnCormyrQuest && !isTestQuest && isNotARaidOrShouldBeShown;
+      if (!isNotOnCormyrQuest || isTestQuest || !isNotARaidOrShouldBeShown) {
+          return false;
+      }
+      
+      if (isDebugMode) {
+          return true;
+      }
+
+      const isEligible = quest.hiddenReasons.length === 0;
+      const shouldShow = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
+      return isEligible && shouldShow;
     });
 
     const areaAggregates = {
@@ -517,42 +538,43 @@ export default function FavorTrackerPage() {
     });
 
     const sortedQuests = [...processedQuests].sort((a, b) => {
-      // Primary sort
+      const getSortValue = (quest: typeof a, key: SortableColumnKey) => {
+          if (key === 'areaRemainingFavor') return quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : 0;
+          if (key === 'areaAdjustedRemainingFavorScore') return quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : 0;
+          if (key === 'name') return getSortableName(quest.name);
+          return quest[key as keyof typeof quest];
+      };
+
+      let comparison = 0;
       if (sortConfig) {
-        const getSortValue = (quest: typeof a, key: SortableColumnKey) => {
-            if (key === 'areaRemainingFavor') return quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : 0;
-            if (key === 'areaAdjustedRemainingFavorScore') return quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : 0;
-            if (key === 'name') return getSortableName(quest.name);
-            return quest[key as keyof typeof quest];
-        };
+          let aValue = getSortValue(a, sortConfig.key);
+          let bValue = getSortValue(b, sortConfig.key);
 
-        let aValue = getSortValue(a, sortConfig.key);
-        let bValue = getSortValue(b, sortConfig.key);
+          if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+          if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
 
-        if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-        if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-
-        let comparison = 0;
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-          comparison = aValue.localeCompare(bValue);
-        } else {
-          if (aValue < bValue) comparison = -1;
-          if (aValue > bValue) comparison = 1;
-        }
-
-        if (comparison !== 0) {
-          return sortConfig.direction === 'ascending' ? comparison : -comparison;
-        }
+          if (typeof aValue === 'string' && typeof bValue === 'string') {
+            comparison = aValue.localeCompare(bValue);
+          } else {
+            if (aValue < bValue) comparison = -1;
+            if (aValue > bValue) comparison = 1;
+          }
+          if (comparison !== 0) {
+            comparison = sortConfig.direction === 'ascending' ? comparison : -comparison;
+          }
+      }
+      
+      if (comparison === 0) {
+        return getSortableName(a.name).localeCompare(getSortableName(b.name));
       }
 
-      // Secondary sort (or default sort if no sortConfig) by quest name, ascending
-      return getSortableName(a.name).localeCompare(getSortableName(b.name));
+      return comparison;
     });
     
     return { sortedQuests, areaAggregates };
   }, [
     quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
-    completionDep, durationAdjustments, isDataLoaded, sortConfig
+    completionDep, durationAdjustments, isDataLoaded, sortConfig, isDebugMode
   ]);
 
   if (pageOverallLoading || !isDataLoaded || !character) {
@@ -612,6 +634,12 @@ export default function FavorTrackerPage() {
                         <Checkbox id="show-raids" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} aria-label="Toggle visibility of raids"/>
                         <Label htmlFor="show-raids" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Raids</Label>
                     </div>
+                    {userData?.isAdmin && (
+                      <div className="flex items-center space-x-2">
+                          <Checkbox id="debug-mode" checked={isDebugMode} onCheckedChange={(checked) => setIsDebugMode(!!checked)} disabled={pageOverallLoading}/>
+                          <Label htmlFor="debug-mode" className={cn("font-normal text-destructive", pageOverallLoading && "cursor-not-allowed opacity-50")}>Debug</Label>
+                      </div>
+                    )}
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                      <Button onClick={() => {}} variant="outline" disabled={pageOverallLoading || quests.length === 0} size="sm">
@@ -724,30 +752,48 @@ export default function FavorTrackerPage() {
                 </TableRow> </TableHeader>
                 <TableBody>
                     {sortedAndFilteredData.sortedQuests.map((quest) => (
-                    <TableRow key={quest.id} className={cn(character && quest.level > character.level ? 'opacity-60' : '', clickAction !== 'none' && 'cursor-pointer')} onClick={() => handleRowClick(quest)}>
-                        {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
-                        {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
-                        {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
-                        {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
-                        {columnVisibility['duration'] && <TableCell className="whitespace-nowrap text-center">{getDurationCategory(quest.duration) || 'N/A'}</TableCell>}
-                        {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
-                        {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
-                        {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
-                        {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
-                        {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : '-'}</TableCell>}
-                        {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : '-'}</TableCell>}
-
-                        {difficultyLevels.map(diff => columnVisibility[diff.key] && (
-                        <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
-                            <Checkbox
-                            checked={(quest as any)[diff.key]}
-                            onCheckedChange={(checked) => handleCompletionChange(quest.id, diff.key, !!checked)}
-                            disabled={!!quest[diff.notAvailableKey] || pageOverallLoading}
-                            aria-label={`${quest.name} ${diff.label} completion status`}
-                            />
-                        </TableCell>
-                        ))}
-                    </TableRow>
+                    <TooltipProvider key={quest.id} delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <TableRow
+                            className={cn(
+                              (character && quest.level > character.level && !isDebugMode) ? 'opacity-60' : '',
+                              clickAction !== 'none' && 'cursor-pointer',
+                              isDebugMode && (quest.hiddenReasons?.length ?? 0) > 0 && 'text-destructive/80 hover:text-destructive'
+                            )}
+                            onClick={() => handleRowClick(quest)}
+                          >
+                              {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
+                              {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
+                              {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
+                              {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                              {columnVisibility['duration'] && <TableCell className="whitespace-nowrap text-center">{getDurationCategory(quest.duration) || 'N/A'}</TableCell>}
+                              {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
+                              {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
+                              {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
+                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : '-'}</TableCell>}
+                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : '-'}</TableCell>}
+      
+                              {difficultyLevels.map(diff => columnVisibility[diff.key] && (
+                              <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox
+                                  checked={(quest as any)[diff.key]}
+                                  onCheckedChange={(checked) => handleCompletionChange(quest.id, diff.key, !!checked)}
+                                  disabled={!!quest[diff.notAvailableKey] || pageOverallLoading}
+                                  aria-label={`${quest.name} ${diff.label} completion status`}
+                                  />
+                              </TableCell>
+                              ))}
+                          </TableRow>
+                        </TooltipTrigger>
+                        {isDebugMode && quest.hiddenReasons && quest.hiddenReasons.length > 0 && (
+                            <TooltipContent>
+                                <p>Normally hidden because: {quest.hiddenReasons.join(', ')}</p>
+                            </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                     ))}
                 </TableBody>
                 </Table> </div>
