@@ -64,7 +64,7 @@ const questFormSchema = z.object({
   epicHardNotAvailable: z.boolean().default(false),
   epicEliteNotAvailable: z.boolean().default(false),
   // Wiki/Map Fields
-  wikiUrl: z.string().optional().or(z.literal('')),
+  wikiUrl: z.string().optional(),
   mapUrls: z.array(z.object({ value: z.string() })).optional(),
 });
 
@@ -161,12 +161,8 @@ export function QuestForm({
   }, [initialData, form, isOpen]);
 
   const handleFormSubmit = async (data: QuestFormData) => {
-    // We need to transform mapUrls from {value: string}[] to string[] for the parent
-    const submissionData = {
-      ...data,
-      mapUrls: data.mapUrls?.map(item => item.value)
-    };
-    await onSubmit(submissionData as any);
+    await onSubmit(data);
+    onOpenChange(false); // Close dialog on successful submission
   };
 
   const handleDeleteConfirm = async () => {
@@ -212,22 +208,22 @@ export function QuestForm({
                     <FormItem><FormLabel>Quest Name</FormLabel><FormControl><Input {...field} disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="adventurePackName" render={({ field }) => (
-                    <FormItem><FormLabel>Adventure Pack Name</FormLabel><FormControl><Input {...field} placeholder="e.g., The Lost Gatekeepers" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Adventure Pack Name</FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="e.g., The Lost Gatekeepers" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="location" render={({ field }) => (
-                    <FormItem><FormLabel>Location</FormLabel><FormControl><Input {...field} placeholder="e.g., The Harbor" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Location</FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="e.g., The Harbor" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="questGiver" render={({ field }) => (
-                    <FormItem><FormLabel>Quest Giver</FormLabel><FormControl><Input {...field} placeholder="e.g., Baudry Cartamon" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Quest Giver</FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="e.g., Baudry Cartamon" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="duration" render={({ field }) => (
-                    <FormItem><FormLabel>Duration</FormLabel><FormControl><Input {...field} placeholder="e.g., 20m or PT20M" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Duration</FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="e.g., 20m or PT20M" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="baseFavor" render={({ field }) => (
                     <FormItem><FormLabel>Base Favor</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="patron" render={({ field }) => (
-                    <FormItem><FormLabel>Patron</FormLabel><FormControl><Input {...field} placeholder="e.g., The Coin Lords" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Patron</FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="e.g., The Coin Lords" disabled={effectiveIsSubmitting} /></FormControl><FormMessage /></FormItem>
                   )} />
 
                   <Separator className="my-4" />
