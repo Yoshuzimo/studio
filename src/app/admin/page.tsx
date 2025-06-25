@@ -1,7 +1,7 @@
 // src/app/admin/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppData } from '@/context/app-data-context';
 import { CsvUploader } from '@/components/admin/csv-uploader';
 import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw } from 'lucide-react';
@@ -367,6 +367,10 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
     if (editingQuest && editingQuest.id === questToDeleteId) { setIsQuestFormOpen(false); setEditingQuest(null); }
   };
   
+  const sortedQuests = useMemo(() => {
+    return [...quests].sort((a, b) => a.name.localeCompare(b.name));
+  }, [quests]);
+
   const pageOverallInitialLoad = authIsLoading || isInitialAppDataLoading;
   const pageContentLoading = isInitialAppDataLoading || isLoadingSuggestions || isLoadingAllUsers; 
   const uiDisabled = pageContentLoading || isAppContextUpdating; 
@@ -469,11 +473,11 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
             <CardDescription>Overview of loaded quests. Click a quest to edit or delete.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isInitialAppDataLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <p>Total Quests: <strong>{quests.length}</strong></p>}
-             {!isInitialAppDataLoading && quests.length > 0 && (
+            {isInitialAppDataLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <p>Total Quests: <strong>{sortedQuests.length}</strong></p>}
+             {!isInitialAppDataLoading && sortedQuests.length > 0 && (
               <ScrollArea className="h-48 mt-2">
                 <ul className="space-y-1 text-sm">
-                  {quests.map(quest => (
+                  {sortedQuests.map(quest => (
                     <li
                       key={quest.id}
                       className="p-2 hover:bg-muted rounded-md cursor-pointer flex justify-between items-center group"
