@@ -269,24 +269,26 @@ export default function ReaperRewardsPage() {
         const charLvl = character.level;
         const questLvl = quest.level;
         const hiddenReasons: string[] = [];
-
-        if (charLvl < questLvl) hiddenReasons.push(`Character Level (${charLvl}) < Quest Level (${questLvl})`);
         
-        if (charLvl >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
-        else if (charLvl >= 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
-        else if (questLvl >= 20 && charLvl < 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
-        else if (questLvl < 20 && charLvl - questLvl > 4) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 4 for heroic levels.`);
+        if (!isDebugMode) {
+          if (charLvl < questLvl) hiddenReasons.push(`Character Level (${charLvl}) < Quest Level (${questLvl})`);
+          
+          if (charLvl >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
+          else if (charLvl >= 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
+          else if (questLvl >= 20 && charLvl < 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
+          else if (questLvl < 20 && charLvl - questLvl > 4) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 4 for heroic levels.`);
 
-        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        if (!isOwned) hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
+          const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+          const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+          const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+          if (!isOwned) hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
 
-        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
-        
-        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
+          if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
+          
+          if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
 
-        if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
+          if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
+        }
 
         return {
             ...quest,
@@ -407,7 +409,10 @@ export default function ReaperRewardsPage() {
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
         <CardHeader className="bg-card border-b">
           <div className="flex justify-between items-center">
-            <CardTitle className="font-headline flex items-center"><Skull className="mr-2 h-6 w-6 text-primary" /> Reaper Rewards</CardTitle>
+            <CardTitle className="font-headline flex items-center">
+              <Skull className="mr-2 h-6 w-6 text-primary" /> Reaper Rewards
+              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedAndFilteredQuests.length} quests)</span>}
+            </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/favor-tracker/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><ListOrdered className="mr-2 h-4 w-4" />Favor Tracker</Button></Link>
               <Link href={`/quest-guide/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><BookOpen className="mr-2 h-4 w-4" />Quest Guide</Button></Link>

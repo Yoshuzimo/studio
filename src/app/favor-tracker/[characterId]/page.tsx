@@ -484,28 +484,30 @@ export default function FavorTrackerPage() {
         };
         
         const hiddenReasons: string[] = [];
-        const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
-        if (!isEligibleLevel) {
-            hiddenReasons.push(`Quest Level (${quest.level}) > Character Level (${character.level})`);
-        }
+        if (!isDebugMode) {
+          const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
+          if (!isEligibleLevel) {
+              hiddenReasons.push(`Quest Level (${quest.level}) > Character Level (${character.level})`);
+          }
 
-        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        if (!isOwned) {
-            hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
-        }
-        
-        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") {
-          hiddenReasons.push('Hidden by "On Cormyr" filter');
-        }
+          const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+          const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+          const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+          if (!isOwned) {
+              hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
+          }
+          
+          if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") {
+            hiddenReasons.push('Hidden by "On Cormyr" filter');
+          }
 
-        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) {
-          hiddenReasons.push('Is a Raid (hidden by filter)');
-        }
+          if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) {
+            hiddenReasons.push('Is a Raid (hidden by filter)');
+          }
 
-        if (quest.name.toLowerCase().includes("test")) {
-          hiddenReasons.push('Is a test quest');
+          if (quest.name.toLowerCase().includes("test")) {
+            hiddenReasons.push('Is a test quest');
+          }
         }
         
         return {
@@ -524,14 +526,11 @@ export default function FavorTrackerPage() {
     const filteredQuests = isDebugMode
       ? allProcessedQuests
       : allProcessedQuests.filter(quest => {
-          if (quest.hiddenReasons.includes('Is a test quest')) {
-            return false;
-          }
+          if (quest.hiddenReasons.length > 0) return false;
           
-          const isEligibleByFilters = quest.hiddenReasons.length === 0;
-          const isVisibleByCompletion = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
+          if (!showCompletedQuestsWithZeroRemainingFavor && quest.remainingPossibleFavor <= 0) return false;
           
-          return isEligibleByFilters && isVisibleByCompletion;
+          return true;
       });
 
     const areaAggregates = {
@@ -708,7 +707,10 @@ export default function FavorTrackerPage() {
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
         <CardHeader className="sticky top-0 z-20 bg-card border-b">
           <div className="flex justify-between items-center">
-            <CardTitle className="font-headline flex items-center"><ListOrdered className="mr-2 h-6 w-6 text-primary" /> Favor Tracker</CardTitle>
+            <CardTitle className="font-headline flex items-center">
+              <ListOrdered className="mr-2 h-6 w-6 text-primary" /> Favor Tracker
+              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedAndFilteredData.sortedQuests.length} quests)</span>}
+            </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/reaper-rewards/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Button></Link>
               <Link href={`/quest-guide/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><BookOpen className="mr-2 h-4 w-4" />Quest Guide</Button></Link>

@@ -385,7 +385,10 @@ export default function QuestGuidePage() {
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
         <CardHeader className="bg-card border-b">
           <div className="flex justify-between items-center">
-            <CardTitle className="font-headline flex items-center"><BookOpen className="mr-2 h-6 w-6 text-primary" /> Quest Guide</CardTitle>
+            <CardTitle className="font-headline flex items-center">
+              <BookOpen className="mr-2 h-6 w-6 text-primary" /> Quest Guide
+              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedAndFilteredQuests.length} quests)</span>}
+            </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/reaper-rewards/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Button></Link>
               <Link href={`/favor-tracker/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><ListOrdered className="mr-2 h-4 w-4" />Favor Tracker</Button></Link>
