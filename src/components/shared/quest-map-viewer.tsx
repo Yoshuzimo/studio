@@ -21,7 +21,7 @@ import { ScrollArea } from '../ui/scroll-area';
 interface QuestMapViewerProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  mapUrls: string[];
+  mapUrls: string[]; // These are now expected to be filenames, e.g., "map1.jpg"
   questName: string;
 }
 
@@ -42,7 +42,8 @@ export function QuestMapViewer({
     }
   }, [isOpen]);
 
-  const currentMapUrl = mapUrls[currentMapIndex];
+  const currentMapFilename = mapUrls[currentMapIndex];
+  const currentMapPublicUrl = currentMapFilename ? `/maps/${currentMapFilename}` : '';
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -65,7 +66,7 @@ export function QuestMapViewer({
             <PopoverContent side="right" align="start" className="w-auto p-2">
               <ScrollArea className="h-auto max-h-[70vh]">
                 <div className="space-y-2">
-                  {mapUrls.map((url, index) => (
+                  {mapUrls.map((filename, index) => (
                     <div
                       key={index}
                       className={cn(
@@ -78,7 +79,7 @@ export function QuestMapViewer({
                         setIsPopoverOpen(false);
                       }}
                     >
-                      <Image src={url} alt={`Map thumbnail ${index + 1}`} layout="fill" objectFit="cover" sizes="160px" data-ai-hint="map screenshot" />
+                      <Image src={`/maps/${filename}`} alt={`Map thumbnail ${index + 1}`} layout="fill" objectFit="cover" sizes="160px" data-ai-hint="map screenshot" />
                     </div>
                   ))}
                 </div>
@@ -92,9 +93,9 @@ export function QuestMapViewer({
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
             </div>
           )}
-          {currentMapUrl && (
+          {currentMapPublicUrl && (
             <Image
-              src={currentMapUrl}
+              src={currentMapPublicUrl}
               alt={`Map ${currentMapIndex + 1} for ${questName}`}
               fill
               style={{ objectFit: 'contain' }}
@@ -107,9 +108,11 @@ export function QuestMapViewer({
         </div>
         
         <DialogFooter className="flex-row justify-end items-center p-4 pt-2 border-t">
-          <Button variant="ghost" onClick={() => window.open(currentMapUrl, '_blank')}>
-            <ExternalLink className="mr-2 h-4 w-4" /> Open Image in New Tab
-          </Button>
+          {currentMapPublicUrl && (
+             <Button variant="ghost" onClick={() => window.open(currentMapPublicUrl, '_blank')}>
+              <ExternalLink className="mr-2 h-4 w-4" /> Open Image in New Tab
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
