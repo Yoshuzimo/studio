@@ -51,7 +51,7 @@ interface SortConfig {
   direction: 'ascending' | 'descending';
 }
 
-const getSortableName = (name: string): string => name.toLowerCase().replace(/^(the)\s+/i, '');
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^the\s+/i, '');
 
 const difficultyLevels: {
   key: DifficultyKey;
@@ -488,7 +488,7 @@ export default function FavorTrackerPage() {
           hiddenReasons.push('Is a test quest');
         }
         
-        if (!showCompletedQuestsWithZeroRemainingFavor && remainingPossibleFavor <= 0) {
+        if (!isDebugMode && !showCompletedQuestsWithZeroRemainingFavor && remainingPossibleFavor <= 0) {
             hiddenReasons.push('Completed with 0 remaining favor');
         }
         
@@ -699,13 +699,13 @@ export default function FavorTrackerPage() {
             </div>
           </CardHeader>
         </Card>
-      </Card>
+      )}
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
         <CardHeader className="sticky top-0 z-20 bg-card border-b">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <ListOrdered className="mr-2 h-6 w-6 text-primary" /> Favor Tracker
-              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedAndFilteredData.sortedQuests.length} quests)</span>}
+              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedQuests.length} quests)</span>}
             </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/reaper-rewards/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Button></Link>
@@ -748,8 +748,8 @@ export default function FavorTrackerPage() {
           <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
-           {pageOverallLoading && sortedAndFilteredData.sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
-           : !pageOverallLoading && sortedAndFilteredData.sortedQuests.length === 0 && character ? ( <div className="text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
+           {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
+           : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
            : ( <div className="overflow-x-auto"> <Table>
                 <TableCaption className="py-4">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
                 <TableHeader> <TableRow>
@@ -762,7 +762,7 @@ export default function FavorTrackerPage() {
                     ))}
                 </TableRow> </TableHeader>
                 <TableBody>
-                    {sortedAndFilteredData.sortedQuests.map((quest) => (
+                    {sortedQuests.map((quest) => (
                     <TooltipProvider key={quest.id} delayDuration={0}>
                       <Tooltip>
                         <TooltipTrigger asChild>

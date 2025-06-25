@@ -35,7 +35,7 @@ type DurationCategory = "Very Short" | "Short" | "Medium" | "Long" | "Very Long"
 const durationAdjustmentDefaults: Record<DurationCategory, number> = { "Very Short": 1.2, "Short": 1.1, "Medium": 1.0, "Long": 0.9, "Very Long": 0.8, };
 const DURATION_CATEGORIES: DurationCategory[] = ["Very Short", "Short", "Medium", "Long", "Very Long"];
 
-const getSortableName = (name: string): string => name.toLowerCase().replace(/^(the)\s+/i, '');
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^the\s+/i, '');
 
 const tableHeaders: { key: SortableQuestGuideColumnKey; label: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
     { key: 'name', label: 'Quest Name', className: "w-[250px] whitespace-nowrap", isSortable: false },
@@ -296,8 +296,8 @@ export default function QuestGuidePage() {
         aValue = getSortableName(a.name);
         bValue = getSortableName(b.name);
       } else {
-        aValue = a[sortConfig.key as keyof typeof a];
-        bValue = b[sortConfig.key as keyof typeof b];
+        aValue = (a as any)[sortConfig.key];
+        bValue = (b as any)[sortConfig.key];
       }
       
       if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
@@ -352,12 +352,12 @@ export default function QuestGuidePage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="on-cormyr" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} />
-                    <Label htmlFor="on-cormyr" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
+                    <Checkbox id="on-cormyr-reaper" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} />
+                    <Label htmlFor="on-cormyr-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox id="show-raids-guide" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
-                    <Label htmlFor="show-raids-guide" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Raids</Label>
+                    <Label htmlFor="show-raids-guide" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Include Raids</Label>
                   </div>
                    {userData?.isAdmin && (
                       <div className="flex items-center space-x-2">

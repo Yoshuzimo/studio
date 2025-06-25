@@ -41,7 +41,7 @@ const reaperLengthAdjustments: Record<DurationCategory, number> = {
   "Very Long": 1.4,
 };
 
-const getSortableName = (name: string): string => name.toLowerCase().replace(/^(the)\s+/i, '');
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^the\s+/i, '');
 
 function parseDurationToMinutes(durationString?: string | null): number | null {
   if (!durationString || durationString.trim() === "") return null;
@@ -246,8 +246,8 @@ export default function ReaperRewardsPage() {
 
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
 
-  const sortedAndFilteredQuests = useMemo(() => {
-    if (!character || !isDataLoaded || !quests) return [];
+  const sortedAndFilteredData = useMemo(() => {
+    if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
 
     const calculateRXP = (quest: Quest, character: Character, skulls: number): number | null => {
       let baseRXP = 50 + (3 * quest.level * skulls);
@@ -302,18 +302,18 @@ export default function ReaperRewardsPage() {
       ? allProcessedQuests
       : allProcessedQuests.filter(quest => quest.hiddenReasons.length === 0);
 
-    return [...filteredQuests].sort((a, b) => {
+    const sortedQuests = [...filteredQuests].sort((a, b) => {
       if (!sortConfig || !character) return 0;
       
       let aValue: string | number | null | undefined;
       let bValue: string | number | null | undefined;
 
       if (sortConfig.key === 'name') {
-          aValue = getSortableName(a.name);
-          bValue = getSortableName(b.name);
+        aValue = getSortableName(a.name);
+        bValue = getSortableName(b.name);
       } else {
-          aValue = (a as any)[sortConfig.key];
-          bValue = (b as any)[sortConfig.key];
+        aValue = (a as any)[sortConfig.key];
+        bValue = (b as any)[sortConfig.key];
       }
       
       if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
@@ -334,6 +334,7 @@ export default function ReaperRewardsPage() {
       return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
 
+    return { sortedQuests };
   }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids, isDebugMode]);
   
   const requestSort = (key: SortableReaperColumnKey) => {
@@ -371,6 +372,7 @@ export default function ReaperRewardsPage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
+  const { sortedQuests } = sortedAndFilteredData;
   const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
 
   return (
@@ -417,7 +419,7 @@ export default function ReaperRewardsPage() {
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <Skull className="mr-2 h-6 w-6 text-primary" /> Reaper Rewards
-              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedAndFilteredQuests.length} quests)</span>}
+              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedQuests.length} quests)</span>}
             </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/favor-tracker/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><ListOrdered className="mr-2 h-4 w-4" />Favor Tracker</Button></Link>
@@ -449,9 +451,9 @@ export default function ReaperRewardsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
-          {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
+          {pageOverallLoading && sortedQuests.length === 0 ? (
             <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /><p>Filtering quests...</p></div>
-          ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
+          ) : !pageOverallLoading && sortedQuests.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
@@ -474,7 +476,7 @@ export default function ReaperRewardsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedAndFilteredQuests.map((quest) => (
+                  {sortedQuests.map((quest) => (
                     <TooltipProvider key={quest.id} delayDuration={0}>
                       <Tooltip>
                         <TooltipTrigger asChild>
