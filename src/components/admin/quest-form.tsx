@@ -64,8 +64,8 @@ const questFormSchema = z.object({
   epicHardNotAvailable: z.boolean().default(false),
   epicEliteNotAvailable: z.boolean().default(false),
   // Wiki/Map Fields
-  wikiUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
-  mapUrls: z.array(z.object({ value: z.string().url({ message: "Please enter a valid URL." }) })).optional(),
+  wikiUrl: z.string().optional().or(z.literal('')),
+  mapUrls: z.array(z.object({ value: z.string() })).optional(),
 });
 
 export type QuestFormData = z.infer<typeof questFormSchema>;
