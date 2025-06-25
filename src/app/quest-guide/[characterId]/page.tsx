@@ -81,6 +81,14 @@ function getDurationCategory(durationInput?: string | null): DurationCategory | 
 
 const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
 
+const normalizeAdventurePackNameForComparison = (name?: string | null): string => {
+  if (!name) return "";
+  const trimmedName = name.trim();
+  const lowerName = trimmedName.toLowerCase();
+  const withoutThe = lowerName.startsWith("the ") ? lowerName.substring(4) : lowerName;
+  return withoutThe.replace(/[^a-z0-9]/g, '');
+};
+
 export default function QuestGuidePage() {
   const params = useParams();
   const router = useRouter();
@@ -193,6 +201,8 @@ export default function QuestGuidePage() {
         }
     }
   };
+
+  const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
   
   const sortedAndFilteredQuests = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return [];
@@ -244,8 +254,9 @@ export default function QuestGuidePage() {
         return { ...quest, ...adjustedExps, maxExp, experienceScore };
     }).filter(quest => {
         if (quest.maxExp === null || quest.maxExp <= 0) return false;
-        const isActuallyFreeToPlay = quest.adventurePackName?.toLowerCase() === FREE_TO_PLAY_PACK_NAME_LOWERCASE;
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || (quest.adventurePackName && ownedPacks.some(op => op.toLowerCase() === quest.adventurePackName!.toLowerCase()));
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
         const isNotOnCormyrQuest = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
         const isTestQuest = quest.name.toLowerCase().includes("test");
         const isNotARaidOrShouldBeShown = showRaids || !quest.name.toLowerCase().endsWith('(raid)');
@@ -275,7 +286,7 @@ export default function QuestGuidePage() {
       if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
       return 0;
     });
-  }, [quests, character, onCormyr, ownedPacks, isDataLoaded, showRaids, durationAdjustments, sortConfig]);
+  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig]);
 
   const requestSort = (key: ActualSortKey) => setSortConfig({ key, direction: 'descending' });
   const getSortIndicator = (columnKey: SortableQuestGuideColumnKey) => { 
@@ -386,9 +397,9 @@ export default function QuestGuidePage() {
           <CardDescription>Experience guide for {character.name}. Shows relevant Heroic or Epic EXP based on character level. Score is Max EXP adjusted by quest duration.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
-          {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
+          {pageOverallLoading && sortedQuests.length === 0 ? (
             <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div>
-          ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
+          ) : !pageOverallLoading && sortedQuests.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
@@ -416,7 +427,7 @@ export default function QuestGuidePage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {sortedAndFilteredQuests.map((quest) => (
+                    {sortedQuests.map((quest) => (
                     <TableRow key={quest.id} className={cn(getRelevantQuestDetails(quest, character).baseLevel > character.level ? 'opacity-60' : '', clickAction !== 'none' && 'cursor-pointer')} onClick={() => handleRowClick(quest)}>
                         {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
                         {columnVisibility['level'] && <TableCell className="text-center">{getRelevantQuestDetails(quest, character).baseLevel}</TableCell>}

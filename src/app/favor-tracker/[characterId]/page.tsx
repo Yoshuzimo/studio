@@ -129,6 +129,14 @@ const CSV_DIFFICULTY_HEADER_LINE_INDEX = 1;
 const CSV_DATA_START_LINE_INDEX = 3;
 const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
 
+const normalizeAdventurePackNameForComparison = (name?: string | null): string => {
+  if (!name) return "";
+  const trimmedName = name.trim();
+  const lowerName = trimmedName.toLowerCase();
+  const withoutThe = lowerName.startsWith("the ") ? lowerName.substring(4) : lowerName;
+  return withoutThe.replace(/[^a-z0-9]/g, '');
+};
+
 export default function FavorTrackerPage() {
   const params = useParams();
   const router = useRouter();
@@ -440,6 +448,8 @@ export default function FavorTrackerPage() {
 
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
 
+  const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
+
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) {
       return {
@@ -483,8 +493,9 @@ export default function FavorTrackerPage() {
         };
     }).filter(quest => {
       const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
-      const isActuallyFreeToPlay = quest.adventurePackName?.toLowerCase() === FREE_TO_PLAY_PACK_NAME_LOWERCASE;
-      const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || (quest.adventurePackName && ownedPacks.some(op => op.toLowerCase() === quest.adventurePackName!.toLowerCase()));
+      const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+      const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+      const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
       const shouldShow = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
       const isNotOnCormyrQuest = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
       const isNotARaidOrShouldBeShown = showRaids || !quest.name.toLowerCase().endsWith('(raid)');
@@ -540,7 +551,7 @@ export default function FavorTrackerPage() {
     
     return { sortedQuests, areaAggregates };
   }, [
-    quests, character, ownedPacks, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
+    quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
     completionDep, durationAdjustments, isDataLoaded, sortConfig
   ]);
 

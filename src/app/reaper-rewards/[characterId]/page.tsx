@@ -98,6 +98,14 @@ interface ReaperRewardsPreferences {
 
 const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
 
+const normalizeAdventurePackNameForComparison = (name?: string | null): string => {
+  if (!name) return "";
+  const trimmedName = name.trim();
+  const lowerName = trimmedName.toLowerCase();
+  const withoutThe = lowerName.startsWith("the ") ? lowerName.substring(4) : lowerName;
+  return withoutThe.replace(/[^a-z0-9]/g, '');
+};
+
 export default function ReaperRewardsPage() {
   const params = useParams();
   const router = useRouter();
@@ -232,6 +240,8 @@ export default function ReaperRewardsPage() {
     }
   };
 
+  const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
+
   const sortedAndFilteredQuests = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return [];
 
@@ -263,8 +273,10 @@ export default function ReaperRewardsPage() {
         const questLvl = quest.level;
         if (charLvl < questLvl) return false;
 
-        const isActuallyFreeToPlay = quest.adventurePackName?.toLowerCase() === FREE_TO_PLAY_PACK_NAME_LOWERCASE;
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || (quest.adventurePackName && ownedPacks.some(op => op.toLowerCase() === quest.adventurePackName!.toLowerCase()));
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+
         const isNotOnCormyrQuest = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
         const isTestQuest = quest.name.toLowerCase().includes("test");
         const isNotARaidOrShouldBeShown = showRaids || !quest.name.toLowerCase().endsWith('(raid)');
@@ -307,7 +319,7 @@ export default function ReaperRewardsPage() {
       return 0;
     });
 
-  }, [quests, character, onCormyr, ownedPacks, isDataLoaded, sortConfig, showRaids]);
+  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids]);
   
   const requestSort = (key: SortableReaperColumnKey) => {
     let direction: 'ascending' | 'descending' = 'ascending';
