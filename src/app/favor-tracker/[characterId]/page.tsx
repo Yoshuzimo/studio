@@ -506,24 +506,36 @@ export default function FavorTrackerPage() {
     });
 
     const sortedQuests = [...processedQuests].sort((a, b) => {
-      if (!sortConfig) return 0;
-      
-      const getSortValue = (quest: typeof a, key: SortableColumnKey) => {
-          if (key === 'areaRemainingFavor') return quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : 0;
-          if (key === 'areaAdjustedRemainingFavorScore') return quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : 0;
-          if (key === 'name') return getSortableName(quest.name);
-          return quest[key as keyof typeof quest];
-      };
+      // Primary sort
+      if (sortConfig) {
+        const getSortValue = (quest: typeof a, key: SortableColumnKey) => {
+            if (key === 'areaRemainingFavor') return quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : 0;
+            if (key === 'areaAdjustedRemainingFavorScore') return quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : 0;
+            if (key === 'name') return getSortableName(quest.name);
+            return quest[key as keyof typeof quest];
+        };
 
-      let aValue = getSortValue(a, sortConfig.key);
-      let bValue = getSortValue(b, sortConfig.key);
+        let aValue = getSortValue(a, sortConfig.key);
+        let bValue = getSortValue(b, sortConfig.key);
 
-      if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-      if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-      if (typeof aValue === 'string' && typeof bValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-      if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
-      return 0;
+        if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+        if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+
+        let comparison = 0;
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          comparison = aValue.localeCompare(bValue);
+        } else {
+          if (aValue < bValue) comparison = -1;
+          if (aValue > bValue) comparison = 1;
+        }
+
+        if (comparison !== 0) {
+          return sortConfig.direction === 'ascending' ? comparison : -comparison;
+        }
+      }
+
+      // Secondary sort (or default sort if no sortConfig) by quest name, ascending
+      return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
     
     return { sortedQuests, areaAggregates };
