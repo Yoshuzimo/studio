@@ -1,4 +1,3 @@
-
 // src/components/shared/quest-map-viewer.tsx
 "use client";
 
@@ -47,15 +46,15 @@ export function QuestMapViewer({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl w-full h-[95vh] flex flex-col p-2 sm:p-4">
-        <DialogHeader className="p-4 pb-2 border-b">
+      <DialogContent className="w-screen h-screen max-w-full max-h-full flex flex-col p-0 sm:p-0 border-0 rounded-none">
+        <DialogHeader className="p-4 pb-2 border-b flex-shrink-0">
           <DialogTitle className="font-headline">{questName} - Map Viewer</DialogTitle>
           <DialogDescription>
             Map {currentMapIndex + 1} of {mapUrls.length}. Hover over the menu icon to select a map.
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex-grow relative bg-muted/20 rounded-md overflow-hidden">
+        <div className="flex-grow relative bg-muted/20 overflow-hidden">
           {/* Menu Popover */}
           <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <PopoverTrigger asChild>
@@ -107,7 +106,7 @@ export function QuestMapViewer({
           )}
         </div>
         
-        <DialogFooter className="flex-row justify-end items-center p-4 pt-2 border-t">
+        <DialogFooter className="flex-row justify-end items-center p-4 pt-2 border-t flex-shrink-0">
           {currentMapPublicUrl && (
              <Button variant="ghost" onClick={() => window.open(currentMapPublicUrl, '_blank')}>
               <ExternalLink className="mr-2 h-4 w-4" /> Open Image in New Tab
