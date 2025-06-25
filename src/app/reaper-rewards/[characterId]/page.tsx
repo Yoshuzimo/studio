@@ -18,6 +18,8 @@ import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { CharacterForm, type CharacterFormData } from '@/components/character/character-form';
 import { DialogFooter } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
 
 type SortableReaperColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'maxRXP' | `skull-${number}`;
 
@@ -88,6 +90,8 @@ const getDefaultColumnVisibility = (): Record<string, boolean> => {
 interface ReaperRewardsPreferences {
   columnVisibility: Record<string, boolean>;
   onCormyr: boolean;
+  showRaids: boolean;
+  clickAction: 'none' | 'wiki' | 'map';
 }
 
 const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
@@ -104,12 +108,17 @@ export default function ReaperRewardsPage() {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'level', direction: 'ascending' });
   
   const [onCormyr, setOnCormyr] = useState(false);
+  const [showRaids, setShowRaids] = useState(false);
   
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(getDefaultColumnVisibility());
   const [popoverColumnVisibility, setPopoverColumnVisibility] = useState<Record<string, boolean>>({});
   const [isSettingsPopoverOpen, setIsSettingsPopoverOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
+  
+  const [clickAction, setClickAction] = useState<'none' | 'wiki' | 'map'>('none');
+  const [isWikiOpen, setIsWikiOpen] = useState(false);
+  const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
 
@@ -139,6 +148,8 @@ export default function ReaperRewardsPage() {
         if (storedPrefs) {
           const prefs = JSON.parse(storedPrefs) as ReaperRewardsPreferences;
           if (typeof prefs.onCormyr === 'boolean') setOnCormyr(prefs.onCormyr);
+          if (typeof prefs.showRaids === 'boolean') setShowRaids(prefs.showRaids);
+          if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) { setClickAction(prefs.clickAction); }
           
           const defaultVis = getDefaultColumnVisibility();
           const mergedVisibility: Record<string, boolean> = {};
@@ -148,7 +159,7 @@ export default function ReaperRewardsPage() {
           setColumnVisibility(mergedVisibility);
         } else {
           setColumnVisibility(getDefaultColumnVisibility());
-          savePreferences({ columnVisibility: getDefaultColumnVisibility(), onCormyr: false });
+          savePreferences({ columnVisibility: getDefaultColumnVisibility(), onCormyr: false, showRaids: false, clickAction: 'none' });
         }
       } catch (error) {
         console.error("Error loading preferences:", error);
@@ -158,6 +169,8 @@ export default function ReaperRewardsPage() {
   }, [characterId, isDataLoaded, currentUser, savePreferences]);
 
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
 
   const handlePopoverColumnVisibilityChange = (key: string, checked: boolean) => {
     setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
@@ -196,6 +209,17 @@ export default function ReaperRewardsPage() {
       }
     }
   }, [characterId, characters, isDataLoaded, currentUser, router, toast]);
+
+  const handleRowClick = (quest: Quest) => {
+    if (clickAction === 'wiki') {
+        if (quest.wikiUrl) {
+            setSelectedQuest(quest);
+            setIsWikiOpen(true);
+        } else {
+            toast({ title: "No Wiki Link", description: `A wiki link is not available for "${quest.name}".` });
+        }
+    }
+  };
 
   const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
   
@@ -250,7 +274,7 @@ export default function ReaperRewardsPage() {
         const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || (quest.adventurePackName && ownedPacks.some(op => op.toLowerCase() === quest.adventurePackName!.toLowerCase()));
         const isNotOnCormyrQuest = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
         const isTestQuest = quest.name.toLowerCase().includes("test");
-        const isNotARaidOrShouldBeShown = !quest.name.toLowerCase().endsWith('(raid)');
+        const isNotARaidOrShouldBeShown = showRaids || !quest.name.toLowerCase().endsWith('(raid)');
         
         if (!isOwned || !isNotOnCormyrQuest || isTestQuest || !isNotARaidOrShouldBeShown) return false;
 
@@ -288,7 +312,7 @@ export default function ReaperRewardsPage() {
       return 0;
     });
 
-  }, [quests, character, onCormyr, ownedPacks, isDataLoaded, sortConfig]);
+  }, [quests, character, onCormyr, ownedPacks, isDataLoaded, sortConfig, showRaids]);
 
   const getSortIndicator = (columnKey: SortableReaperColumnKey) => {
     if (!sortConfig || sortConfig.key !== columnKey) {
@@ -320,10 +344,22 @@ export default function ReaperRewardsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="on-cormyr" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} />
-                  <Label htmlFor="on-cormyr" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
+                  <Checkbox id="on-cormyr-reaper" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} />
+                  <Label htmlFor="on-cormyr-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="show-raids-reaper" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
+                  <Label htmlFor="show-raids-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Include Raids</Label>
                 </div>
               </div>
+            </div>
+            <div className="pt-2 border-t border-border mt-4">
+              <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
+              <RadioGroup value={clickAction} onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')} className="flex items-center space-x-4" disabled={pageOverallLoading}>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-reaper" /><Label htmlFor="action-none-reaper" className="font-normal cursor-pointer">None</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-reaper" /><Label htmlFor="action-wiki-reaper" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-reaper" disabled/><Label htmlFor="action-map-reaper" className="font-normal cursor-not-allowed opacity-50 flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
+              </RadioGroup>
             </div>
           </div>
         </CardHeader>
@@ -358,13 +394,13 @@ export default function ReaperRewardsPage() {
             </div>
           </div>
           <CardDescription>
-              Estimated Reaper Experience (RXP) for {character.name}. Quests are filtered based on Reaper XP eligibility rules for the character's level. Raids are excluded.
+              Estimated Reaper Experience (RXP) for {character.name}. Quests are filtered based on Reaper XP eligibility rules for the character's level.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
-          {pageOverallLoading && sortedQuests.length === 0 ? (
+          {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /><p>Filtering quests...</p></div>
-          ) : !pageOverallLoading && sortedQuests.length === 0 ? (
+          ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
@@ -387,8 +423,8 @@ export default function ReaperRewardsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedQuests.map((quest) => (
-                    <TableRow key={quest.id}>
+                  {sortedAndFilteredQuests.map((quest) => (
+                    <TableRow key={quest.id} className={cn(quest.level > character.level ? 'opacity-60' : '', clickAction !== 'none' && 'cursor-pointer')} onClick={() => handleRowClick(quest)}>
                       {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
                       {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                       {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
@@ -415,6 +451,14 @@ export default function ReaperRewardsPage() {
           onSubmit={handleEditCharacterSubmit}
           initialData={editingCharacter}
           isSubmitting={pageOverallLoading}
+        />
+      )}
+      {selectedQuest && (
+        <QuestWikiPopover
+            isOpen={isWikiOpen}
+            onOpenChange={setIsWikiOpen}
+            questName={selectedQuest.name}
+            wikiUrl={selectedQuest.wikiUrl}
         />
       )}
     </div>

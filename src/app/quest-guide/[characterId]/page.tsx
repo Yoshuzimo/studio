@@ -7,7 +7,6 @@ import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -15,19 +14,19 @@ import { UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowDown, Ar
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DialogFooter } from '@/components/ui/dialog';
+import { DialogFooter } from '@/components/ui/dialog'; 
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { Separator } from '@/components/ui/separator'; 
 import { CharacterForm, type CharacterFormData } from '@/components/character/character-form';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type SortableQuestGuideColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'adjustedCasualExp' | 'adjustedNormalExp' | 'adjustedHardExp' | 'adjustedEliteExp' | 'maxExp' | 'experienceScore';
 type ActualSortKey = 'experienceScore' | 'maxExp';
 
-interface SortConfig {
-  key: ActualSortKey;
-  direction: 'descending';
-}
+interface SortConfig { key: ActualSortKey; direction: 'descending'; }
 type DurationCategory = "Very Short" | "Short" | "Medium" | "Long" | "Very Long";
 const durationAdjustmentDefaults: Record<DurationCategory, number> = { "Very Short": 1.2, "Short": 1.1, "Medium": 1.0, "Long": 0.9, "Very Long": 0.8, };
 const DURATION_CATEGORIES: DurationCategory[] = ["Very Short", "Short", "Medium", "Long", "Very Long"];
@@ -58,8 +57,8 @@ const getDefaultColumnVisibility = (): Record<SortableQuestGuideColumnKey, boole
     return initial;
  };
 
-interface QuestGuidePreferences { columnVisibility: Record<SortableQuestGuideColumnKey, boolean>; }
-interface FavorTrackerPreferences { durationAdjustments: Record<DurationCategory, number>; onCormyr: boolean; showAllAdventurePacks: boolean; }
+interface QuestGuidePreferences { columnVisibility: Record<SortableQuestGuideColumnKey, boolean>; clickAction: 'none' | 'wiki' | 'map'; }
+interface FavorTrackerPreferences { durationAdjustments: Record<DurationCategory, number>; onCormyr: boolean; showRaids: boolean; }
 
 function parseDurationToMinutes(durationString?: string | null): number | null { 
   if (!durationString || durationString.trim() === "") return null;
@@ -98,6 +97,10 @@ export default function QuestGuidePage() {
   const [isSettingsPopoverOpen, setIsSettingsPopoverOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
+  
+  const [clickAction, setClickAction] = useState<'none' | 'wiki' | 'map'>('none');
+  const [isWikiOpen, setIsWikiOpen] = useState(false);
+  const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
 
@@ -106,13 +109,7 @@ export default function QuestGuidePage() {
       router.replace('/login');
     }
   }, [authIsLoading, currentUser, router]);
-
-  const saveSharedPreference = useCallback((updatedPrefs: Partial<FavorTrackerPreferences>) => {
-    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
-    try { localStorage.setItem(`ddoToolkit_favorTrackerPrefs_${currentUser.uid}_${characterId}`, JSON.stringify({ ...(JSON.parse(localStorage.getItem(`ddoToolkit_favorTrackerPrefs_${currentUser.uid}_${characterId}`) || '{}')), ...updatedPrefs })); } 
-    catch (error) { console.error("Failed to save shared preferences:", error); toast({ title: "Error Saving Preferences", variant: "destructive" }); }
-  }, [characterId, isDataLoaded, currentUser, toast]);
-
+  
   const saveQuestGuidePreference = useCallback((updatedPrefs: Partial<QuestGuidePreferences>) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
     try { localStorage.setItem(`ddoToolkit_questGuidePrefs_${currentUser.uid}_${characterId}`, JSON.stringify({ ...(JSON.parse(localStorage.getItem(`ddoToolkit_questGuidePrefs_${currentUser.uid}_${characterId}`) || '{}')), ...updatedPrefs })); }
@@ -122,9 +119,9 @@ export default function QuestGuidePage() {
   useEffect(() => { 
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
     try {
-        const storedFavorPrefs = localStorage.getItem(`ddoToolkit_favorTrackerPrefs_${currentUser.uid}_${characterId}`);
+        const storedFavorPrefs = localStorage.getItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`);
         if (storedFavorPrefs) {
-            const prefs = JSON.parse(storedFavorPrefs) as FavorTrackerPreferences & { showRaids?: boolean };
+            const prefs = JSON.parse(storedFavorPrefs) as FavorTrackerPreferences;
             if (prefs.durationAdjustments) {
               const mergedAdjustments = { ...durationAdjustmentDefaults };
               for (const cat of DURATION_CATEGORIES) { if (prefs.durationAdjustments[cat] !== undefined && typeof prefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefs.durationAdjustments[cat]; }
@@ -138,6 +135,7 @@ export default function QuestGuidePage() {
         const storedGuidePrefs = localStorage.getItem(`ddoToolkit_questGuidePrefs_${currentUser.uid}_${characterId}`);
          if (storedGuidePrefs) {
             const prefs = JSON.parse(storedGuidePrefs) as QuestGuidePreferences;
+            if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) { setClickAction(prefs.clickAction); }
             const defaultVis = getDefaultColumnVisibility();
             const mergedVisibility: Record<SortableQuestGuideColumnKey, boolean> = {} as any;
             tableHeaders.forEach(header => { mergedVisibility[header.key as SortableQuestGuideColumnKey] = prefs.columnVisibility?.[header.key as SortableQuestGuideColumnKey] ?? defaultVis[header.key as SortableQuestGuideColumnKey]; });
@@ -146,9 +144,10 @@ export default function QuestGuidePage() {
     } catch (error) { console.error("Error loading quest guide preferences:", error); }
   }, [characterId, isDataLoaded, currentUser]);
 
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveSharedPreference({ durationAdjustments }); }, [durationAdjustments, saveSharedPreference, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveSharedPreference({ onCormyr }); }, [onCormyr, saveSharedPreference, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveSharedPreference({ showRaids }); }, [showRaids, saveSharedPreference, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ durationAdjustments }); }, [durationAdjustments, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ onCormyr }); }, [onCormyr, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ showRaids }); }, [showRaids, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ clickAction }); }, [clickAction, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
   
   const handlePopoverColumnVisibilityChange = (key: SortableQuestGuideColumnKey, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
   const handleApplyColumnSettings = () => { setColumnVisibility(popoverColumnVisibility); saveQuestGuidePreference({ columnVisibility: popoverColumnVisibility }); setIsSettingsPopoverOpen(false); };
@@ -174,19 +173,28 @@ export default function QuestGuidePage() {
       else { toast({ title: "Character not found", description: "This character may not exist or you don't have permission.", variant: "destructive" }); router.push('/'); }
     }
   }, [characterId, characters, isDataLoaded, currentUser, router, toast]);
+  
+  const handleRowClick = (quest: Quest) => {
+    if (clickAction === 'wiki') {
+        if (quest.wikiUrl) {
+            setSelectedQuest(quest);
+            setIsWikiOpen(true);
+        } else {
+            toast({ title: "No Wiki Link", description: `A wiki link is not available for "${quest.name}".` });
+        }
+    }
+  };
 
   const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
   
   const sortedAndFilteredQuests = useMemo(() => {
-    if (!character || !isDataLoaded || !quests) {
-      return [];
-    }
-    
+    if (!character || !isDataLoaded || !quests) return [];
+
     const getRelevantQuestDetails = (quest: Quest, char: Character) => {
         const useEpic = quest.epicBaseLevel != null && char.level >= quest.epicBaseLevel;
         return { tier: useEpic ? 'Epic' : 'Heroic', baseLevel: useEpic ? quest.epicBaseLevel! : quest.level, casualExp: useEpic ? quest.epicCasualExp : quest.casualExp, normalExp: useEpic ? quest.epicNormalExp : quest.normalExp, hardExp: useEpic ? quest.epicHardExp : quest.hardExp, eliteExp: useEpic ? quest.epicEliteExp : quest.eliteExp, casualNotAvailable: useEpic ? quest.epicCasualNotAvailable : quest.casualNotAvailable, normalNotAvailable: useEpic ? quest.epicNormalNotAvailable : quest.normalNotAvailable, hardNotAvailable: useEpic ? quest.epicHardNotAvailable : quest.hardNotAvailable, eliteNotAvailable: useEpic ? quest.epicEliteNotAvailable : quest.eliteNotAvailable, };
     };
-
+    
     const getHeroicPenaltyPercent = (charLevel: number, questEffectiveLevel: number): number => {
       if (charLevel >= 20) return 0; const levelDifference = charLevel - questEffectiveLevel;
       if (levelDifference <= 1) return 0;
@@ -242,20 +250,12 @@ export default function QuestGuidePage() {
         let aValue: string | number | null | undefined;
         let bValue: string | number | null | undefined;
         
-        if (sortConfig.key === 'experienceScore') {
-            aValue = a.experienceScore;
-            bValue = b.experienceScore;
-        } else if (sortConfig.key === 'maxExp') {
-            aValue = a.maxExp;
-            bValue = b.maxExp;
-        } else { 
-            aValue = a[sortConfig.key as keyof Quest]; 
-            bValue = b[sortConfig.key as keyof Quest];
-        }
+        if (sortConfig.key === 'experienceScore') { aValue = a.experienceScore; bValue = b.experienceScore; } 
+        else if (sortConfig.key === 'maxExp') { aValue = a.maxExp; bValue = b.maxExp; } 
+        else { aValue = a[sortConfig.key as keyof Quest]; bValue = b[sortConfig.key as keyof Quest]; }
         
         if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
         if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-
         if (typeof aValue === 'string' && typeof bValue === 'string') {
           return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
         }
@@ -288,8 +288,8 @@ export default function QuestGuidePage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(header => !header.isDifficulty);
-  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key as SortableQuestGuideColumnKey]);
+  const popoverVisibleNonDifficultyHeaders = tableHeaders.filter(header => !header.isDifficulty);
+  const visibleTableHeaders = tableHeaders.filter(h => columnVisibility[h.key as SortableQuestGuideColumnKey]);
 
   return (
     <div className="py-8 space-y-8">
@@ -308,8 +308,8 @@ export default function QuestGuidePage() {
                     <Label htmlFor="on-cormyr" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="show-raids" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
-                    <Label htmlFor="show-raids" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Raids</Label>
+                    <Checkbox id="show-raids-guide" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
+                    <Label htmlFor="show-raids-guide" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Raids</Label>
                   </div>
                 </div>
               </div>
@@ -325,6 +325,20 @@ export default function QuestGuidePage() {
                           </div>
                       ))}
                   </div>
+              </div>
+              <div className="pt-2 border-t border-border mt-4">
+                <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
+                <RadioGroup value={clickAction} onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')} className="flex items-center space-x-4" disabled={pageOverallLoading}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="none" id="action-none-guide" /><Label htmlFor="action-none-guide" className="font-normal cursor-pointer">None</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="wiki" id="action-wiki-guide" /><Label htmlFor="action-wiki-guide" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="map" id="action-map-guide" disabled/><Label htmlFor="action-map-guide" className="font-normal cursor-not-allowed opacity-50 flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label>
+                  </div>
+                </RadioGroup>
               </div>
             </div>
         </CardHeader>
@@ -344,7 +358,7 @@ export default function QuestGuidePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${header.key}`} checked={!!columnVisibility[header.key as SortableQuestGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key as SortableQuestGuideColumnKey, !!checked)} />
+                          <Checkbox id={`vis-guide-${header.key}`} checked={!!popoverColumnVisibility[header.key as SortableQuestGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key as SortableQuestGuideColumnKey, !!checked)} />
                           <Label htmlFor={`vis-guide-${header.key}`} className="font-normal whitespace-nowrap">{header.label}</Label>
                         </div>
                       ))}
@@ -354,8 +368,8 @@ export default function QuestGuidePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {difficultyColumnKeys.map(key => (
                           <div key={key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${key}`} checked={!!columnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key, !!checked)} />
-                          <Label htmlFor={`vis-guide-${key}`} className="font-normal whitespace-nowrap">{allTableHeaders.find(h=>h.key===key)?.label}</Label>
+                          <Checkbox id={`vis-guide-${key}`} checked={!!popoverColumnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key, !!checked)} />
+                          <Label htmlFor={`vis-guide-${key}`} className="font-normal whitespace-nowrap">{tableHeaders.find(h=>h.key===key)?.label}</Label>
                           </div>
                       ))}
                     </div>
@@ -371,9 +385,9 @@ export default function QuestGuidePage() {
           <CardDescription>Experience guide for {character.name}. Shows relevant Heroic or Epic EXP based on character level. Score is Max EXP adjusted by quest duration.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
-          {pageOverallLoading && sortedQuests.length === 0 && filteredQuests.length > 0 ? (
+          {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div>
-          ) : !pageOverallLoading && sortedQuests.length === 0 ? (
+          ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
@@ -401,8 +415,8 @@ export default function QuestGuidePage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {sortedQuests.map((quest) => (
-                    <TableRow key={quest.id} className={cn(getRelevantQuestDetails(quest, character).baseLevel > character.level ? 'opacity-60' : '')}>
+                    {sortedAndFilteredQuests.map((quest) => (
+                    <TableRow key={quest.id} className={cn(getRelevantQuestDetails(quest, character).baseLevel > character.level ? 'opacity-60' : '', clickAction !== 'none' && 'cursor-pointer')} onClick={() => handleRowClick(quest)}>
                         {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
                         {columnVisibility['level'] && <TableCell className="text-center">{getRelevantQuestDetails(quest, character).baseLevel}</TableCell>}
                         {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
@@ -429,6 +443,14 @@ export default function QuestGuidePage() {
           onSubmit={handleEditCharacterSubmit}
           initialData={editingCharacter}
           isSubmitting={pageOverallLoading}
+        />
+      )}
+      {selectedQuest && (
+        <QuestWikiPopover
+            isOpen={isWikiOpen}
+            onOpenChange={setIsWikiOpen}
+            questName={selectedQuest.name}
+            wikiUrl={selectedQuest.wikiUrl}
         />
       )}
     </div>

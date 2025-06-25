@@ -30,15 +30,15 @@ export function QuestWikiPopover({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-2 sm:p-4">
-        <DialogHeader className="p-4 pb-2 border-b">
+      <DialogContent className="w-screen h-screen max-w-full max-h-full flex flex-col p-0 sm:p-0 border-0 rounded-none">
+        <DialogHeader className="p-4 pb-2 border-b flex-shrink-0">
           <DialogTitle className="font-headline">{questName} - DDO Wiki</DialogTitle>
           <DialogDescription>
             Displaying content from <a href={wikiUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">{wikiUrl}</a>.
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex-grow bg-background rounded-md overflow-hidden">
+        <div className="flex-grow bg-background overflow-hidden">
           <iframe
             src={wikiUrl}
             title={`${questName} Wiki Page`}
@@ -46,7 +46,7 @@ export function QuestWikiPopover({
           />
         </div>
         
-        <DialogFooter className="flex-row justify-end items-center p-4 pt-2 border-t">
+        <DialogFooter className="flex-row justify-end items-center p-4 pt-2 border-t flex-shrink-0">
            <Button variant="ghost" onClick={() => window.open(wikiUrl, '_blank')}>
             <ExternalLink className="mr-2 h-4 w-4" /> Open in New Tab
           </Button>

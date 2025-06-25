@@ -1,4 +1,3 @@
-
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -163,7 +162,6 @@ export default function FavorTrackerPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
   
-  // New state for click actions and popovers
   const [clickAction, setClickAction] = useState<'none' | 'wiki' | 'map'>('none');
   const [isWikiOpen, setIsWikiOpen] = useState(false);
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
@@ -470,7 +468,7 @@ export default function FavorTrackerPage() {
             eliteCompleted: getQuestCompletion(quest.id, 'eliteCompleted'),
             remainingPossibleFavor: remainingPossibleFavor,
             adjustedRemainingFavorScore: calculateAdjustedRemainingFavorScore(quest, remainingPossibleFavor),
-            maxPotentialFavorSingleQuest: (quest.baseFavor || 0) * 3, // This is a simplification
+            maxPotentialFavorSingleQuest: (quest.baseFavor || 0) * 3,
         };
     }).filter(quest => {
       const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
