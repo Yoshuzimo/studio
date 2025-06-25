@@ -51,6 +51,8 @@ interface SortConfig {
   direction: 'ascending' | 'descending';
 }
 
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
+
 const difficultyLevels: {
   key: DifficultyKey;
   label: string;
@@ -408,28 +410,6 @@ export default function FavorTrackerPage() {
     finally { setIsCsvProcessing(false); }
   };
   
-  const getSortableName = (name: string): string => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
-
-  const requestSort = (key: SortableColumnKey) => {
-    const specialSortKeys: SortableColumnKey[] = [
-      'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
-    ];
-
-    let direction: 'ascending' | 'descending' = 'ascending';
-
-    if (specialSortKeys.includes(key) || difficultyLevels.some(dl => dl.key === key)) {
-      direction = 'descending';
-    }
-    
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-        direction = 'descending';
-    } else if (sortConfig && sortConfig.key === key && sortConfig.direction === 'descending') {
-        setSortConfig(null);
-        return;
-    }
-    setSortConfig({ key, direction });
-  };
-  
   const handleRowClick = (quest: Quest) => {
     if (clickAction === 'wiki') {
         if (quest.wikiUrl) {
@@ -484,30 +464,28 @@ export default function FavorTrackerPage() {
         };
         
         const hiddenReasons: string[] = [];
-        if (!isDebugMode) {
-          const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
-          if (!isEligibleLevel) {
-              hiddenReasons.push(`Quest Level (${quest.level}) > Character Level (${character.level})`);
-          }
+        const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
+        if (!isEligibleLevel) {
+            hiddenReasons.push(`Level too high (Lvl ${quest.level} vs Char Lvl ${character.level})`);
+        }
 
-          const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-          const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-          const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-          if (!isOwned) {
-              hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
-          }
-          
-          if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") {
-            hiddenReasons.push('Hidden by "On Cormyr" filter');
-          }
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+        if (!isOwned) {
+            hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
+        }
+        
+        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") {
+          hiddenReasons.push('Hidden by "On Cormyr" filter');
+        }
 
-          if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) {
-            hiddenReasons.push('Is a Raid (hidden by filter)');
-          }
+        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) {
+          hiddenReasons.push('Is a Raid (hidden by filter)');
+        }
 
-          if (quest.name.toLowerCase().includes("test")) {
-            hiddenReasons.push('Is a test quest');
-          }
+        if (quest.name.toLowerCase().includes("test")) {
+          hiddenReasons.push('Is a test quest');
         }
         
         return {
@@ -527,9 +505,7 @@ export default function FavorTrackerPage() {
       ? allProcessedQuests
       : allProcessedQuests.filter(quest => {
           if (quest.hiddenReasons.length > 0) return false;
-          
           if (!showCompletedQuestsWithZeroRemainingFavor && quest.remainingPossibleFavor <= 0) return false;
-          
           return true;
       });
 
@@ -585,6 +561,37 @@ export default function FavorTrackerPage() {
     completionDep, durationAdjustments, isDataLoaded, sortConfig, isDebugMode
   ]);
 
+  const requestSort = (key: SortableColumnKey) => {
+    const specialSortKeys: SortableColumnKey[] = [
+      'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
+    ];
+
+    let direction: 'ascending' | 'descending' = 'ascending';
+
+    if (specialSortKeys.includes(key) || difficultyLevels.some(dl => dl.key === key)) {
+      direction = 'descending';
+    }
+    
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+        direction = 'descending';
+    } else if (sortConfig && sortConfig.key === key && sortConfig.direction === 'descending') {
+        setSortConfig(null);
+        return;
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIndicator = (columnKey: SortableColumnKey) => {
+    if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
+    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
+  };
+  
+  const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
+    header => !header.isDifficulty && header.key !== 'maxPotentialFavorSingleQuest'
+  );
+  
+  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
+
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
   }
@@ -605,17 +612,6 @@ export default function FavorTrackerPage() {
   }
   
   const { sortedQuests, areaAggregates } = sortedAndFilteredData;
-
-  const getSortIndicator = (columnKey: SortableColumnKey) => {
-    if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
-    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
-  };
-  
-  const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
-    header => !header.isDifficulty && header.key !== 'maxPotentialFavorSingleQuest'
-  );
-  
-  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
 
   return (
     <div className="py-8 space-y-8">
@@ -703,7 +699,7 @@ export default function FavorTrackerPage() {
             </div>
           </CardHeader>
         </Card>
-      )}
+      </Card>
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
         <CardHeader className="sticky top-0 z-20 bg-card border-b">
           <div className="flex justify-between items-center">
@@ -773,7 +769,7 @@ export default function FavorTrackerPage() {
                           <TableRow
                             className={cn(
                               clickAction !== 'none' && 'cursor-pointer',
-                              isDebugMode && (quest.hiddenReasons?.length ?? 0) > 0 && 'text-destructive/80 hover:text-destructive'
+                              isDebugMode && quest.hiddenReasons.length > 0 && 'text-destructive/80 hover:text-destructive'
                             )}
                             onClick={() => handleRowClick(quest)}
                           >
@@ -801,7 +797,7 @@ export default function FavorTrackerPage() {
                               ))}
                           </TableRow>
                         </TooltipTrigger>
-                        {isDebugMode && quest.hiddenReasons && quest.hiddenReasons.length > 0 && (
+                        {isDebugMode && quest.hiddenReasons.length > 0 && (
                             <TooltipContent>
                                 <p>Normally hidden because: {quest.hiddenReasons.join(', ')}</p>
                             </TooltipContent>

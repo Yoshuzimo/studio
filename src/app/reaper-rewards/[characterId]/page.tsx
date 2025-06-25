@@ -41,6 +41,8 @@ const reaperLengthAdjustments: Record<DurationCategory, number> = {
   "Very Long": 1.4,
 };
 
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
+
 function parseDurationToMinutes(durationString?: string | null): number | null {
   if (!durationString || durationString.trim() === "") return null;
   let parsableString = durationString.toUpperCase();
@@ -270,25 +272,23 @@ export default function ReaperRewardsPage() {
         const questLvl = quest.level;
         const hiddenReasons: string[] = [];
         
-        if (!isDebugMode) {
-          if (charLvl < questLvl) hiddenReasons.push(`Character Level (${charLvl}) < Quest Level (${questLvl})`);
-          
-          if (charLvl >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
-          else if (charLvl >= 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
-          else if (questLvl >= 20 && charLvl < 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
-          else if (questLvl < 20 && charLvl - questLvl > 4) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 4 for heroic levels.`);
+        if (charLvl < questLvl) hiddenReasons.push(`Character Level (${charLvl}) < Quest Level (${questLvl})`);
+        
+        if (charLvl >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
+        else if (charLvl >= 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
+        else if (questLvl >= 20 && charLvl < 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
+        else if (questLvl < 20 && charLvl - questLvl > 4) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 4 for heroic levels.`);
 
-          const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-          const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-          const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-          if (!isOwned) hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+        if (!isOwned) hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
 
-          if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
-          
-          if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
+        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
+        
+        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
 
-          if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
-        }
+        if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
 
         return {
             ...quest,
@@ -301,8 +301,6 @@ export default function ReaperRewardsPage() {
     const filteredQuests = isDebugMode
       ? allProcessedQuests
       : allProcessedQuests.filter(quest => quest.hiddenReasons.length === 0);
-
-    const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
 
     return [...filteredQuests].sort((a, b) => {
       if (!sortConfig || !character) return 0;
@@ -320,12 +318,20 @@ export default function ReaperRewardsPage() {
       
       if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
       if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+
+      let comparison = 0;
       if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        comparison = aValue.localeCompare(bValue);
+      } else {
+        if (aValue < bValue) comparison = -1;
+        if (aValue > bValue) comparison = 1;
       }
-      if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
-      return 0;
+      
+      if (comparison !== 0) {
+        return sortConfig.direction === 'ascending' ? comparison : -comparison;
+      }
+
+      return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
 
   }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids, isDebugMode]);

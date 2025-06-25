@@ -35,6 +35,8 @@ type DurationCategory = "Very Short" | "Short" | "Medium" | "Long" | "Very Long"
 const durationAdjustmentDefaults: Record<DurationCategory, number> = { "Very Short": 1.2, "Short": 1.1, "Medium": 1.0, "Long": 0.9, "Very Long": 0.8, };
 const DURATION_CATEGORIES: DurationCategory[] = ["Very Short", "Short", "Medium", "Long", "Very Long"];
 
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
+
 const tableHeaders: { key: SortableQuestGuideColumnKey; label: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
     { key: 'name', label: 'Quest Name', className: "w-[250px] whitespace-nowrap", isSortable: false },
     { key: 'level', label: 'LVL', className: "text-center w-[80px]", isSortable: false },
@@ -269,7 +271,7 @@ export default function QuestGuidePage() {
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
         const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
         const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        if (!isOwned) hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
+        if (!isOwned) hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
         
         if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
         
@@ -284,8 +286,6 @@ export default function QuestGuidePage() {
       ? allProcessedQuests
       : allProcessedQuests.filter(quest => quest.hiddenReasons.length === 0);
 
-    const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
-    
     return [...filteredQuests].sort((a, b) => {
       if (!sortConfig || !character) return 0;
       
@@ -302,10 +302,19 @@ export default function QuestGuidePage() {
       
       if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
       if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-      if (typeof aValue === 'string' && typeof bValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-      if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
-      return 0;
+      let comparison = 0;
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        comparison = aValue.localeCompare(bValue);
+      } else {
+        if (aValue < bValue) comparison = -1;
+        if (aValue > bValue) comparison = 1;
+      }
+      
+      if (comparison !== 0) {
+          return sortConfig.direction === 'ascending' ? comparison : -comparison;
+      }
+      
+      return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
   }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig, isDebugMode]);
 
@@ -462,7 +471,7 @@ export default function QuestGuidePage() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                            <TableRow 
-                              className={cn(clickAction !== 'none' && 'cursor-pointer', isDebugMode && quest.hiddenReasons.length > 0 && 'text-destructive/80 hover:text-destructive')} 
+                              className={cn(clickAction !== 'none' && 'cursor-pointer', isDebugMode && (quest.hiddenReasons?.length ?? 0) > 0 && 'text-destructive/80 hover:text-destructive')} 
                               onClick={() => handleRowClick(quest)}
                             >
                               {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
