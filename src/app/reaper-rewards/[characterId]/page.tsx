@@ -41,7 +41,7 @@ const reaperLengthAdjustments: Record<DurationCategory, number> = {
   "Very Long": 1.4,
 };
 
-const getSortableName = (name: string): string => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^(the)\s+/i, '');
 
 function parseDurationToMinutes(durationString?: string | null): number | null {
   if (!durationString || durationString.trim() === "") return null;

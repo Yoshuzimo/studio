@@ -35,7 +35,7 @@ type DurationCategory = "Very Short" | "Short" | "Medium" | "Long" | "Very Long"
 const durationAdjustmentDefaults: Record<DurationCategory, number> = { "Very Short": 1.2, "Short": 1.1, "Medium": 1.0, "Long": 0.9, "Very Long": 0.8, };
 const DURATION_CATEGORIES: DurationCategory[] = ["Very Short", "Short", "Medium", "Long", "Very Long"];
 
-const getSortableName = (name: string): string => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^(the)\s+/i, '');
 
 const tableHeaders: { key: SortableQuestGuideColumnKey; label: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
     { key: 'name', label: 'Quest Name', className: "w-[250px] whitespace-nowrap", isSortable: false },

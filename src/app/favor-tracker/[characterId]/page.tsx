@@ -51,7 +51,7 @@ interface SortConfig {
   direction: 'ascending' | 'descending';
 }
 
-const getSortableName = (name: string): string => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
+const getSortableName = (name: string): string => name.toLowerCase().replace(/^(the)\s+/i, '');
 
 const difficultyLevels: {
   key: DifficultyKey;
@@ -488,6 +488,10 @@ export default function FavorTrackerPage() {
           hiddenReasons.push('Is a test quest');
         }
         
+        if (!showCompletedQuestsWithZeroRemainingFavor && remainingPossibleFavor <= 0) {
+            hiddenReasons.push('Completed with 0 remaining favor');
+        }
+        
         return {
             ...quest,
             casualCompleted: getQuestCompletion(quest.id, 'casualCompleted'),
@@ -503,22 +507,18 @@ export default function FavorTrackerPage() {
 
     const filteredQuests = isDebugMode
       ? allProcessedQuests
-      : allProcessedQuests.filter(quest => {
-          if (quest.hiddenReasons.length > 0) return false;
-          if (!showCompletedQuestsWithZeroRemainingFavor && quest.remainingPossibleFavor <= 0) return false;
-          return true;
-      });
+      : allProcessedQuests.filter(quest => quest.hiddenReasons.length === 0);
 
     const areaAggregates = {
       favorMap: new Map<string, number>(),
       scoreMap: new Map<string, number>(),
     };
 
-    filteredQuests.forEach(quest => {
-      if (quest.location) {
-        areaAggregates.favorMap.set(quest.location, (areaAggregates.favorMap.get(quest.location) || 0) + quest.remainingPossibleFavor);
-        areaAggregates.scoreMap.set(quest.location, (areaAggregates.scoreMap.get(quest.location) || 0) + quest.adjustedRemainingFavorScore);
-      }
+    allProcessedQuests.forEach(quest => {
+        if(quest.hiddenReasons.length === 0 && quest.location) {
+            areaAggregates.favorMap.set(quest.location, (areaAggregates.favorMap.get(quest.location) || 0) + quest.remainingPossibleFavor);
+            areaAggregates.scoreMap.set(quest.location, (areaAggregates.scoreMap.get(quest.location) || 0) + quest.adjustedRemainingFavorScore);
+        }
     });
 
     const sortedQuests = [...filteredQuests].sort((a, b) => {
