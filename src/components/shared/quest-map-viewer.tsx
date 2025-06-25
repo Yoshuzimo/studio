@@ -20,14 +20,26 @@ import { ScrollArea } from '../ui/scroll-area';
 interface QuestMapViewerProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  mapUrls: string[];
+  mapFileNames: string[];
   questName: string;
 }
+
+// Function to construct the full Firebase Storage URL
+const getMapUrl = (fileName: string): string => {
+  const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!bucket) {
+    console.error("Firebase storage bucket URL is not configured in .env");
+    return "https://placehold.co/800x600.png"; // Fallback URL
+  }
+  // Note: a folder name like "maps" is part of the path encoded in the URL.
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/maps%2F${encodeURIComponent(fileName)}?alt=media`;
+};
+
 
 export function QuestMapViewer({
   isOpen,
   onOpenChange,
-  mapUrls,
+  mapFileNames,
   questName,
 }: QuestMapViewerProps) {
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
@@ -41,6 +53,7 @@ export function QuestMapViewer({
     }
   }, [isOpen]);
 
+  const mapUrls = mapFileNames.map(getMapUrl);
   const currentMapUrl = mapUrls[currentMapIndex];
 
   return (

@@ -147,13 +147,11 @@ export default function QuestGuidePage() {
     } catch (error) { console.error("Error loading quest guide preferences:", error); }
   }, [characterId, isDataLoaded, currentUser]);
 
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ durationAdjustments }); }, [durationAdjustments, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ onCormyr }); }, [onCormyr, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ showRaids }); }, [showRaids, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ columnVisibility }); }, [columnVisibility, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) saveQuestGuidePreference({ clickAction }); }, [clickAction, saveQuestGuidePreference, isDataLoaded, characterId, currentUser]);
   
   const handlePopoverColumnVisibilityChange = (key: SortableQuestGuideColumnKey, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
-  const handleApplyColumnSettings = () => { setColumnVisibility(popoverColumnVisibility); saveQuestGuidePreference({ columnVisibility: popoverColumnVisibility }); setIsSettingsPopoverOpen(false); };
+  const handleApplyColumnSettings = () => { setColumnVisibility(popoverColumnVisibility); setIsSettingsPopoverOpen(false); };
   const handleCancelColumnSettings = () => setIsSettingsPopoverOpen(false);
   const handleSettingsPopoverOpenChange = (open: boolean) => { if (open) setPopoverColumnVisibility(columnVisibility); setIsSettingsPopoverOpen(open); };
 
@@ -194,17 +192,15 @@ export default function QuestGuidePage() {
         }
     }
   };
-
-  const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
   
   const sortedAndFilteredQuests = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return [];
 
     const getRelevantQuestDetails = (quest: Quest, char: Character) => {
-        const useEpic = quest.epicBaseLevel != null && char.level >= quest.epicBaseLevel;
-        return { tier: useEpic ? 'Epic' : 'Heroic', baseLevel: useEpic ? quest.epicBaseLevel! : quest.level, casualExp: useEpic ? quest.epicCasualExp : quest.casualExp, normalExp: useEpic ? quest.epicNormalExp : quest.normalExp, hardExp: useEpic ? quest.epicHardExp : quest.hardExp, eliteExp: useEpic ? quest.epicEliteExp : quest.eliteExp, casualNotAvailable: useEpic ? quest.epicCasualNotAvailable : quest.casualNotAvailable, normalNotAvailable: useEpic ? quest.epicNormalNotAvailable : quest.normalNotAvailable, hardNotAvailable: useEpic ? quest.epicHardNotAvailable : quest.hardNotAvailable, eliteNotAvailable: useEpic ? quest.epicEliteNotAvailable : quest.eliteNotAvailable, };
+      const useEpic = quest.epicBaseLevel != null && char.level >= quest.epicBaseLevel;
+      return { tier: useEpic ? 'Epic' : 'Heroic', baseLevel: useEpic ? quest.epicBaseLevel! : quest.level, casualExp: useEpic ? quest.epicCasualExp : quest.casualExp, normalExp: useEpic ? quest.epicNormalExp : quest.normalExp, hardExp: useEpic ? quest.epicHardExp : quest.hardExp, eliteExp: useEpic ? quest.epicEliteExp : quest.eliteExp, casualNotAvailable: useEpic ? quest.epicCasualNotAvailable : quest.casualNotAvailable, normalNotAvailable: useEpic ? quest.epicNormalNotAvailable : quest.normalNotAvailable, hardNotAvailable: useEpic ? quest.epicHardNotAvailable : quest.hardNotAvailable, eliteNotAvailable: useEpic ? quest.epicEliteNotAvailable : quest.eliteNotAvailable, };
     };
-    
+
     const getHeroicPenaltyPercent = (charLevel: number, questEffectiveLevel: number): number => {
       if (charLevel >= 20) return 0; const levelDifference = charLevel - questEffectiveLevel;
       if (levelDifference <= 1) return 0;
@@ -212,30 +208,30 @@ export default function QuestGuidePage() {
     };
     
     const calculateAdjustedExp = (quest: Quest, char: Character) => {
-        const details = getRelevantQuestDetails(quest, char);
-        const calc = (exp: number | null | undefined, notAvailable: boolean | null | undefined, effectiveLevel: number) => {
-            if (!exp || notAvailable) return null;
-            if (details.tier === 'Epic') {
-                if (char.level < details.baseLevel) return null;
-                const penalty = char.level - (effectiveLevel);
-                if (penalty > 6) return null;
-                return exp;
-            }
-            if (char.level < effectiveLevel) return null;
-            if (char.level >= 20) return exp;
-            const penaltyPercent = getHeroicPenaltyPercent(char.level, effectiveLevel);
-            if (penaltyPercent >= 100) return null;
-            return Math.round(exp * (1 - penaltyPercent / 100));
-        };
-        
-        return {
-            adjustedCasualExp: calc(details.casualExp, details.casualNotAvailable, details.baseLevel - 1),
-            adjustedNormalExp: calc(details.normalExp, details.normalNotAvailable, details.baseLevel),
-            adjustedHardExp: calc(details.hardExp, details.hardNotAvailable, details.baseLevel + 1),
-            adjustedEliteExp: calc(details.eliteExp, details.eliteNotAvailable, details.baseLevel + 2),
-        };
+      const details = getRelevantQuestDetails(quest, char);
+      const calc = (exp: number | null | undefined, notAvailable: boolean | null | undefined, effectiveLevel: number) => {
+          if (!exp || notAvailable) return null;
+          if (details.tier === 'Epic') {
+              if (char.level < details.baseLevel) return null;
+              const penalty = char.level - (effectiveLevel);
+              if (penalty > 6) return null;
+              return exp;
+          }
+          if (char.level < effectiveLevel) return null;
+          if (char.level >= 20) return exp;
+          const penaltyPercent = getHeroicPenaltyPercent(char.level, effectiveLevel);
+          if (penaltyPercent >= 100) return null;
+          return Math.round(exp * (1 - penaltyPercent / 100));
+      };
+      
+      return {
+          adjustedCasualExp: calc(details.casualExp, details.casualNotAvailable, details.baseLevel - 1),
+          adjustedNormalExp: calc(details.normalExp, details.normalNotAvailable, details.baseLevel),
+          adjustedHardExp: calc(details.hardExp, details.hardNotAvailable, details.baseLevel + 1),
+          adjustedEliteExp: calc(details.eliteExp, details.eliteNotAvailable, details.baseLevel + 2),
+      };
     };
-
+    
     const processedQuests = quests.map(quest => {
         const adjustedExps = calculateAdjustedExp(quest, character);
         const allExps = Object.values(adjustedExps).filter(v => v !== null) as number[];
@@ -255,23 +251,28 @@ export default function QuestGuidePage() {
         return isOwned && isNotOnCormyrQuest && !isTestQuest && isNotARaidOrShouldBeShown;
     });
 
+    const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
+    
     return [...processedQuests].sort((a, b) => {
-        if (!sortConfig || !character) return 0;
-        let aValue: string | number | null | undefined;
-        let bValue: string | number | null | undefined;
-        
-        if (sortConfig.key === 'experienceScore') { aValue = a.experienceScore; bValue = b.experienceScore; } 
-        else if (sortConfig.key === 'maxExp') { aValue = a.maxExp; bValue = b.maxExp; } 
-        else { aValue = a[sortConfig.key as keyof Quest]; bValue = b[sortConfig.key as keyof Quest]; }
-        
-        if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-        if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-          return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-        }
-        if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
-        return 0;
+      if (!sortConfig || !character) return 0;
+      
+      let aValue: string | number | null | undefined;
+      let bValue: string | number | null | undefined;
+
+      if (sortConfig.key === 'name') {
+        aValue = getSortableName(a.name);
+        bValue = getSortableName(b.name);
+      } else {
+        aValue = a[sortConfig.key as keyof typeof a];
+        bValue = b[sortConfig.key as keyof typeof b];
+      }
+      
+      if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+      if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+      if (typeof aValue === 'string' && typeof bValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+      return 0;
     });
   }, [quests, character, onCormyr, ownedPacks, isDataLoaded, showRaids, durationAdjustments, sortConfig]);
 
@@ -284,16 +285,11 @@ export default function QuestGuidePage() {
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
   }
-  if (!currentUser) { 
-     return (
-      <div className="container mx-auto py-8 text-center">
-        <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-        <p className="text-muted-foreground mt-2">Please log in to view this page.</p>
-        <Button onClick={() => router.push('/login')} className="mt-6">Log In</Button>
-      </div>
-    );
+  
+  if (!currentUser) {
+     return <div className="container mx-auto py-8 text-center"><AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" /><h1 className="text-2xl font-bold">Access Denied</h1><p className="text-muted-foreground mt-2">Please log in to view this page.</p><Button onClick={() => router.push('/login')} className="mt-6">Log In</Button></div>;
   }
+  
   if (!character) { 
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
@@ -457,12 +453,12 @@ export default function QuestGuidePage() {
             wikiUrl={selectedQuest.wikiUrl}
         />
       )}
-      {selectedQuestForMap && (
+       {selectedQuestForMap && (
         <QuestMapViewer
           isOpen={isMapViewerOpen}
           onOpenChange={setIsMapViewerOpen}
           questName={selectedQuestForMap.name}
-          mapUrls={selectedQuestForMap.mapUrls || []}
+          mapFileNames={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>

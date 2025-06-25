@@ -231,24 +231,6 @@ export default function ReaperRewardsPage() {
     }
   };
 
-  const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
-  
-  const requestSort = (key: SortableReaperColumnKey) => {
-    let direction: 'ascending' | 'descending' = 'ascending';
-
-    if (key.startsWith('skull-') || key === 'maxRXP') {
-      direction = 'descending';
-    }
-
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
-    } else if (sortConfig && sortConfig.key === key && sortConfig.direction === 'descending') {
-      setSortConfig(null);
-      return;
-    }
-    setSortConfig({ key, direction });
-  };
-
   const sortedAndFilteredQuests = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return [];
 
@@ -298,6 +280,8 @@ export default function ReaperRewardsPage() {
         return charLvl - questLvl <= 4;
       });
 
+    const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
+
     return [...processedQuests].sort((a, b) => {
       if (!sortConfig || !character) return 0;
       
@@ -323,7 +307,23 @@ export default function ReaperRewardsPage() {
     });
 
   }, [quests, character, onCormyr, ownedPacks, isDataLoaded, sortConfig, showRaids]);
+  
+  const requestSort = (key: SortableReaperColumnKey) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
 
+    if (key.startsWith('skull-') || key === 'maxRXP') {
+      direction = 'descending';
+    }
+
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    } else if (sortConfig && sortConfig.key === key && sortConfig.direction === 'descending') {
+      setSortConfig(null);
+      return;
+    }
+    setSortConfig({ key, direction });
+  };
+  
   const getSortIndicator = (columnKey: SortableReaperColumnKey) => {
     if (!sortConfig || sortConfig.key !== columnKey) {
       return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
@@ -480,7 +480,7 @@ export default function ReaperRewardsPage() {
           isOpen={isMapViewerOpen}
           onOpenChange={setIsMapViewerOpen}
           questName={selectedQuestForMap.name}
-          mapUrls={selectedQuestForMap.mapUrls || []}
+          mapFileNames={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>

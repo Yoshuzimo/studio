@@ -685,8 +685,8 @@ export default function FavorTrackerPage() {
           <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
-           {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
-           : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
+           {pageOverallLoading && sortedAndFilteredData.sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
+           : !pageOverallLoading && sortedAndFilteredData.sortedQuests.length === 0 && character ? ( <div className="text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
            : ( <div className="overflow-x-auto"> <Table>
                 <TableCaption className="py-4">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
                 <TableHeader> <TableRow>
@@ -699,7 +699,7 @@ export default function FavorTrackerPage() {
                     ))}
                 </TableRow> </TableHeader>
                 <TableBody>
-                    {sortedQuests.map((quest) => (
+                    {sortedAndFilteredData.sortedQuests.map((quest) => (
                     <TableRow key={quest.id} className={cn(character && quest.level > character.level ? 'opacity-60' : '', clickAction !== 'none' && 'cursor-pointer')} onClick={() => handleRowClick(quest)}>
                         {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
                         {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
@@ -707,9 +707,9 @@ export default function FavorTrackerPage() {
                         {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
                         {columnVisibility['duration'] && <TableCell className="whitespace-nowrap text-center">{getDurationCategory(quest.duration) || 'N/A'}</TableCell>}
                         {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
-                        {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{(quest as any).maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
-                        {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{(quest as any).remainingPossibleFavor ?? '-'}</TableCell>}
-                        {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{(quest as any).adjustedRemainingFavorScore ?? '-'}</TableCell>}
+                        {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
+                        {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
+                        {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
                         {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : '-'}</TableCell>}
                         {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : '-'}</TableCell>}
 
@@ -758,7 +758,7 @@ export default function FavorTrackerPage() {
           isOpen={isMapViewerOpen}
           onOpenChange={setIsMapViewerOpen}
           questName={selectedQuestForMap.name}
-          mapUrls={selectedQuestForMap.mapUrls || []}
+          mapFileNames={selectedQuestForMap.mapUrls || []}
         />
       )}
     </div>

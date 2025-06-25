@@ -77,7 +77,7 @@ export interface Quest {
 
   // New fields for wiki and maps
   wikiUrl?: string | null;
-  mapUrls?: string[];
+  mapUrls?: string[]; // Should contain filenames, not full URLs
 }
 
 export interface UserQuestCompletionData {
