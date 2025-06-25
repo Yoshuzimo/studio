@@ -8,7 +8,7 @@ import type { Character, AdventurePack, Quest, UserQuestCompletionData } from '@
 import { db, auth } from '@/lib/firebase';
 import {
   collection, getDocs, doc, writeBatch, setDoc, deleteDoc, query,
-  getDoc, where, type Timestamp as FirestoreTimestampType, serverTimestamp, type FieldValue,
+  getDoc, where, type Timestamp as FirestoreTimestampType, serverTimestamp, type FieldValue, onSnapshot,
 } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from './auth-context';
@@ -57,6 +57,8 @@ const USER_CONFIGURATION_COLLECTION = 'userConfiguration';
 const OWNED_PACKS_SUBCOLLECTION = 'ownedPacksInfo';
 const CHARACTERS_COLLECTION = 'characters';
 const QUEST_COMPLETIONS_SUBCOLLECTION = 'questCompletions';
+const METADATA_COLLECTION = 'metadata';
+const QUEST_DATA_METADATA_DOC = 'questData';
 const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
 
 const BATCH_OPERATION_LIMIT = 490;
@@ -87,6 +89,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [characters, setCharactersState] = useState<Character[]>([]);
   const [quests, setQuestsState] = useState<Quest[]>([]);
   const [ownedPacks, setOwnedPacksInternal] = useState<string[]>([]);
+  const [lastQuestUpdateTime, setLastQuestUpdateTime] = useState<FirestoreTimestampType | null>(null);
+
 
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
   const [activeCharacterQuestCompletions, setActiveCharacterQuestCompletions] = useState<Map<string, UserQuestCompletionData>>(new Map());
@@ -98,8 +102,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const initialDataLoadedForUserRef = useRef<string | null>(null);
   const lastKnownOwnedPacksRef = useRef<string | null>(null);
-
-  console.log('[AppDataProvider] Render. Auth isLoading:', authIsLoading, 'AppData isLoading:', isLoading, 'AppData isUpdating:', isUpdating, 'Current user UID:', currentUser?.uid, 'Active Char ID:', activeCharacterId);
 
   const setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>> = useCallback((valueOrFn) => {
     setOwnedPacksInternal(prevOwnedPacks => {
@@ -128,49 +130,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return [...new Set(finalPacks)];
     });
   }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-    console.log('[AppDataProvider] Main data loading useEffect triggered. authIsLoading:', authIsLoading, 'currentUser?.uid:', currentUser?.uid);
-
-    if (authIsLoading) {
-      console.log('[AppDataProvider] Auth is still loading, AppData will wait.');
-      setIsLoading(true);
-      return;
-    }
-
-    console.log('[AppDataProvider] Auth resolved. Current user UID:', currentUser?.uid);
+  
+  const fetchQuests = useCallback(async () => {
+    console.log('[AppDataProvider] Fetching master quest list...');
     setIsLoading(true);
-    setIsUpdating(false);
-    setIsDataLoaded(false);
-    console.log('[AppDataProvider] loadAllData: Set AppData isLoading true, isDataLoaded false.');
-
-    const loadAllData = async () => {
-      console.log('[AppDataProvider] loadAllData async function started. Current user UID:', currentUser?.uid);
-
-      if (currentUser && initialDataLoadedForUserRef.current !== currentUser.uid) {
-          console.log('[AppDataProvider] New login or user switch detected.');
-          React.startTransition(() => {
-            setCharactersState([]);
-            setOwnedPacksInternal([]);
-            setActiveCharacterId(null);
-            setActiveCharacterQuestCompletions(new Map());
-          });
-          console.log('[AppDataProvider] User-specific states reset for new login/user switch.');
-      } else if (!currentUser && initialDataLoadedForUserRef.current !== null) {
-          console.log('[AppDataProvider] User logged out. Resetting user-specific states and clearing initialDataLoadedForUserRef.');
-           React.startTransition(() => {
-            setCharactersState([]);
-            setOwnedPacksInternal([]);
-            setActiveCharacterId(null);
-            setActiveCharacterQuestCompletions(new Map());
-          });
-          initialDataLoadedForUserRef.current = null;
-      }
-      
-      try {
+    try {
         const questSnapshot = await getDocs(collection(db, 'quests'));
-        if (!isMounted) { console.log('[AppDataProvider] Unmounted during quest fetch.'); return; }
         const loadedQuests = questSnapshot.docs.map(docSnap => ({
           id: docSnap.id,
           ...docSnap.data(),
@@ -179,21 +144,71 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             adventurePackName: normalizeAdventurePackNameForStorage(q.adventurePackName)
         }));
         setQuestsState(loadedQuests);
-        console.log(`[AppDataProvider] Loaded ${loadedQuests.length} quests from Firestore.`);
-      } catch (error) {
-        if (!isMounted) return;
-        console.error("[AppDataProvider] Failed to load quests:", error);
-        toast({ title: "Quest Load Error", description: (error as Error).message, variant: 'destructive' });
-        setQuestsState([]);
-      }
+        console.log(`[AppDataProvider] Loaded ${loadedQuests.length} quests.`);
+    } catch (error) {
+      console.error("[AppDataProvider] Failed to load quests:", error);
+      toast({ title: "Quest Load Error", description: "Could not fetch the master quest list. Some features may not work.", variant: 'destructive' });
+      setQuestsState([]);
+    } finally {
+        setIsLoading(false);
+    }
+  }, [toast]);
 
+  useEffect(() => {
+    const metadataDocRef = doc(db, METADATA_COLLECTION, QUEST_DATA_METADATA_DOC);
+    const unsubscribe = onSnapshot(metadataDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const newTimestamp = docSnap.data().lastUpdatedAt as FirestoreTimestampType;
+            if (newTimestamp && (!lastQuestUpdateTime || newTimestamp.toMillis() > lastQuestUpdateTime.toMillis())) {
+                console.log('[AppDataProvider] Quest data has been updated. Re-fetching...');
+                setLastQuestUpdateTime(newTimestamp);
+                fetchQuests();
+            }
+        }
+    });
+
+    return () => unsubscribe();
+  }, [fetchQuests, lastQuestUpdateTime]);
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    if (authIsLoading) {
+      setIsLoading(true);
+      return;
+    }
+
+    setIsLoading(true);
+    setIsDataLoaded(false);
+
+    const loadInitialData = async () => {
+      console.log('[AppDataProvider] loadInitialData started for user:', currentUser?.uid);
+      
+      // Fetch quests on initial load regardless of listener
+      await fetchQuests();
+
+      if (currentUser && initialDataLoadedForUserRef.current !== currentUser.uid) {
+          console.log('[AppDataProvider] New login or user switch detected.');
+          setCharactersState([]);
+          setOwnedPacksInternal([]);
+          setActiveCharacterId(null);
+          setActiveCharacterQuestCompletions(new Map());
+      } else if (!currentUser && initialDataLoadedForUserRef.current !== null) {
+          console.log('[AppDataProvider] User logged out.');
+          setCharactersState([]);
+          setOwnedPacksInternal([]);
+          setActiveCharacterId(null);
+          setActiveCharacterQuestCompletions(new Map());
+          initialDataLoadedForUserRef.current = null;
+      }
+      
       let finalUserOwnedPacks: string[] = [];
       if (currentUser) {
-        console.log('[AppDataProvider] CurrentUser exists, fetching user-specific data (characters, ownedPacks) for UID:', currentUser.uid);
+        console.log('[AppDataProvider] Fetching user-specific data for UID:', currentUser.uid);
         try {
           const charQuery = query(collection(db, 'characters'), where('userId', '==', currentUser.uid));
           const charSnapshot = await getDocs(charQuery);
-          if (!isMounted) { console.log('[AppDataProvider] Unmounted during character fetch.'); return; }
+          if (!isMounted) return;
           const loadedChars = charSnapshot.docs.map(docSnap => {
             const data = docSnap.data();
             return {
@@ -204,43 +219,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               iconUrl: data.iconUrl || null,
             } as Character;
           });
-
-          React.startTransition(() => {
-            setCharactersState(loadedChars);
-          });
-          console.log('[AppDataProvider] Characters set in state:', loadedChars.length);
+          setCharactersState(loadedChars);
 
           const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_SUBCOLLECTION, 'data');
           const ownedPacksDocSnap = await getDoc(ownedPacksDocRef);
-          if (!isMounted) { console.log('[AppDataProvider] Unmounted during ownedPacks fetch.'); return; }
+          if (!isMounted) return;
 
           const rawOwnedPacks = ownedPacksDocSnap.exists() ? (ownedPacksDocSnap.data()?.names || []) as string[] : [];
           finalUserOwnedPacks = rawOwnedPacks
             .map(name => normalizeAdventurePackNameForStorage(name))
             .filter((name): name is string => name !== null);
-          console.log('[AppDataProvider] Fetched and normalized user-specific ownedPacks from Firestore:', finalUserOwnedPacks);
 
         } catch (error) {
           if (!isMounted) return;
           console.error("[AppDataProvider] Failed to load user-specific data:", error);
           toast({ title: "User Data Load Error", description: (error as Error).message, variant: 'destructive' });
-          React.startTransition(() => {
-            setCharactersState([]);
-          });
-          finalUserOwnedPacks = [];
-        }
-      } else {
-        console.log('[AppDataProvider] No currentUser, user-specific states remain empty (or were reset).');
-        if (isMounted) {
-          React.startTransition(() => {
-            setCharactersState([]);
-          });
+          setCharactersState([]);
           finalUserOwnedPacks = [];
         }
       }
 
       let packsToSetInState = [...new Set(finalUserOwnedPacks)];
-
       if (SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED && packsToSetInState.some(p => p.toLowerCase() === SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED.toLowerCase())) {
         SHADOWFELL_CONSPIRACY_CHILDREN_NORMALIZED.forEach(childPackName => {
           if (!packsToSetInState.some(p => p.toLowerCase() === childPackName.toLowerCase())) {
@@ -248,77 +247,48 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           }
         });
       }
-
       const freeToPlayMasterInstance = adventurePacks.find(p => normalizeAdventurePackNameForStorage(p.name)?.toLowerCase() === FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-      if (freeToPlayMasterInstance && freeToPlayMasterInstance.name) {
-          const isFtpAlreadyInFinal = packsToSetInState.some(opName => normalizeAdventurePackNameForStorage(opName)?.toLowerCase() === FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-          if (!isFtpAlreadyInFinal) {
-              packsToSetInState = [...packsToSetInState, freeToPlayMasterInstance.name];
-              console.log('[AppDataProvider] Added "Free to play" to packsToSetInState on load.');
+      if (freeToPlayMasterInstance?.name) {
+          if (!packsToSetInState.some(opName => normalizeAdventurePackNameForStorage(opName)?.toLowerCase() === FREE_TO_PLAY_PACK_NAME_LOWERCASE)) {
+              packsToSetInState.push(freeToPlayMasterInstance.name);
           }
       }
 
       if (isMounted) {
-        React.startTransition(() => {
-          setOwnedPacksInternal([...new Set(packsToSetInState)]);
-        });
+        setOwnedPacksInternal([...new Set(packsToSetInState)]);
         lastKnownOwnedPacksRef.current = JSON.stringify([...new Set(packsToSetInState)].sort());
-        console.log('[AppDataProvider] OwnedPacks set in state on load, lastKnownOwnedPacksRef updated with:', packsToSetInState);
         if (currentUser) initialDataLoadedForUserRef.current = currentUser.uid; else initialDataLoadedForUserRef.current = null;
         setIsDataLoaded(true);
         setIsLoading(false);
-        console.log('[AppDataProvider] loadAllData finished. setIsLoading(false), setIsDataLoaded(true).');
       }
     };
 
-    loadAllData();
+    loadInitialData();
 
-    return () => {
-      isMounted = false;
-      console.log('[AppDataProvider] Main data loading useEffect unmounted.');
-    };
-  }, [currentUser?.uid, authIsLoading, toast, setOwnedPacks]);
+    return () => { isMounted = false; };
+  }, [currentUser?.uid, authIsLoading, toast, fetchQuests]);
 
   useEffect(() => {
     const currentOwnedPacksString = JSON.stringify(ownedPacks.sort());
     if (
-      authIsLoading ||
-      !currentUser ||
-      !isDataLoaded ||
+      authIsLoading || !currentUser || !isDataLoaded ||
       initialDataLoadedForUserRef.current !== currentUser.uid ||
       currentOwnedPacksString === lastKnownOwnedPacksRef.current
-    ) {
-        console.log('[AppDataProvider] ownedPacks save effect: Skipping save. Guard conditions:', {
-            authIsLoading,
-            hasCurrentUser: !!currentUser,
-            isDataLoaded,
-            initialLoadMatchesUser: initialDataLoadedForUserRef.current === currentUser?.uid,
-            contentChanged: currentOwnedPacksString !== lastKnownOwnedPacksRef.current
-        });
-      return;
-    }
-    console.log('[AppDataProvider] ownedPacks save effect triggered. currentUser:', currentUser.uid, 'isDataLoaded:', isDataLoaded, 'initialDataLoadedForUserRef:', initialDataLoadedForUserRef.current, 'lastKnown:', lastKnownOwnedPacksRef.current, 'current:', currentOwnedPacksString);
+    ) return;
+    
     const handler = setTimeout(async () => {
       const freshestCurrentUser = auth.currentUser;
-      if (!freshestCurrentUser || freshestCurrentUser.uid !== currentUser.uid) {
-        console.warn('[AppDataProvider] User changed during ownedPacks save timeout. Aborting save.');
-        return;
-      }
+      if (!freshestCurrentUser || freshestCurrentUser.uid !== currentUser.uid) return;
       setIsUpdating(true);
-      console.log('[AppDataProvider] ownedPacks save: isUpdating set to true.');
       try {
         const packsToSave = ownedPacks.filter(pName => normalizeAdventurePackNameForStorage(pName)?.toLowerCase() !== FREE_TO_PLAY_PACK_NAME_LOWERCASE);
         const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, freshestCurrentUser.uid, OWNED_PACKS_SUBCOLLECTION, 'data');
-        console.log('[AppDataProvider] Saving owned packs to Firestore:', packsToSave, 'for UID:', freshestCurrentUser.uid);
         await setDoc(ownedPacksDocRef, { names: packsToSave }, { merge: true });
         lastKnownOwnedPacksRef.current = currentOwnedPacksString;
-        console.log('[AppDataProvider] Owned packs saved successfully. lastKnownOwnedPacksRef updated.');
       } catch (error) {
-        console.error('[AppDataProvider] Error saving owned packs:', error);
         toast({ title: "Error Saving Owned Packs", description: (error as Error).message, variant: 'destructive' });
       } finally {
         setIsUpdating(false);
-        console.log('[AppDataProvider] ownedPacks save: isUpdating set to false.');
       }
     }, 1500);
     return () => clearTimeout(handler);
@@ -327,32 +297,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const addCharacter = async (characterData: Omit<Character, 'id' | 'userId' | 'iconUrl'> & { iconUrl?: string }): Promise<Character | undefined> => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return undefined; }
     setIsUpdating(true);
-    console.log('[AppDataProvider] addCharacter: isUpdating set to true.');
     try {
       const newId = doc(collection(db, 'characters')).id;
       const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, iconUrl: characterData.iconUrl || null };
       await setDoc(doc(db, 'characters', newId), newCharacter);
-      React.startTransition(() => {
-        setCharactersState(prev => [...prev, newCharacter]);
-      });
+      setCharactersState(prev => [...prev, newCharacter]);
       toast({ title: "Character Added", description: `${newCharacter.name} created.` });
       return newCharacter;
     } catch (error) { toast({ title: "Error Adding Character", description: (error as Error).message, variant: 'destructive' }); return undefined; }
-    finally { setIsUpdating(false); console.log('[AppDataProvider] addCharacter: isUpdating set to false.');}
+    finally { setIsUpdating(false); }
   };
 
   const updateCharacter = async (character: Character): Promise<void> => {
     if (!currentUser || character.userId !== currentUser.uid) { toast({ title: "Unauthorized", variant: "destructive" }); return; }
     setIsUpdating(true);
-    console.log('[AppDataProvider] updateCharacter: isUpdating set to true.');
     try {
       await setDoc(doc(db, 'characters', character.id), character, { merge: true });
-      React.startTransition(() => {
-        setCharactersState(prev => prev.map(c => c.id === character.id ? character : c));
-      });
+      setCharactersState(prev => prev.map(c => c.id === character.id ? character : c));
       toast({ title: "Character Updated", description: `${character.name}'s details saved.`});
     } catch (error) { toast({ title: "Error Updating Character", description: (error as Error).message, variant: 'destructive' }); }
-    finally { setIsUpdating(false); console.log('[AppDataProvider] updateCharacter: isUpdating set to false.');}
+    finally { setIsUpdating(false); }
   };
 
   const deleteCharacter = async (characterId: string): Promise<void> => {
@@ -361,12 +325,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Unauthorized", variant: "destructive" }); return;
     }
     setIsUpdating(true);
-    console.log('[AppDataProvider] deleteCharacter: isUpdating set to true.');
     try {
       await deleteDoc(doc(db, 'characters', characterId));
-      React.startTransition(() => {
-        setCharactersState(prev => prev.filter(c => c.id !== characterId));
-      });
+      setCharactersState(prev => prev.filter(c => c.id !== characterId));
 
       const completionsSubcollectionRef = collection(db, CHARACTERS_COLLECTION, characterId, QUEST_COMPLETIONS_SUBCOLLECTION);
       const completionsSnapshot = await getDocs(completionsSubcollectionRef);
@@ -384,19 +345,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (operationCount > 0) await currentBatch.commit();
 
       if (activeCharacterId === characterId) {
-        React.startTransition(() => {
-          setActiveCharacterId(null);
-          setActiveCharacterQuestCompletions(new Map());
-        });
+        setActiveCharacterId(null);
+        setActiveCharacterQuestCompletions(new Map());
       }
       toast({ title: "Character Deleted", description: `${characterToDelete.name} and their quest completions deleted.`, variant: "destructive" });
     } catch (error) { toast({ title: "Error Deleting Character", description: (error as Error).message, variant: 'destructive' }); }
-    finally { setIsUpdating(false); console.log('[AppDataProvider] deleteCharacter: isUpdating set to false.');}
+    finally { setIsUpdating(false); }
   };
   
   const setQuests = useCallback(async (newQuests: Quest[]) => {
     setIsUpdating(true);
-    console.log('[AppDataProvider] setQuests: Starting Firestore update for master quest list.');
     try {
       const questsCollectionRef = collection(db, 'quests');
       const oldQuestsSnapshot = await getDocs(questsCollectionRef);
@@ -406,14 +364,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         deleteBatch.delete(docSnap.ref);
         deleteCount++;
         if (deleteCount % BATCH_OPERATION_LIMIT === 0) {
-          deleteBatch.commit();
-          deleteBatch = writeBatch(db);
+          deleteBatch.commit(); deleteBatch = writeBatch(db);
         }
       });
-      if (deleteCount > 0) {
-        await deleteBatch.commit();
-        console.log(`[AppDataProvider] Deleted ${deleteCount} old quests.`);
-      }
+      if (deleteCount > 0) await deleteBatch.commit();
 
       let addBatch = writeBatch(db);
       let addCount = 0;
@@ -422,26 +376,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         addBatch.set(questDocRef, { ...quest, id: questDocRef.id });
         addCount++;
         if (addCount % BATCH_OPERATION_LIMIT === 0) {
-          addBatch.commit();
-          addBatch = writeBatch(db);
+          addBatch.commit(); addBatch = writeBatch(db);
         }
       });
-      if (addCount > 0) {
-        await addBatch.commit();
-        console.log(`[AppDataProvider] Added ${addCount} new quests.`);
-      }
+      if (addCount > 0) await addBatch.commit();
 
-      React.startTransition(() => {
-        setQuestsState(newQuests);
-      });
+      const metadataDocRef = doc(db, METADATA_COLLECTION, QUEST_DATA_METADATA_DOC);
+      await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() });
+
+      setQuestsState(newQuests);
       toast({ title: 'Quests Updated', description: `Successfully updated ${newQuests.length} quests in the database.` });
 
     } catch (error) {
-      console.error("Error setting quests in Firestore:", error);
       toast({ title: "Quest Update Failed", description: (error as Error).message, variant: 'destructive' });
     } finally {
       setIsUpdating(false);
-      console.log('[AppDataProvider] setQuests: Finished Firestore update.');
     }
   }, [toast]);
 
@@ -450,12 +399,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     try {
       const questDocRef = doc(db, 'quests', quest.id);
       await setDoc(questDocRef, quest, { merge: true });
-      React.startTransition(() => {
-        setQuestsState(prev => prev.map(q => q.id === quest.id ? quest : q));
-      });
+      const metadataDocRef = doc(db, METADATA_COLLECTION, QUEST_DATA_METADATA_DOC);
+      await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() }, { merge: true });
+      setQuestsState(prev => prev.map(q => q.id === quest.id ? quest : q));
       toast({ title: 'Quest Updated', description: `${quest.name} has been saved.` });
     } catch (error) {
-      console.error("Error updating quest:", error);
       toast({ title: "Update Failed", description: (error as Error).message, variant: 'destructive' });
     } finally {
       setIsUpdating(false);
@@ -466,12 +414,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setIsUpdating(true);
     try {
       await deleteDoc(doc(db, 'quests', questId));
-      React.startTransition(() => {
-        setQuestsState(prev => prev.filter(q => q.id !== questId));
-      });
+      const metadataDocRef = doc(db, METADATA_COLLECTION, QUEST_DATA_METADATA_DOC);
+      await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() }, { merge: true });
+      setQuestsState(prev => prev.filter(q => q.id !== questId));
       toast({ title: 'Quest Deleted', description: 'The quest has been removed from the database.' });
     } catch (error) {
-      console.error("Error deleting quest:", error);
       toast({ title: "Delete Failed", description: (error as Error).message, variant: 'destructive' });
     } finally {
       setIsUpdating(false);
@@ -480,14 +427,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const fetchQuestCompletionsForCharacter = useCallback(async (characterIdToFetch: string) => {
     if (!currentUser) {
-      console.log('[AppDataProvider] fetchQuestCompletions: No current user, clearing active completions.');
-      React.startTransition(() => {
-        setActiveCharacterId(null);
-        setActiveCharacterQuestCompletions(new Map());
-      });
+      setActiveCharacterId(null);
+      setActiveCharacterQuestCompletions(new Map());
       return;
     }
-    console.log('[AppDataProvider] fetchQuestCompletions: Fetching for character', characterIdToFetch);
     setIsLoading(true);
     try {
       const completionsPath = `${CHARACTERS_COLLECTION}/${characterIdToFetch}/${QUEST_COMPLETIONS_SUBCOLLECTION}`;
@@ -497,18 +440,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       snapshot.docs.forEach(docSnap => {
         newCompletions.set(docSnap.id, { ...docSnap.data() } as UserQuestCompletionData);
       });
-      React.startTransition(() => {
-        setActiveCharacterQuestCompletions(newCompletions);
-        setActiveCharacterId(characterIdToFetch);
-      });
-      console.log(`[AppDataProvider] Loaded ${newCompletions.size} completions for char ${characterIdToFetch}`);
+      setActiveCharacterQuestCompletions(newCompletions);
+      setActiveCharacterId(characterIdToFetch);
     } catch (error) {
-      console.error("[AppDataProvider] Error loading quest completions:", error);
       toast({ title: "Error Loading Quest Completions", description: (error as Error).message, variant: 'destructive' });
-      React.startTransition(() => {
-        setActiveCharacterQuestCompletions(new Map());
-        setActiveCharacterId(null);
-      });
+      setActiveCharacterQuestCompletions(new Map());
+      setActiveCharacterId(null);
     } finally {
       setIsLoading(false);
     }
@@ -521,17 +458,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     difficultyKey: keyof Pick<UserQuestCompletionData, 'casualCompleted' | 'normalCompleted' | 'hardCompleted' | 'eliteCompleted'>,
     isCompleted: boolean
   ) => {
-    if (!currentUser) {
-      toast({ title: "Not Authenticated", variant: "destructive" });
-      return;
-    }
+    if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
     const characterDoc = characters.find(c => c.id === characterIdForUpdate);
-    if (!characterDoc || characterDoc.userId !== currentUser.uid) {
-      toast({ title: "Unauthorized", description: "Cannot update completions for this character.", variant: "destructive" });
-      return;
-    }
+    if (!characterDoc || characterDoc.userId !== currentUser.uid) { toast({ title: "Unauthorized", description: "Cannot update completions for this character.", variant: "destructive" }); return; }
     setIsUpdating(true);
-    console.log('[AppDataProvider] updateUserQuestCompletion: isUpdating set to true.');
     try {
       const completionDocRef = doc(db, CHARACTERS_COLLECTION, characterIdForUpdate, QUEST_COMPLETIONS_SUBCOLLECTION, questId);
       const updatePayload: Partial<UserQuestCompletionData> = {
@@ -542,21 +472,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       await setDoc(completionDocRef, updatePayload, { merge: true });
 
       if (characterIdForUpdate === activeCharacterId) {
-        React.startTransition(() => {
-          setActiveCharacterQuestCompletions(prevMap => {
-            const newMap = new Map(prevMap);
-            const existingEntry = newMap.get(questId) || { questId };
-            newMap.set(questId, { ...existingEntry, ...updatePayload, lastUpdatedAt: undefined } as UserQuestCompletionData); // lastUpdatedAt set to undefined for local state
-            return newMap;
-          });
+        setActiveCharacterQuestCompletions(prevMap => {
+          const newMap = new Map(prevMap);
+          const existingEntry = newMap.get(questId) || { questId };
+          newMap.set(questId, { ...existingEntry, ...updatePayload, lastUpdatedAt: undefined } as UserQuestCompletionData); // lastUpdatedAt set to undefined for local state
+          return newMap;
         });
       }
-    } catch (error) {
-      toast({ title: "Error Updating Quest Completion", description: (error as Error).message, variant: 'destructive' });
-    } finally {
-      setIsUpdating(false);
-      console.log('[AppDataProvider] updateUserQuestCompletion: isUpdating set to false.');
-    }
+    } catch (error) { toast({ title: "Error Updating Quest Completion", description: (error as Error).message, variant: 'destructive' }); }
+    finally { setIsUpdating(false); }
   }, [currentUser, characters, activeCharacterId, toast]);
 
   const batchResetUserQuestCompletions = useCallback(async (characterIdForReset: string, questIdsToReset: string[]): Promise<void> => {
@@ -564,15 +488,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const characterDoc = characters.find(c => c.id === characterIdForReset);
     if (!characterDoc || characterDoc.userId !== currentUser.uid) { toast({ title: "Unauthorized", variant: "destructive" }); return; }
     setIsUpdating(true);
-    console.log('[AppDataProvider] batchResetUserQuestCompletions: isUpdating set to true.');
     try {
       let currentBatch = writeBatch(db);
       let operationCount = 0;
       const commitBatchIfNeeded = async () => {
         if (operationCount >= BATCH_OPERATION_LIMIT) {
-            await currentBatch.commit();
-            currentBatch = writeBatch(db);
-            operationCount = 0;
+            await currentBatch.commit(); currentBatch = writeBatch(db); operationCount = 0;
         }
       };
 
@@ -581,46 +502,32 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       for (const questId of questIdsToReset) {
         await commitBatchIfNeeded();
-        const quest = quests.find(q => q.id === questId);
-        if (!quest) continue;
-
+        const quest = quests.find(q => q.id === questId); if (!quest) continue;
         const completionDocRef = doc(db, CHARACTERS_COLLECTION, characterIdForReset, QUEST_COMPLETIONS_SUBCOLLECTION, questId);
         const payload: Partial<UserQuestCompletionData> = { lastUpdatedAt: serverTimestamp() as FieldValue };
         let questChanged = false;
-
         const currentCompletion = activeCharacterId === characterIdForReset ? updatedCompletionsMap.get(questId) : undefined;
-
         if (!quest.casualNotAvailable && currentCompletion?.casualCompleted) { payload.casualCompleted = false; questChanged = true; }
         if (!quest.normalNotAvailable && currentCompletion?.normalCompleted) { payload.normalCompleted = false; questChanged = true; }
         if (!quest.hardNotAvailable && currentCompletion?.hardCompleted) { payload.hardCompleted = false; questChanged = true; }
         if (!quest.eliteNotAvailable && currentCompletion?.eliteCompleted) { payload.eliteCompleted = false; questChanged = true; }
-
         if (questChanged) {
           currentBatch.set(completionDocRef, payload, { merge: true });
           operationCount++;
           if (activeCharacterId === characterIdForReset) {
-            updatedCompletionsMap.set(questId, {
-             ...(currentCompletion || { questId }),
-             ...payload,
-             lastUpdatedAt: undefined // For local state consistency
-            } as UserQuestCompletionData);
+            updatedCompletionsMap.set(questId, { ...(currentCompletion || { questId }), ...payload, lastUpdatedAt: undefined } as UserQuestCompletionData);
           }
           changesMade = true;
         }
       }
 
       if (operationCount > 0) await currentBatch.commit();
-
       if (changesMade) {
-        if (activeCharacterId === characterIdForReset) {
-          React.startTransition(() => {
-            setActiveCharacterQuestCompletions(updatedCompletionsMap);
-          });
-        }
+        if (activeCharacterId === characterIdForReset) setActiveCharacterQuestCompletions(updatedCompletionsMap);
         toast({ title: "Quest Completions Reset" });
       } else { toast({ title: "No Changes", description: "No quest completions needed resetting." }); }
     } catch (error) { toast({ title: "Error Resetting Completions", description: (error as Error).message, variant: "destructive" }); throw error; }
-    finally { setIsUpdating(false); console.log('[AppDataProvider] batchResetUserQuestCompletions: isUpdating set to false.'); }
+    finally { setIsUpdating(false); }
   }, [currentUser, characters, quests, activeCharacterId, activeCharacterQuestCompletions, toast]);
 
   const batchUpdateUserQuestCompletions = useCallback(async (characterIdForUpdate: string, updates: QuestCompletionUpdate[]): Promise<void> => {
@@ -628,30 +535,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const characterDoc = characters.find(c => c.id === characterIdForUpdate);
     if (!characterDoc || characterDoc.userId !== currentUser.uid) { toast({ title: "Unauthorized", variant: "destructive" }); return; }
     setIsUpdating(true);
-    console.log('[AppDataProvider] batchUpdateUserQuestCompletions: isUpdating set to true.');
     try {
-      let currentBatch = writeBatch(db);
-      let operationCount = 0;
-      const commitBatchIfNeeded = async () => {
-        if (operationCount >= BATCH_OPERATION_LIMIT) {
-            await currentBatch.commit();
-            currentBatch = writeBatch(db);
-            operationCount = 0;
-        }
-      };
+      let currentBatch = writeBatch(db); let operationCount = 0;
+      const commitBatchIfNeeded = async () => { if (operationCount >= BATCH_OPERATION_LIMIT) { await currentBatch.commit(); currentBatch = writeBatch(db); operationCount = 0; } };
 
       const updatedCompletionsMap = activeCharacterId === characterIdForUpdate ? new Map(activeCharacterQuestCompletions) : new Map();
       let changesMade = 0;
-
       for (const update of updates) {
-        await commitBatchIfNeeded();
-        const { questId, ...completionData } = update;
+        await commitBatchIfNeeded(); const { questId, ...completionData } = update;
         if (Object.keys(completionData).length > 0) {
             const questRef = doc(db, CHARACTERS_COLLECTION, characterIdForUpdate, QUEST_COMPLETIONS_SUBCOLLECTION, questId);
             const payloadWithTimestamp = {...completionData, lastUpdatedAt: serverTimestamp() as FieldValue };
             currentBatch.set(questRef, payloadWithTimestamp, { merge: true });
             operationCount++;
-
             if (activeCharacterId === characterIdForUpdate) {
               const existingEntry = updatedCompletionsMap.get(questId) || { questId };
               updatedCompletionsMap.set(questId, { ...existingEntry, ...payloadWithTimestamp, lastUpdatedAt: undefined } as UserQuestCompletionData);
@@ -660,17 +556,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         }
       }
       if (operationCount > 0) await currentBatch.commit();
-
       if (changesMade > 0) {
-        if (activeCharacterId === characterIdForUpdate) {
-          React.startTransition(() => {
-            setActiveCharacterQuestCompletions(updatedCompletionsMap);
-          });
-        }
+        if (activeCharacterId === characterIdForUpdate) setActiveCharacterQuestCompletions(updatedCompletionsMap);
         toast({ title: "Quest Completions Updated", description: `${changesMade} quest(s) updated from CSV.`});
       } else { toast({ title: "No Updates", description: "No quest completions were changed by CSV." }); }
     } catch (error) { toast({ title: "Error Updating from CSV", description: (error as Error).message, variant: "destructive" }); throw error; }
-    finally { setIsUpdating(false); console.log('[AppDataProvider] batchUpdateUserQuestCompletions: isUpdating set to false.'); }
+    finally { setIsUpdating(false); }
   }, [currentUser, characters, activeCharacterId, activeCharacterQuestCompletions, toast]);
 
   return (
