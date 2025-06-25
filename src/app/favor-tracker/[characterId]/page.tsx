@@ -1,3 +1,4 @@
+
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -23,6 +24,9 @@ import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { Separator } from '@/components/ui/separator';
 import { CharacterForm, type CharacterFormData } from '@/components/character/character-form';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
+
 
 type DifficultyKey = 'casualCompleted' | 'normalCompleted' | 'hardCompleted' | 'eliteCompleted';
 type DifficultyNotAvailableKey = 'casualNotAvailable' | 'normalNotAvailable' | 'hardNotAvailable' | 'eliteNotAvailable';
@@ -70,6 +74,7 @@ interface CharacterFavorTrackerPreferences {
   showCompletedQuestsWithZeroRemainingFavor: boolean;
   onCormyr: boolean;
   showRaids: boolean;
+  clickAction: 'none' | 'wiki' | 'map';
 }
 
 function parseDurationToMinutes(durationString?: string | null): number | null {
@@ -158,6 +163,11 @@ export default function FavorTrackerPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
   
+  // New state for click actions and popovers
+  const [clickAction, setClickAction] = useState<'none' | 'wiki' | 'map'>('none');
+  const [isWikiOpen, setIsWikiOpen] = useState(false);
+  const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
+
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
@@ -189,13 +199,17 @@ export default function FavorTrackerPage() {
           if (typeof prefs.onCormyr === 'boolean') setOnCormyr(prefs.onCormyr);
           if (typeof prefs.showRaids === 'boolean') setShowRaids(prefs.showRaids);
 
+          if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) {
+            setClickAction(prefs.clickAction);
+          }
+
           const defaultVis = getDefaultColumnVisibility();
           const mergedVisibility: Record<SortableColumnKey | string, boolean> = {} as any;
           allTableHeaders.forEach(header => { mergedVisibility[header.key] = prefs.columnVisibility?.[header.key] ?? defaultVis[header.key]; });
           setColumnVisibility(mergedVisibility);
         } else {
           setColumnVisibility(getDefaultColumnVisibility());
-          savePreferences({ columnVisibility: getDefaultColumnVisibility(), durationAdjustments: durationAdjustmentDefaults, showCompletedQuestsWithZeroRemainingFavor: false, onCormyr: false, showRaids: false });
+          savePreferences({ columnVisibility: getDefaultColumnVisibility(), durationAdjustments: durationAdjustmentDefaults, showCompletedQuestsWithZeroRemainingFavor: false, onCormyr: false, showRaids: false, clickAction: 'none' });
         }
       } catch (error) { console.error("Error loading preferences:", error); setColumnVisibility(getDefaultColumnVisibility()); }
     }
@@ -206,6 +220,7 @@ export default function FavorTrackerPage() {
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showCompletedQuestsWithZeroRemainingFavor }); }, [showCompletedQuestsWithZeroRemainingFavor, savePreferences, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
 
 
   const handlePopoverColumnVisibilityChange = (key: SortableColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
@@ -401,6 +416,18 @@ export default function FavorTrackerPage() {
     }
     setSortConfig({ key, direction });
   };
+  
+  const handleRowClick = (quest: Quest) => {
+    if (clickAction === 'wiki') {
+        if (quest.wikiUrl) {
+            setSelectedQuest(quest);
+            setIsWikiOpen(true);
+        } else {
+            toast({ title: "No Wiki Link", description: `A wiki link is not available for "${quest.name}".` });
+        }
+    }
+    // 'map' and 'none' do nothing as requested.
+  };
 
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
 
@@ -517,7 +544,7 @@ export default function FavorTrackerPage() {
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
   };
-
+  
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
     header => !header.isDifficulty && header.key !== 'maxPotentialFavorSingleQuest'
   );
@@ -579,6 +606,28 @@ export default function FavorTrackerPage() {
                     ))}
                   </div>
               </div>
+               <div className="pt-2 border-t border-border mt-4">
+                <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
+                <RadioGroup
+                  value={clickAction}
+                  onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')}
+                  className="flex items-center space-x-4"
+                  disabled={pageOverallLoading}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="none" id="action-none" />
+                    <Label htmlFor="action-none" className="font-normal cursor-pointer">None</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="wiki" id="action-wiki" />
+                    <Label htmlFor="action-wiki" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="map" id="action-map" disabled/>
+                    <Label htmlFor="action-map" className="font-normal cursor-not-allowed opacity-50 flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </div>
           </CardHeader>
         </Card>
@@ -628,8 +677,8 @@ export default function FavorTrackerPage() {
           <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
-           {pageOverallLoading && sortedAndFilteredData.sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
-           : !pageOverallLoading && sortedAndFilteredData.sortedQuests.length === 0 && character ? ( <div className="text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
+           {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
+           : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
            : ( <div className="overflow-x-auto"> <Table>
                 <TableCaption className="py-4">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
                 <TableHeader> <TableRow>
@@ -642,8 +691,8 @@ export default function FavorTrackerPage() {
                     ))}
                 </TableRow> </TableHeader>
                 <TableBody>
-                    {sortedAndFilteredData.sortedQuests.map((quest) => (
-                    <TableRow key={quest.id} className={cn(character && quest.level > character.level ? 'opacity-60' : '')}>
+                    {sortedQuests.map((quest) => (
+                    <TableRow key={quest.id} className={cn(character && quest.level > character.level ? 'opacity-60' : '', clickAction !== 'none' && 'cursor-pointer')} onClick={() => handleRowClick(quest)}>
                         {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
                         {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                         {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
@@ -686,6 +735,14 @@ export default function FavorTrackerPage() {
           onSubmit={handleEditCharacterSubmit}
           initialData={editingCharacter}
           isSubmitting={pageOverallLoading}
+        />
+      )}
+      {selectedQuest && (
+        <QuestWikiPopover
+            isOpen={isWikiOpen}
+            onOpenChange={setIsWikiOpen}
+            questName={selectedQuest.name}
+            wikiUrl={selectedQuest.wikiUrl}
         />
       )}
     </div>

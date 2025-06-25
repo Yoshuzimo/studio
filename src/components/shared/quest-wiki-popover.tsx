@@ -1,9 +1,7 @@
-
 // src/components/shared/quest-wiki-popover.tsx
 "use client";
 
 import React from 'react';
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +10,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 
 interface QuestWikiPopoverProps {
