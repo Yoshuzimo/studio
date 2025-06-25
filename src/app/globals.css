@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 231 56% 36%; /* #283593 Very Dark Blue */
+    --foreground: 0 0% 98%; /* Light text for dark background */
+
+    --card: 231 50% 40%; /* Slightly lighter than main bg */
+    --card-foreground: 0 0% 98%;
+
+    --popover: 231 45% 38%; /* Similar to card, slightly adjusted */
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 230 47% 48%; /* #3F51B5 Dark Blue */
+    --primary-foreground: 0 0% 98%; /* Light text for primary */
+
+    --secondary: 230 40% 55%; /* A lighter blue for secondary elements */
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 230 30% 65%; /* For less important text/elements */
+    --muted-foreground: 0 0% 80%; /* Lighter muted text */
+
+    --accent: 36 100% 50%; /* #FF9800 Light Orange */
+    --accent-foreground: 20 0% 10%; /* Dark text for orange accent */
+
+    --destructive: 0 70% 40%; /* Darker destructive red */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 230 40% 45%; /* Border color matching theme */
+    --input: 230 40% 42%; /* Input background */
+    --ring: 36 100% 50%; /* Ring color (accent) */
+
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+
+    /* Sidebar variables (can be adjusted if sidebar is heavily used) */
+    --sidebar-background: 231 50% 38%; /* Slightly different from main bg */
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 36 100% 50%; /* Accent for sidebar primary actions */
+    --sidebar-primary-foreground: 20 0% 10%;
+    --sidebar-accent: 230 45% 45%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 230 40% 50%;
+    --sidebar-ring: 36 100% 50%;
+  }
+
+  /* Apply dark theme directly as it's the primary style */
+  .dark {
+    --background: 231 56% 36%;
+    --foreground: 0 0% 98%;
+    --card: 231 50% 40%;
+    --card-foreground: 0 0% 98%;
+    --popover: 231 45% 38%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 230 47% 48%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 230 40% 55%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 230 30% 65%;
+    --muted-foreground: 0 0% 80%;
+    --accent: 36 100% 50%;
+    --accent-foreground: 20 0% 10%;
+    --destructive: 0 70% 40%; /* Darker destructive red */
+    --destructive-foreground: 0 0% 98%;
+    --border: 230 40% 45%;
+    --input: 230 40% 42%;
+    --ring: 36 100% 50%;
+
+    --sidebar-background: 231 50% 38%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 36 100% 50%;
+    --sidebar-primary-foreground: 20 0% 10%;
+    --sidebar-accent: 230 45% 45%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 230 40% 50%;
+    --sidebar-ring: 36 100% 50%;
+  }
+}
+
+@layer base {
+  /*
+  * {
+    @apply border-border;
+  }
+  */
+  body {
+    @apply bg-background text-foreground;
+  }
+}
