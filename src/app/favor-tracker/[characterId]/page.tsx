@@ -79,6 +79,7 @@ interface CharacterFavorTrackerPreferences {
   onCormyr: boolean;
   showRaids: boolean;
   clickAction: 'none' | 'wiki' | 'map';
+  sortConfig?: SortConfig | null;
 }
 
 function parseDurationToMinutes(durationString?: string | null): number | null {
@@ -110,7 +111,7 @@ const allTableHeaders: { key: SortableColumnKey | string; label: string; icon?: 
     { key: 'adjustedRemainingFavorScore', label: 'Score', icon: TrendingUp, className: "text-center whitespace-nowrap", isSortable: true },
     { key: 'areaRemainingFavor', label: 'Area Favor', icon: Layers, className: "text-center whitespace-nowrap", isSortable: true },
     { key: 'areaAdjustedRemainingFavorScore', label: 'Area Score', icon: Layers, className: "text-center whitespace-nowrap", isSortable: true },
-    ...difficultyLevels.map(diff => ({ key: diff.key, label: diff.label, isDifficulty: true, isSortable: true, className: "text-center whitespace-nowrap" }))
+    ...difficultyLevels.map(diff => ({ key: diff.key, label: diff.label, isDifficulty: true, isSortable: false, className: "text-center whitespace-nowrap" }))
 ];
 
 const getDefaultColumnVisibility = (): Record<SortableColumnKey | string, boolean> => {
@@ -158,7 +159,7 @@ export default function FavorTrackerPage() {
 
   const [character, setCharacter] = useState<Character | null>(null);
   const characterId = params.characterId as string;
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'level', direction: 'ascending' });
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   
   const [showCompletedQuestsWithZeroRemainingFavor, setShowCompletedQuestsWithZeroRemainingFavor] = useState(false);
   const [onCormyr, setOnCormyr] = useState(false);
@@ -218,15 +219,34 @@ export default function FavorTrackerPage() {
             setClickAction(prefs.clickAction);
           }
 
+          if (prefs.sortConfig) {
+            setSortConfig(prefs.sortConfig);
+          } else {
+            setSortConfig({ key: 'name', direction: 'ascending' });
+          }
+
           const defaultVis = getDefaultColumnVisibility();
           const mergedVisibility: Record<SortableColumnKey | string, boolean> = {} as any;
           allTableHeaders.forEach(header => { mergedVisibility[header.key] = prefs.columnVisibility?.[header.key] ?? defaultVis[header.key]; });
           setColumnVisibility(mergedVisibility);
         } else {
+          setSortConfig({ key: 'name', direction: 'ascending' });
           setColumnVisibility(getDefaultColumnVisibility());
-          savePreferences({ columnVisibility: getDefaultColumnVisibility(), durationAdjustments: durationAdjustmentDefaults, showCompletedQuestsWithZeroRemainingFavor: false, onCormyr: false, showRaids: false, clickAction: 'none' });
+          savePreferences({ 
+              columnVisibility: getDefaultColumnVisibility(), 
+              durationAdjustments: durationAdjustmentDefaults, 
+              showCompletedQuestsWithZeroRemainingFavor: false, 
+              onCormyr: false, 
+              showRaids: false, 
+              clickAction: 'none',
+              sortConfig: { key: 'name', direction: 'ascending' }
+            });
         }
-      } catch (error) { console.error("Error loading preferences:", error); setColumnVisibility(getDefaultColumnVisibility()); }
+      } catch (error) { 
+        console.error("Error loading preferences:", error);
+        setSortConfig({ key: 'name', direction: 'ascending' });
+        setColumnVisibility(getDefaultColumnVisibility());
+    }
     }
   }, [characterId, isDataLoaded, currentUser, savePreferences]);
 
@@ -236,6 +256,11 @@ export default function FavorTrackerPage() {
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => {
+    if (isDataLoaded && characterId && currentUser && sortConfig !== null) {
+      savePreferences({ sortConfig });
+    }
+  }, [sortConfig, savePreferences, isDataLoaded, characterId, currentUser]);
 
 
   const handlePopoverColumnVisibilityChange = (key: SortableColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
@@ -565,19 +590,23 @@ export default function FavorTrackerPage() {
     const specialSortKeys: SortableColumnKey[] = [
       'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
     ];
-
+  
     let direction: 'ascending' | 'descending' = 'ascending';
-
-    if (specialSortKeys.includes(key) || difficultyLevels.some(dl => dl.key === key)) {
+    
+    if (specialSortKeys.includes(key)) {
       direction = 'descending';
     }
-    
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+  
+    if (sortConfig && sortConfig.key === key) {
+      if (sortConfig.direction === 'ascending') {
         direction = 'descending';
-    } else if (sortConfig && sortConfig.key === key && sortConfig.direction === 'descending') {
-        setSortConfig(null);
+      } else {
+        // Cycle back to the default sort
+        setSortConfig({ key: 'name', direction: 'ascending' });
         return;
+      }
     }
+    
     setSortConfig({ key, direction });
   };
   
