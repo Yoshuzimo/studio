@@ -41,6 +41,11 @@ const reaperLengthAdjustments: Record<DurationCategory, number> = {
   "Very Long": 1.4,
 };
 
+const getPrimaryLocation = (location?: string | null): string | null => {
+  if (!location) return null;
+  return location.split('(')[0].trim();
+};
+
 const getSortableName = (name: string): string => name.toLowerCase().replace(/^the\s+/i, '');
 
 function parseDurationToMinutes(durationString?: string | null): number | null {
@@ -311,6 +316,9 @@ export default function ReaperRewardsPage() {
       if (sortConfig.key === 'name') {
         aValue = getSortableName(a.name);
         bValue = getSortableName(b.name);
+      } else if (sortConfig.key === 'location') {
+        aValue = getPrimaryLocation(a.location);
+        bValue = getPrimaryLocation(b.location);
       } else {
         aValue = (a as any)[sortConfig.key];
         bValue = (b as any)[sortConfig.key];

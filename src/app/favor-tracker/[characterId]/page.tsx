@@ -51,6 +51,11 @@ interface SortConfig {
   direction: 'ascending' | 'descending';
 }
 
+const getPrimaryLocation = (location?: string | null): string | null => {
+  if (!location) return null;
+  return location.split('(')[0].trim();
+};
+
 const getSortableName = (name: string): string => name.toLowerCase().replace(/^the\s+/i, '');
 
 const difficultyLevels: {
@@ -540,17 +545,25 @@ export default function FavorTrackerPage() {
     };
 
     allProcessedQuests.forEach(quest => {
-        if(quest.hiddenReasons.length === 0 && quest.location) {
-            areaAggregates.favorMap.set(quest.location, (areaAggregates.favorMap.get(quest.location) || 0) + quest.remainingPossibleFavor);
-            areaAggregates.scoreMap.set(quest.location, (areaAggregates.scoreMap.get(quest.location) || 0) + quest.adjustedRemainingFavorScore);
+        const primaryLocation = getPrimaryLocation(quest.location);
+        if(quest.hiddenReasons.length === 0 && primaryLocation) {
+            areaAggregates.favorMap.set(primaryLocation, (areaAggregates.favorMap.get(primaryLocation) || 0) + quest.remainingPossibleFavor);
+            areaAggregates.scoreMap.set(primaryLocation, (areaAggregates.scoreMap.get(primaryLocation) || 0) + quest.adjustedRemainingFavorScore);
         }
     });
 
     const sortedQuests = [...filteredQuests].sort((a, b) => {
       const getSortValue = (quest: typeof a, key: SortableColumnKey) => {
-          if (key === 'areaRemainingFavor') return quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : 0;
-          if (key === 'areaAdjustedRemainingFavorScore') return quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : 0;
+          if (key === 'areaRemainingFavor') {
+            const primaryLocation = getPrimaryLocation(quest.location);
+            return primaryLocation ? areaAggregates.favorMap.get(primaryLocation) ?? 0 : 0;
+          }
+          if (key === 'areaAdjustedRemainingFavorScore') {
+            const primaryLocation = getPrimaryLocation(quest.location);
+            return primaryLocation ? areaAggregates.scoreMap.get(primaryLocation) ?? 0 : 0;
+          }
           if (key === 'name') return getSortableName(quest.name);
+          if (key === 'location') return getPrimaryLocation(quest.location);
           return quest[key as keyof typeof quest];
       };
 
@@ -811,8 +824,8 @@ export default function FavorTrackerPage() {
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
                               {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
-                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : '-'}</TableCell>}
-                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : '-'}</TableCell>}
+                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? areaAggregates.favorMap.get(getPrimaryLocation(quest.location)) ?? 0 : '-'}</TableCell>}
+                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? areaAggregates.scoreMap.get(getPrimaryLocation(quest.location)) ?? 0 : '-'}</TableCell>}
       
                               {difficultyLevels.map(diff => columnVisibility[diff.key] && (
                               <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>

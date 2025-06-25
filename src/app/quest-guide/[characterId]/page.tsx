@@ -28,21 +28,26 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 
 type SortableQuestGuideColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'adjustedCasualExp' | 'adjustedNormalExp' | 'adjustedHardExp' | 'adjustedEliteExp' | 'maxExp' | 'experienceScore';
-type ActualSortKey = 'experienceScore' | 'maxExp';
+type ActualSortKey = 'experienceScore' | 'maxExp' | 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver';
 
-interface SortConfig { key: ActualSortKey; direction: 'descending'; }
+interface SortConfig { key: ActualSortKey; direction: 'ascending' | 'descending'; }
 type DurationCategory = "Very Short" | "Short" | "Medium" | "Long" | "Very Long";
 const durationAdjustmentDefaults: Record<DurationCategory, number> = { "Very Short": 1.2, "Short": 1.1, "Medium": 1.0, "Long": 0.9, "Very Long": 0.8, };
 const DURATION_CATEGORIES: DurationCategory[] = ["Very Short", "Short", "Medium", "Long", "Very Long"];
 
+const getPrimaryLocation = (location?: string | null): string | null => {
+  if (!location) return null;
+  return location.split('(')[0].trim();
+};
+
 const getSortableName = (name: string): string => name.toLowerCase().replace(/^the\s+/i, '');
 
-const tableHeaders: { key: SortableQuestGuideColumnKey; label: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
-    { key: 'name', label: 'Quest Name', className: "w-[250px] whitespace-nowrap", isSortable: false },
-    { key: 'level', label: 'LVL', className: "text-center w-[80px]", isSortable: false },
-    { key: 'adventurePackName', label: 'Adventure Pack', icon: Package, className: "w-[200px] whitespace-nowrap", isSortable: false },
-    { key: 'location', label: 'Location', icon: MapPin, className: "w-[180px] whitespace-nowrap", isSortable: false },
-    { key: 'questGiver', label: 'Quest Giver', icon: UserSquare, className: "w-[180px] whitespace-nowrap", isSortable: false },
+const tableHeaders: { key: SortableQuestGuideColumnKey | string; label: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
+    { key: 'name', label: 'Quest Name', className: "w-[250px] whitespace-nowrap", isSortable: true },
+    { key: 'level', label: 'LVL', className: "text-center w-[80px]", isSortable: true },
+    { key: 'adventurePackName', label: 'Adventure Pack', icon: Package, className: "w-[200px] whitespace-nowrap", isSortable: true },
+    { key: 'location', label: 'Location', icon: MapPin, className: "w-[180px] whitespace-nowrap", isSortable: true },
+    { key: 'questGiver', label: 'Quest Giver', icon: UserSquare, className: "w-[180px] whitespace-nowrap", isSortable: true },
     { key: 'adjustedCasualExp', label: 'C/S', icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
     { key: 'adjustedNormalExp', label: 'N', icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
     { key: 'adjustedHardExp', label: 'H', icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
@@ -295,6 +300,9 @@ export default function QuestGuidePage() {
       if (sortConfig.key === 'name') {
         aValue = getSortableName(a.name);
         bValue = getSortableName(b.name);
+      } else if (sortConfig.key === 'location') {
+        aValue = getPrimaryLocation(a.location);
+        bValue = getPrimaryLocation(b.location);
       } else {
         aValue = (a as any)[sortConfig.key];
         bValue = (b as any)[sortConfig.key];
@@ -318,10 +326,29 @@ export default function QuestGuidePage() {
     });
   }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig, isDebugMode]);
 
-  const requestSort = (key: ActualSortKey) => setSortConfig({ key, direction: 'descending' });
-  const getSortIndicator = (columnKey: SortableQuestGuideColumnKey) => { 
+  const requestSort = (key: ActualSortKey) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+
+    if (['experienceScore', 'maxExp'].includes(key)) {
+      direction = 'descending';
+    }
+
+    if (sortConfig && sortConfig.key === key) {
+      if (sortConfig.direction === 'ascending') {
+        direction = 'descending';
+      } else {
+        // Cycle back to the default sort
+        setSortConfig({ key: 'experienceScore', direction: 'descending' });
+        return;
+      }
+    }
+    
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIndicator = (columnKey: ActualSortKey) => { 
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
-    return <ArrowDown className="ml-2 h-3 w-3 text-accent" />; 
+    return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />; 
   };
   
   if (pageOverallLoading || !isDataLoaded || !character) {
