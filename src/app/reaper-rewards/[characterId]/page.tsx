@@ -22,6 +22,7 @@ import { DialogFooter } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
 import { QuestMapViewer } from '@/components/shared/quest-map-viewer';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type SortableReaperColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'maxRXP' | `skull-${number}`;
 
@@ -109,7 +110,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 export default function ReaperRewardsPage() {
   const params = useParams();
   const router = useRouter();
-  const { currentUser, isLoading: authIsLoading } = useAuth();
+  const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
   const { toast } = useToast();
 
@@ -119,6 +120,7 @@ export default function ReaperRewardsPage() {
   
   const [onCormyr, setOnCormyr] = useState(false);
   const [showRaids, setShowRaids] = useState(false);
+  const [isDebugMode, setIsDebugMode] = useState(false);
   
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(getDefaultColumnVisibility());
   const [popoverColumnVisibility, setPopoverColumnVisibility] = useState<Record<string, boolean>>({});
@@ -258,44 +260,49 @@ export default function ReaperRewardsPage() {
       return Math.round(totalRXP);
     };
 
-    const processedQuests = quests.map(quest => {
+    const allProcessedQuests = quests.map(quest => {
         const skullData: Record<string, number | null> = {};
         for(let i = 1; i <= 10; i++) {
             skullData[`skull-${i}`] = calculateRXP(quest, character, i);
         }
-        return {
-            ...quest,
-            maxRXP: calculateRXP(quest, character, 10),
-            ...skullData
-        };
-    }).filter(quest => {
+
         const charLvl = character.level;
         const questLvl = quest.level;
-        if (charLvl < questLvl) return false;
+        const hiddenReasons: string[] = [];
+
+        if (charLvl < questLvl) hiddenReasons.push(`Character Level (${charLvl}) < Quest Level (${questLvl})`);
+        
+        if (charLvl >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
+        else if (charLvl >= 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
+        else if (questLvl >= 20 && charLvl < 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
+        else if (questLvl < 20 && charLvl - questLvl > 4) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 4 for heroic levels.`);
 
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
         const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
         const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+        if (!isOwned) hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
 
-        const isNotOnCormyrQuest = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-        const isTestQuest = quest.name.toLowerCase().includes("test");
-        const isNotARaidOrShouldBeShown = showRaids || !quest.name.toLowerCase().endsWith('(raid)');
+        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
         
-        if (!isOwned || !isNotOnCormyrQuest || isTestQuest || !isNotARaidOrShouldBeShown) return false;
+        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
 
-        if (charLvl >= 30) {
-          if (questLvl < 30) return false;
-          return charLvl - questLvl <= 6;
-        }
-        if (questLvl >= 20) {
-          return charLvl - questLvl <= 6;
-        }
-        return charLvl - questLvl <= 4;
-      });
+        if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
+
+        return {
+            ...quest,
+            maxRXP: calculateRXP(quest, character, 10),
+            ...skullData,
+            hiddenReasons,
+        };
+    });
+
+    const filteredQuests = isDebugMode
+      ? allProcessedQuests
+      : allProcessedQuests.filter(quest => quest.hiddenReasons.length === 0);
 
     const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
 
-    return [...processedQuests].sort((a, b) => {
+    return [...filteredQuests].sort((a, b) => {
       if (!sortConfig || !character) return 0;
       
       let aValue: string | number | null | undefined;
@@ -319,7 +326,7 @@ export default function ReaperRewardsPage() {
       return 0;
     });
 
-  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids]);
+  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids, isDebugMode]);
   
   const requestSort = (key: SortableReaperColumnKey) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -378,6 +385,12 @@ export default function ReaperRewardsPage() {
                   <Checkbox id="show-raids-reaper" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
                   <Label htmlFor="show-raids-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Include Raids</Label>
                 </div>
+                {userData?.isAdmin && (
+                  <div className="flex items-center space-x-2">
+                      <Checkbox id="debug-mode-reaper" checked={isDebugMode} onCheckedChange={(checked) => setIsDebugMode(!!checked)} disabled={pageOverallLoading}/>
+                      <Label htmlFor="debug-mode-reaper" className={cn("font-normal text-destructive", pageOverallLoading && "cursor-not-allowed opacity-50")}>Debug</Label>
+                  </div>
+                )}
               </div>
             </div>
             <div className="pt-2 border-t border-border mt-4">
@@ -451,19 +464,33 @@ export default function ReaperRewardsPage() {
                 </TableHeader>
                 <TableBody>
                   {sortedAndFilteredQuests.map((quest) => (
-                    <TableRow key={quest.id} className={cn(quest.level > character.level ? 'opacity-60' : '', clickAction !== 'none' && 'cursor-pointer')} onClick={() => handleRowClick(quest)}>
-                      {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
-                      {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
-                      {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
-                      {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
-                      {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
-                      {columnVisibility['maxRXP'] && <TableCell className="text-center font-bold">{(quest as any).maxRXP ?? '-'}</TableCell>}
-                      {skullColumns.map(sc => columnVisibility[sc.key] && (
-                        <TableCell key={sc.key} className="text-center">
-                          {(quest as any)[sc.key] ?? '-'}
-                        </TableCell>
-                      ))}
-                    </TableRow>
+                    <TooltipProvider key={quest.id} delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <TableRow 
+                            className={cn(clickAction !== 'none' && 'cursor-pointer', isDebugMode && (quest.hiddenReasons?.length ?? 0) > 0 && 'text-destructive/80 hover:text-destructive')} 
+                            onClick={() => handleRowClick(quest)}
+                          >
+                            {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
+                            {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
+                            {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
+                            {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                            {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
+                            {columnVisibility['maxRXP'] && <TableCell className="text-center font-bold">{(quest as any).maxRXP ?? '-'}</TableCell>}
+                            {skullColumns.map(sc => columnVisibility[sc.key] && (
+                              <TableCell key={sc.key} className="text-center">
+                                {(quest as any)[sc.key] ?? '-'}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </TooltipTrigger>
+                        {isDebugMode && quest.hiddenReasons.length > 0 && (
+                          <TooltipContent>
+                            <p>Normally hidden because: {quest.hiddenReasons.join(', ')}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   ))}
                 </TableBody>
               </Table>

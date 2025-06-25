@@ -24,6 +24,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
 import { QuestMapViewer } from '@/components/shared/quest-map-viewer';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 type SortableQuestGuideColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'adjustedCasualExp' | 'adjustedNormalExp' | 'adjustedHardExp' | 'adjustedEliteExp' | 'maxExp' | 'experienceScore';
 type ActualSortKey = 'experienceScore' | 'maxExp';
@@ -59,8 +61,17 @@ const getDefaultColumnVisibility = (): Record<SortableQuestGuideColumnKey, boole
     return initial;
  };
 
-interface QuestGuidePreferences { columnVisibility: Record<SortableQuestGuideColumnKey, boolean>; clickAction: 'none' | 'wiki' | 'map'; }
-interface FavorTrackerPreferences { durationAdjustments: Record<DurationCategory, number>; onCormyr: boolean; showRaids: boolean; }
+interface QuestGuidePreferences {
+  columnVisibility: Record<SortableQuestGuideColumnKey, boolean>;
+  clickAction: 'none' | 'wiki' | 'map';
+}
+
+interface FavorTrackerPreferences {
+  durationAdjustments: Record<DurationCategory, number>;
+  onCormyr: boolean;
+  showRaids: boolean;
+}
+
 
 function parseDurationToMinutes(durationString?: string | null): number | null { 
   if (!durationString || durationString.trim() === "") return null;
@@ -92,7 +103,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 export default function QuestGuidePage() {
   const params = useParams();
   const router = useRouter();
-  const { currentUser, isLoading: authIsLoading } = useAuth(); 
+  const { currentUser, userData, isLoading: authIsLoading } = useAuth(); 
   const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
   const { toast } = useToast();
 
@@ -102,6 +113,7 @@ export default function QuestGuidePage() {
   const [durationAdjustments, setDurationAdjustments] = useState<Record<DurationCategory, number>>(durationAdjustmentDefaults);
   const [onCormyr, setOnCormyr] = useState(false);
   const [showRaids, setShowRaids] = useState(false);
+  const [isDebugMode, setIsDebugMode] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState<Record<SortableQuestGuideColumnKey, boolean>>(getDefaultColumnVisibility());
   const [popoverColumnVisibility, setPopoverColumnVisibility] = useState<Record<SortableQuestGuideColumnKey, boolean>>({});
   const [isSettingsPopoverOpen, setIsSettingsPopoverOpen] = useState(false);
@@ -243,7 +255,7 @@ export default function QuestGuidePage() {
       };
     };
     
-    const processedQuests = quests.map(quest => {
+    const allProcessedQuests = quests.map(quest => {
         const adjustedExps = calculateAdjustedExp(quest, character);
         const allExps = Object.values(adjustedExps).filter(v => v !== null) as number[];
         const maxExp = allExps.length > 0 ? Math.max(...allExps) : null;
@@ -251,21 +263,30 @@ export default function QuestGuidePage() {
         const adjustmentFactor = durationCategory ? (durationAdjustments[durationCategory] ?? 1.0) : 1.0;
         const experienceScore = maxExp !== null ? Math.round(maxExp * adjustmentFactor) : null;
 
-        return { ...quest, ...adjustedExps, maxExp, experienceScore };
-    }).filter(quest => {
-        if (quest.maxExp === null || quest.maxExp <= 0) return false;
+        const hiddenReasons: string[] = [];
+        if (maxExp === null || maxExp <= 0) hiddenReasons.push('No eligible EXP for character level.');
+        
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
         const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
         const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        const isNotOnCormyrQuest = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-        const isTestQuest = quest.name.toLowerCase().includes("test");
-        const isNotARaidOrShouldBeShown = showRaids || !quest.name.toLowerCase().endsWith('(raid)');
-        return isOwned && isNotOnCormyrQuest && !isTestQuest && isNotARaidOrShouldBeShown;
+        if (!isOwned) hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
+        
+        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
+        
+        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
+        
+        if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
+
+        return { ...quest, ...adjustedExps, maxExp, experienceScore, hiddenReasons };
     });
+
+    const filteredQuests = isDebugMode
+      ? allProcessedQuests
+      : allProcessedQuests.filter(quest => quest.hiddenReasons.length === 0);
 
     const getSortableName = (name: string) => name.toLowerCase().replace(/^(a|an|the)\s+/i, '');
     
-    return [...processedQuests].sort((a, b) => {
+    return [...filteredQuests].sort((a, b) => {
       if (!sortConfig || !character) return 0;
       
       let aValue: string | number | null | undefined;
@@ -286,7 +307,7 @@ export default function QuestGuidePage() {
       if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
       return 0;
     });
-  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig]);
+  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig, isDebugMode]);
 
   const requestSort = (key: ActualSortKey) => setSortConfig({ key, direction: 'descending' });
   const getSortIndicator = (columnKey: SortableQuestGuideColumnKey) => { 
@@ -329,6 +350,12 @@ export default function QuestGuidePage() {
                     <Checkbox id="show-raids-guide" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
                     <Label htmlFor="show-raids-guide" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Raids</Label>
                   </div>
+                   {userData?.isAdmin && (
+                      <div className="flex items-center space-x-2">
+                          <Checkbox id="debug-mode-guide" checked={isDebugMode} onCheckedChange={(checked) => setIsDebugMode(!!checked)} disabled={pageOverallLoading}/>
+                          <Label htmlFor="debug-mode-guide" className={cn("font-normal text-destructive", pageOverallLoading && "cursor-not-allowed opacity-50")}>Debug</Label>
+                      </div>
+                    )}
                 </div>
               </div>
               <div className="pt-2 border-t border-border">
@@ -397,9 +424,9 @@ export default function QuestGuidePage() {
           <CardDescription>Experience guide for {character.name}. Shows relevant Heroic or Epic EXP based on character level. Score is Max EXP adjusted by quest duration.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
-          {pageOverallLoading && sortedQuests.length === 0 ? (
+          {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div>
-          ) : !pageOverallLoading && sortedQuests.length === 0 ? (
+          ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
@@ -427,20 +454,34 @@ export default function QuestGuidePage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {sortedQuests.map((quest) => (
-                    <TableRow key={quest.id} className={cn(getRelevantQuestDetails(quest, character).baseLevel > character.level ? 'opacity-60' : '', clickAction !== 'none' && 'cursor-pointer')} onClick={() => handleRowClick(quest)}>
-                        {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
-                        {columnVisibility['level'] && <TableCell className="text-center">{getRelevantQuestDetails(quest, character).baseLevel}</TableCell>}
-                        {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
-                        {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
-                        {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
-                        {columnVisibility['adjustedCasualExp'] && <TableCell className="text-center">{quest.adjustedCasualExp ?? '-'}</TableCell>}
-                        {columnVisibility['adjustedNormalExp'] && <TableCell className="text-center">{quest.adjustedNormalExp ?? '-'}</TableCell>}
-                        {columnVisibility['adjustedHardExp'] && <TableCell className="text-center">{quest.adjustedHardExp ?? '-'}</TableCell>}
-                        {columnVisibility['adjustedEliteExp'] && <TableCell className="text-center">{quest.adjustedEliteExp ?? '-'}</TableCell>}
-                        {columnVisibility['maxExp'] && <TableCell className="text-center">{quest.maxExp ?? '-'}</TableCell>}
-                        {columnVisibility['experienceScore'] && <TableCell className="text-center">{quest.experienceScore ?? '-'}</TableCell>}
-                    </TableRow>
+                    {sortedAndFilteredQuests.map((quest) => (
+                    <TooltipProvider key={quest.id} delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                           <TableRow 
+                              className={cn(clickAction !== 'none' && 'cursor-pointer', isDebugMode && quest.hiddenReasons.length > 0 && 'text-destructive/80 hover:text-destructive')} 
+                              onClick={() => handleRowClick(quest)}
+                            >
+                              {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
+                              {columnVisibility['level'] && <TableCell className="text-center">{getRelevantQuestDetails(quest, character).baseLevel}</TableCell>}
+                              {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
+                              {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                              {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
+                              {columnVisibility['adjustedCasualExp'] && <TableCell className="text-center">{quest.adjustedCasualExp ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedNormalExp'] && <TableCell className="text-center">{quest.adjustedNormalExp ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedHardExp'] && <TableCell className="text-center">{quest.adjustedHardExp ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedEliteExp'] && <TableCell className="text-center">{quest.adjustedEliteExp ?? '-'}</TableCell>}
+                              {columnVisibility['maxExp'] && <TableCell className="text-center">{quest.maxExp ?? '-'}</TableCell>}
+                              {columnVisibility['experienceScore'] && <TableCell className="text-center">{quest.experienceScore ?? '-'}</TableCell>}
+                          </TableRow>
+                        </TooltipTrigger>
+                        {isDebugMode && quest.hiddenReasons.length > 0 && (
+                          <TooltipContent>
+                            <p>Normally hidden because: {quest.hiddenReasons.join(', ')}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                     ))}
                 </TableBody>
                 </Table>

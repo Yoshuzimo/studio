@@ -465,7 +465,7 @@ export default function FavorTrackerPage() {
         return !!completion?.[difficultyKey];
     };
 
-    const processedQuests = quests.map(quest => {
+    const allProcessedQuests = quests.map(quest => {
         const calculateRemainingPossibleFavor = (q: Quest): number => {
             if (!q.baseFavor) return 0;
             let remainingFavor = 0;
@@ -519,35 +519,34 @@ export default function FavorTrackerPage() {
             maxPotentialFavorSingleQuest: (quest.baseFavor || 0) * 3,
             hiddenReasons,
         };
-    }).filter(quest => {
-        if (isDebugMode) {
-          return true; // Show all quests regardless of any filters, including 'test' quests for debug.
-        }
-        
-        // Exclude test quests from normal view
-        if (quest.hiddenReasons.includes('Is a test quest')) {
-          return false;
-        }
-
-        const isEligibleByFilters = quest.hiddenReasons.length === 0;
-        const isVisibleByCompletion = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
-        
-        return isEligibleByFilters && isVisibleByCompletion;
     });
+
+    const filteredQuests = isDebugMode
+      ? allProcessedQuests
+      : allProcessedQuests.filter(quest => {
+          if (quest.hiddenReasons.includes('Is a test quest')) {
+            return false;
+          }
+          
+          const isEligibleByFilters = quest.hiddenReasons.length === 0;
+          const isVisibleByCompletion = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
+          
+          return isEligibleByFilters && isVisibleByCompletion;
+      });
 
     const areaAggregates = {
       favorMap: new Map<string, number>(),
       scoreMap: new Map<string, number>(),
     };
 
-    processedQuests.forEach(quest => {
+    filteredQuests.forEach(quest => {
       if (quest.location) {
         areaAggregates.favorMap.set(quest.location, (areaAggregates.favorMap.get(quest.location) || 0) + quest.remainingPossibleFavor);
         areaAggregates.scoreMap.set(quest.location, (areaAggregates.scoreMap.get(quest.location) || 0) + quest.adjustedRemainingFavorScore);
       }
     });
 
-    const sortedQuests = [...processedQuests].sort((a, b) => {
+    const sortedQuests = [...filteredQuests].sort((a, b) => {
       const getSortValue = (quest: typeof a, key: SortableColumnKey) => {
           if (key === 'areaRemainingFavor') return quest.location ? areaAggregates.favorMap.get(quest.location) ?? 0 : 0;
           if (key === 'areaAdjustedRemainingFavorScore') return quest.location ? areaAggregates.scoreMap.get(quest.location) ?? 0 : 0;
