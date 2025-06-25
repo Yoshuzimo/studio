@@ -485,15 +485,27 @@ export default function FavorTrackerPage() {
         
         const hiddenReasons: string[] = [];
         const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
-        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        
         if (!isEligibleLevel) {
             hiddenReasons.push(`Quest Level (${quest.level}) > Character Level (${character.level})`);
         }
+
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
         if (!isOwned) {
             hiddenReasons.push(`Pack '${quest.adventurePackName}' not owned.`);
+        }
+        
+        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") {
+          hiddenReasons.push('Hidden by "On Cormyr" filter');
+        }
+
+        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) {
+          hiddenReasons.push('Is a Raid (hidden by filter)');
+        }
+
+        if (quest.name.toLowerCase().includes("test")) {
+          hiddenReasons.push('Is a test quest');
         }
         
         return {
@@ -508,21 +520,19 @@ export default function FavorTrackerPage() {
             hiddenReasons,
         };
     }).filter(quest => {
-      const isNotOnCormyrQuest = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-      const isNotARaidOrShouldBeShown = showRaids || !quest.name.toLowerCase().endsWith('(raid)');
-      const isTestQuest = quest.name.toLowerCase().includes("test");
-
-      if (!isNotOnCormyrQuest || isTestQuest || !isNotARaidOrShouldBeShown) {
+        if (isDebugMode) {
+          return true; // Show all quests regardless of any filters, including 'test' quests for debug.
+        }
+        
+        // Exclude test quests from normal view
+        if (quest.hiddenReasons.includes('Is a test quest')) {
           return false;
-      }
-      
-      if (isDebugMode) {
-          return true;
-      }
+        }
 
-      const isEligible = quest.hiddenReasons.length === 0;
-      const shouldShow = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
-      return isEligible && shouldShow;
+        const isEligibleByFilters = quest.hiddenReasons.length === 0;
+        const isVisibleByCompletion = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
+        
+        return isEligibleByFilters && isVisibleByCompletion;
     });
 
     const areaAggregates = {
@@ -590,6 +600,10 @@ export default function FavorTrackerPage() {
         <Button onClick={() => router.push('/login')} className="mt-6">Log In</Button>
       </div>
     );
+  }
+  
+  if (!character) { 
+     return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
   const { sortedQuests, areaAggregates } = sortedAndFilteredData;
@@ -757,7 +771,6 @@ export default function FavorTrackerPage() {
                         <TooltipTrigger asChild>
                           <TableRow
                             className={cn(
-                              (character && quest.level > character.level && !isDebugMode) ? 'opacity-60' : '',
                               clickAction !== 'none' && 'cursor-pointer',
                               isDebugMode && (quest.hiddenReasons?.length ?? 0) > 0 && 'text-destructive/80 hover:text-destructive'
                             )}
