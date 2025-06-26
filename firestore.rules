@@ -27,22 +27,27 @@ service cloud.firestore {
       return request.auth != null && getActingUserDoc().data.isCreator == true;
     }
 
-    // Checks if only allowedKeys are being modified in an update
     function onlyAllowedKeysModified(allowedKeys) {
-      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
-      return changedKeys.hasOnly(allowedKeys);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
     }
 
-    // Checks if specific sensitive fields remain unchanged during an update
     function sensitiveFieldsUnchanged(sensitiveFields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(sensitiveFields) == false;
+    }
+
+    function fieldsAreUnchanged(fieldKeys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(fieldKeys) == false;
     }
 
     // ============================
     // Users Collection
     // ============================
+    match /users/{document=**} {
+      allow list: if false; // 🔒 prevent listing full user docs
+    }
+
     match /users/{userId} {
-      allow read: if isSelf(userId) || isCreator(); // Creators can read all user docs for admin purposes
+      allow read: if isSelf(userId) || isCreator();
 
       allow create: if request.auth != null &&
                      request.auth.uid == userId &&
@@ -54,133 +59,145 @@ service cloud.firestore {
                      request.resource.data.isCreator == false &&
                      request.resource.data.createdAt == request.time;
 
-      // Rule 1: User can update their own displayName, email (before verification), and iconUrl
-      // Protected fields (roles, emailVerified, id, createdAt) must not change in this operation.
+      // ✅ Self-update for displayName AND iconUrl
       allow update: if isSelf(userId) &&
-                     (
-                       request.resource.data.displayName != resource.data.displayName ||
-                       request.resource.data.email != resource.data.email ||
-                       request.resource.data.iconUrl != resource.data.iconUrl
-                     ) &&
-                     request.resource.data.id == resource.data.id &&
-                     request.resource.data.isAdmin == resource.data.isAdmin &&
-                     request.resource.data.isOwner == resource.data.isOwner &&
-                     request.resource.data.isCreator == resource.data.isCreator &&
-                     request.resource.data.emailVerified == resource.data.emailVerified &&
-                     request.resource.data.createdAt.toMillis() == resource.data.createdAt.toMillis();
+                    onlyAllowedKeysModified(['displayName', 'iconUrl']) &&
+                    sensitiveFieldsUnchanged([
+                      'id', 'email', 'isAdmin', 'isOwner', 'isCreator', 'emailVerified', 'createdAt'
+                    ]);
 
-
-      // Rule 2: Admins/Owners/Creators modifying roles of OTHERS.
+      // Role updates
       allow update: if request.auth != null && request.auth.uid != userId &&
         (
-          // Creators can change isAdmin and isOwner for non-Creators.
-          // They cannot change isCreator status of anyone, nor their own roles via this rule.
-          (
-            isCreator() && resource.data.isCreator == false && // Target is NOT a Creator
+          (isCreator() && resource.data.isCreator == false &&
             (
-              onlyAllowedKeysModified(['isAdmin', 'isOwner']) || // Only isAdmin/isOwner changing
-              (request.resource.data.isOwner == true && request.resource.data.isAdmin == true && onlyAllowedKeysModified(['isAdmin', 'isOwner'])) // Promoting to Owner also sets Admin
+              onlyAllowedKeysModified(['isAdmin', 'isOwner']) ||
+              (request.resource.data.isOwner == true && request.resource.data.isAdmin == true && onlyAllowedKeysModified(['isAdmin', 'isOwner']))
             ) &&
-            // Ensure other critical fields are not part of this role-change operation
             sensitiveFieldsUnchanged(['isCreator', 'emailVerified', 'id', 'createdAt', 'email', 'displayName', 'iconUrl'])
           ) ||
-          // Owners can make existing Admins into Owners (if target is not Creator).
-          // Owners can also make regular users into Admins (if target is not Creator/Owner).
-          (
-            isOwner() && resource.data.isCreator == false && // Target is not Creator
+          (isOwner() && resource.data.isCreator == false &&
             (
-              // Promote Admin to Owner (also ensures isAdmin stays true or becomes true)
-              (
-                resource.data.isAdmin == true && resource.data.isOwner == false &&
+              (resource.data.isAdmin == true && resource.data.isOwner == false &&
                 request.resource.data.isOwner == true && request.resource.data.isAdmin == true &&
-                onlyAllowedKeysModified(['isOwner', 'isAdmin'])
-              ) ||
-              // Promote User to Admin (if not already admin or owner)
-              (
-                resource.data.isAdmin == false && resource.data.isOwner == false &&
+                onlyAllowedKeysModified(['isOwner', 'isAdmin'])) ||
+              (resource.data.isAdmin == false && resource.data.isOwner == false &&
                 request.resource.data.isAdmin == true && request.resource.data.isOwner == false &&
-                onlyAllowedKeysModified(['isAdmin'])
-              )
+                onlyAllowedKeysModified(['isAdmin']))
             ) &&
             sensitiveFieldsUnchanged(['isCreator', 'emailVerified', 'id', 'createdAt', 'email', 'displayName', 'iconUrl'])
           ) ||
-           // Admins can make regular users into Admins (if target is not Creator/Owner/Admin).
-          (
-            isAdmin() && resource.data.isCreator == false && resource.data.isOwner == false && resource.data.isAdmin == false &&
+          (isAdmin() && resource.data.isCreator == false && resource.data.isOwner == false && resource.data.isAdmin == false &&
             request.resource.data.isAdmin == true && request.resource.data.isOwner == false &&
             onlyAllowedKeysModified(['isAdmin']) &&
             sensitiveFieldsUnchanged(['isCreator', 'emailVerified', 'id', 'createdAt', 'email', 'displayName', 'iconUrl'])
           )
         );
 
-      // Rule 3: Creator can manage emailVerified status (only this field in the operation)
+      // Creator updates emailVerified
       allow update: if isCreator() &&
-                      onlyAllowedKeysModified(['emailVerified']) &&
-                      sensitiveFieldsUnchanged(['isAdmin', 'isOwner', 'isCreator', 'id', 'createdAt', 'email', 'displayName', 'iconUrl']);
+                    onlyAllowedKeysModified(['emailVerified']) &&
+                    sensitiveFieldsUnchanged(['isAdmin', 'isOwner', 'isCreator', 'id', 'createdAt', 'email', 'displayName', 'iconUrl']);
 
-
-      allow delete: if false; // User deletion should be handled by a backend function or admin action
+      allow delete: if false;
     }
 
-    // Characters (Top-Level)
+    // ============================
+    // Public Profiles Collection
+    // ============================
+    match /publicProfiles/{userId} {
+      allow read: if request.auth != null;
+      allow update: if isSelf(userId) &&
+                    onlyAllowedKeysModified(['displayName', 'iconUrl', 'updatedAt']) &&
+                    sensitiveFieldsUnchanged(['userId']);
+      allow create: if isSelf(userId);
+      allow delete: if false;
+    }
+
+    // ============================
+    // Characters + Quest Completions
+    // ============================
     match /characters/{characterId} {
       allow read, update, delete: if request.auth != null &&
                                    resource.data.userId == request.auth.uid;
       allow create: if request.auth != null &&
                     request.resource.data.userId == request.auth.uid;
+
+      // ✅ NEW: Character-specific Quest Completion Tracking
+      match /questCompletions/{questCompletionId} {
+        allow read, create, update, delete: if request.auth != null &&
+          get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
+      }
     }
 
-    // User-specific Owned Packs
+    // ============================
+    // User Configuration / Owned Packs
+    // ============================
     match /userConfiguration/{userId}/ownedPacksInfo/{docId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // ============================
     // Suggestions
+    // ============================
     match /suggestions/{suggestionId} {
       allow create: if request.auth != null;
-      allow read: if isAdmin() || (request.auth != null && resource.data.suggesterId == request.auth.uid); // Admins or original suggester can read
-      allow update, delete: if isAdmin(); // Only admins can modify/delete
+      allow read: if isAdmin() || (request.auth != null && resource.data.suggesterId == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
+    // ============================
     // Messages
+    // ============================
     match /messages/{messageId} {
       allow read: if request.auth != null &&
                   (resource.data.receiverId == request.auth.uid ||
                    resource.data.senderId == request.auth.uid ||
-                   isAdmin()); // Admins can also read messages
+                   isAdmin());
       allow create: if request.auth != null &&
                     request.resource.data.senderId == request.auth.uid;
-      // No client-side updates/deletes for messages by default users
       allow update, delete: if isAdmin();
     }
 
-    // Quests
+    // ============================
+    // Global Quests
+    // ============================
     match /quests/{questId} {
-      allow read: if true; // All users (even unauthenticated) can read master quest list
-      allow create, update, delete: if isAdmin(); // Only admins can write/modify master quest data
-      // User-specific quest completion data should be stored elsewhere, e.g., /users/{userId}/questCompletions/{questId}
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    // Adventure Packs
+    // ============================
+    // Global Adventure Packs
+    // ============================
     match /adventurePacks/{packId} {
-      allow read: if true; // All users (even unauthenticated) can read master pack list
-      allow create, update, delete: if isAdmin(); // Only admins can write/modify master pack data
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // ============================
+    // Metadata Collection
+    // ============================
+    match /metadata/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // Logs - Role Changes
+    // ============================
+    // Role Change Logs
+    // ============================
     match /Logs/roleChanges/entries/{logId} {
       allow create: if request.auth != null && (isAdmin() || isOwner() || isCreator());
-      allow read: if isCreator(); // Only Creators can read all these logs for auditing
-      
-      // Allow the original changer OR a Creator to update specific log status fields.
+      allow read: if isCreator();
       allow update: if request.auth != null &&
                     (request.auth.uid == resource.data.changerId || isCreator()) &&
                     onlyAllowedKeysModified(['status', 'newRoleApplied', 'timestampFinalized', 'errorDetails']) &&
-                    fieldsAreUnchanged(['changerId', 'changerDisplayName', 'changerTier', 'targetUserId', 'targetUserDisplayName', 'targetUserOriginalRole', 'requestedChange', 'timestampRequested']);
-
-      allow delete: if false; // Logs should be immutable
+                    fieldsAreUnchanged([
+                      'changerId', 'changerDisplayName', 'changerTier',
+                      'targetUserId', 'targetUserDisplayName', 'targetUserOriginalRole',
+                      'requestedChange', 'timestampRequested'
+                    ]);
+      allow delete: if false;
     }
   }
 }
-
-    
