@@ -1,3 +1,4 @@
+
 // src/context/app-data-context.tsx
 "use client";
 
@@ -130,28 +131,66 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   
+  const fetchQuestCompletionsForCharacter = useCallback(async (characterIdToFetch: string) => {
+    if (!currentUser) {
+      setActiveCharacterId(null);
+      setActiveCharacterQuestCompletions(new Map());
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const completionsPath = `${CHARACTERS_COLLECTION}/${characterIdToFetch}/${QUEST_COMPLETIONS_SUBCOLLECTION}`;
+      const completionsQuery = query(collection(db, completionsPath));
+      const snapshot = await getDocs(completionsQuery);
+      const newCompletions = new Map<string, UserQuestCompletionData>();
+      snapshot.docs.forEach(docSnap => {
+        newCompletions.set(docSnap.id, { ...docSnap.data() } as UserQuestCompletionData);
+      });
+      setActiveCharacterQuestCompletions(newCompletions);
+      setActiveCharacterId(characterIdToFetch);
+    } catch (error) {
+      toast({ title: "Error Loading Quest Completions", description: (error as Error).message, variant: 'destructive' });
+      setActiveCharacterQuestCompletions(new Map());
+      setActiveCharacterId(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser, toast]);
+
+
   const fetchQuests = useCallback(async () => {
     console.log('[AppDataProvider] Fetching master quest list...');
     setIsLoading(true);
     try {
-        const questSnapshot = await getDocs(collection(db, 'quests'));
-        const loadedQuests = questSnapshot.docs.map(docSnap => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        } as Quest)).map(q => ({
-            ...q,
-            adventurePackName: normalizeAdventurePackNameForStorage(q.adventurePackName)
-        }));
-        setQuestsState(loadedQuests);
-        console.log(`[AppDataProvider] Loaded ${loadedQuests.length} quests.`);
+      const questSnapshot = await getDocs(collection(db, 'quests'));
+      const loadedQuests = questSnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      } as Quest)).map(q => ({
+        ...q,
+        adventurePackName: normalizeAdventurePackNameForStorage(q.adventurePackName)
+      }));
+      setQuestsState(loadedQuests);
+      console.log(`[AppDataProvider] Loaded ${loadedQuests.length} quests.`);
+      
+      // If a character is active, re-fetch their completions as well to keep data in sync.
+      if (activeCharacterId) {
+        console.log(`[AppDataProvider] Re-fetching completions for active character ${activeCharacterId} after quest list update.`);
+        // This function will handle setting isLoading to false after it completes.
+        await fetchQuestCompletionsForCharacter(activeCharacterId);
+      }
     } catch (error) {
       console.error("[AppDataProvider] Failed to load quests:", error);
       toast({ title: "Quest Load Error", description: "Could not fetch the master quest list. Some features may not work.", variant: 'destructive' });
       setQuestsState([]);
     } finally {
+      // If we didn't refetch completions (no active character), we need to handle the loading state here.
+      if (!activeCharacterId) {
         setIsLoading(false);
+      }
     }
-  }, [toast]);
+  }, [toast, activeCharacterId, fetchQuestCompletionsForCharacter]);
+
 
   useEffect(() => {
     const metadataDocRef = doc(db, METADATA_COLLECTION, QUEST_DATA_METADATA_DOC);
@@ -269,7 +308,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         lastKnownOwnedPacksRef.current = JSON.stringify([...new Set(packsToSetInState)].sort());
         if (currentUser) initialDataLoadedForUserRef.current = currentUser.uid; else initialDataLoadedForUserRef.current = null;
         setIsDataLoaded(true);
-        setIsLoading(false);
+        // setIsLoading(false); // fetchQuests handles this now
       }
     };
 
@@ -371,40 +410,31 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setIsUpdating(true);
     try {
       const questsCollectionRef = collection(db, 'quests');
+      const existingQuestDocs = await getDocs(questsCollectionRef);
+      const existingQuestIds = new Set(existingQuestDocs.docs.map(doc => doc.id));
+      const newQuestIds = new Set(newQuests.map(q => q.id));
+
+      const batch = writeBatch(db);
       
-      // Removed the logic to delete all old quests.
-      // This will now only perform `set` operations, which either create or overwrite.
-      // This is safer and less likely to be blocked by restrictive security rules.
-      
-      if (newQuests.length > 0) {
-        let currentBatch = writeBatch(db);
-        let operationCount = 0;
-        
-        for (const quest of newQuests) {
-          const questDocRef = doc(questsCollectionRef, quest.id);
-          currentBatch.set(questDocRef, quest);
-          operationCount++;
-          
-          if (operationCount >= BATCH_OPERATION_LIMIT) {
-            await currentBatch.commit();
-            currentBatch = writeBatch(db);
-            operationCount = 0;
-          }
-        }
-        
-        if (operationCount > 0) {
-          await currentBatch.commit();
-        }
+      // Add/Update new quests
+      for (const quest of newQuests) {
+        batch.set(doc(questsCollectionRef, quest.id), quest, { merge: true });
       }
+
+      // Delete old quests not in the new list
+      existingQuestDocs.forEach(doc => {
+        if (!newQuestIds.has(doc.id)) {
+          batch.delete(doc.ref);
+        }
+      });
       
-      // Update metadata to trigger refetch on all clients
+      await batch.commit();
+      
       const metadataDocRef = doc(db, 'metadata', 'questData');
-      await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() });
+      await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() }, { merge: true });
       
-      // Manually trigger a refetch for immediate feedback for this user
-      await fetchQuests();
-      
-      toast({ title: 'Quests Updated', description: `Successfully created or updated ${newQuests.length} quests in the database.` });
+      toast({ title: 'Quests Updated', description: `Successfully synchronized ${newQuests.length} quests in the database.` });
+      // The onSnapshot listener will handle re-fetching quests automatically.
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       toast({ title: "Quest Update Failed", description: `An error occurred: ${errorMessage}. Check Firestore rules and console for details.`, variant: "destructive" });
@@ -412,7 +442,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsUpdating(false);
     }
-  }, [toast, userData?.isAdmin, fetchQuests]);
+  }, [toast, userData?.isAdmin]);
 
   const updateQuestDefinition = useCallback(async (quest: Quest) => {
     setIsUpdating(true);
@@ -444,33 +474,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setIsUpdating(false);
     }
   }, [toast]);
-
-  const fetchQuestCompletionsForCharacter = useCallback(async (characterIdToFetch: string) => {
-    if (!currentUser) {
-      setActiveCharacterId(null);
-      setActiveCharacterQuestCompletions(new Map());
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const completionsPath = `${CHARACTERS_COLLECTION}/${characterIdToFetch}/${QUEST_COMPLETIONS_SUBCOLLECTION}`;
-      const completionsQuery = query(collection(db, completionsPath));
-      const snapshot = await getDocs(completionsQuery);
-      const newCompletions = new Map<string, UserQuestCompletionData>();
-      snapshot.docs.forEach(docSnap => {
-        newCompletions.set(docSnap.id, { ...docSnap.data() } as UserQuestCompletionData);
-      });
-      setActiveCharacterQuestCompletions(newCompletions);
-      setActiveCharacterId(characterIdToFetch);
-    } catch (error) {
-      toast({ title: "Error Loading Quest Completions", description: (error as Error).message, variant: 'destructive' });
-      setActiveCharacterQuestCompletions(new Map());
-      setActiveCharacterId(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUser, toast]);
-
 
   const updateUserQuestCompletion = useCallback(async (
     characterIdForUpdate: string,
