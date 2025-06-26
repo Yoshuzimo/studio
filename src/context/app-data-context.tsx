@@ -372,48 +372,39 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     try {
       const questsCollectionRef = collection(db, 'quests');
       
-      const oldQuestsSnapshot = await getDocs(questsCollectionRef);
-      if (!oldQuestsSnapshot.empty) {
-        let deleteBatch = writeBatch(db);
-        let deleteCount = 0;
-        for (const docSnap of oldQuestsSnapshot.docs) {
-          deleteBatch.delete(docSnap.ref);
-          deleteCount++;
-          if (deleteCount === BATCH_OPERATION_LIMIT) {
-            await deleteBatch.commit();
-            deleteBatch = writeBatch(db);
-            deleteCount = 0;
-          }
-        }
-        if (deleteCount > 0) {
-          await deleteBatch.commit();
-        }
-      }
+      // Removed the logic to delete all old quests.
+      // This will now only perform `set` operations, which either create or overwrite.
+      // This is safer and less likely to be blocked by restrictive security rules.
       
       if (newQuests.length > 0) {
-        let addBatch = writeBatch(db);
-        let addCount = 0;
+        let currentBatch = writeBatch(db);
+        let operationCount = 0;
+        
         for (const quest of newQuests) {
           const questDocRef = doc(questsCollectionRef, quest.id);
-          addBatch.set(questDocRef, quest);
-          addCount++;
-          if (addCount === BATCH_OPERATION_LIMIT) {
-            await addBatch.commit();
-            addBatch = writeBatch(db);
-            addCount = 0;
+          currentBatch.set(questDocRef, quest);
+          operationCount++;
+          
+          if (operationCount >= BATCH_OPERATION_LIMIT) {
+            await currentBatch.commit();
+            currentBatch = writeBatch(db);
+            operationCount = 0;
           }
         }
-        if (addCount > 0) {
-          await addBatch.commit();
+        
+        if (operationCount > 0) {
+          await currentBatch.commit();
         }
       }
       
+      // Update metadata to trigger refetch on all clients
       const metadataDocRef = doc(db, 'metadata', 'questData');
       await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() });
-
-      setQuestsState(newQuests);
       
-      toast({ title: 'Quests Updated', description: `Successfully updated ${newQuests.length} quests in the database.` });
+      // Manually trigger a refetch for immediate feedback for this user
+      await fetchQuests();
+      
+      toast({ title: 'Quests Updated', description: `Successfully created or updated ${newQuests.length} quests in the database.` });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       toast({ title: "Quest Update Failed", description: `An error occurred: ${errorMessage}. Check Firestore rules and console for details.`, variant: "destructive" });
@@ -421,7 +412,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsUpdating(false);
     }
-  }, [toast, userData?.isAdmin]);
+  }, [toast, userData?.isAdmin, fetchQuests]);
 
   const updateQuestDefinition = useCallback(async (quest: Quest) => {
     setIsUpdating(true);
