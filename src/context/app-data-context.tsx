@@ -13,6 +13,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from './auth-context';
 import { ADVENTURE_PACKS_DATA } from '@/data/adventure-packs';
+import { updateQuests } from '@/ai/flows/update-quests-flow';
 
 export interface QuestCompletionUpdate {
   questId: string;
@@ -156,7 +157,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const metadataDocRef = doc(db, METADATA_COLLECTION, QUEST_DATA_METADATA_DOC);
-    const unsubscribe = onSnapshot(metadataDocRef, (docSnap) => {
+    const unsubscribe = onSnapshot(metadataDocRef, 
+      (docSnap) => {
         if (docSnap.exists()) {
             const newTimestamp = docSnap.data().lastUpdatedAt as FirestoreTimestampType;
             if (newTimestamp && (!lastQuestUpdateTime || newTimestamp.toMillis() > lastQuestUpdateTime.toMillis())) {
@@ -165,10 +167,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                 fetchQuests();
             }
         }
-    });
-
+      },
+      (error) => {
+        console.error("[AppDataProvider] Real-time quest update listener failed:", error);
+        toast({
+          title: "Real-time Sync Disabled",
+          description: "Could not listen for live quest updates. This is likely a Firestore rules issue. You may need to refresh manually for new data.",
+          variant: "default",
+          duration: 10000,
+        })
+      }
+    );
+  
     return () => unsubscribe();
-  }, [fetchQuests, lastQuestUpdateTime]);
+  }, [fetchQuests, lastQuestUpdateTime, toast]);
 
   useEffect(() => {
     let isMounted = true;
@@ -354,45 +366,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
   
   const setQuests = useCallback(async (newQuests: Quest[]) => {
+    if (!userData?.isAdmin) {
+      toast({ title: "Permission Denied", description: "You are not authorized to update the quest list.", variant: "destructive" });
+      return;
+    }
     setIsUpdating(true);
     try {
-      const questsCollectionRef = collection(db, 'quests');
-      const oldQuestsSnapshot = await getDocs(questsCollectionRef);
-      let deleteBatch = writeBatch(db);
-      let deleteCount = 0;
-      oldQuestsSnapshot.forEach(docSnap => {
-        deleteBatch.delete(docSnap.ref);
-        deleteCount++;
-        if (deleteCount % BATCH_OPERATION_LIMIT === 0) {
-          deleteBatch.commit(); deleteBatch = writeBatch(db);
-        }
-      });
-      if (deleteCount > 0) await deleteBatch.commit();
-
-      let addBatch = writeBatch(db);
-      let addCount = 0;
-      newQuests.forEach(quest => {
-        const questDocRef = doc(questsCollectionRef, quest.id || doc(collection(db, 'temp')).id);
-        addBatch.set(questDocRef, { ...quest, id: questDocRef.id });
-        addCount++;
-        if (addCount % BATCH_OPERATION_LIMIT === 0) {
-          addBatch.commit(); addBatch = writeBatch(db);
-        }
-      });
-      if (addCount > 0) await addBatch.commit();
-
-      const metadataDocRef = doc(db, METADATA_COLLECTION, QUEST_DATA_METADATA_DOC);
-      await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() });
-
-      setQuestsState(newQuests);
-      toast({ title: 'Quests Updated', description: `Successfully updated ${newQuests.length} quests in the database.` });
-
+      const result = await updateQuests({ quests: newQuests });
+      setQuestsState(newQuests); // Optimistically update local state
+      toast({ title: 'Quests Updated', description: result.message });
     } catch (error) {
       toast({ title: "Quest Update Failed", description: (error as Error).message, variant: 'destructive' });
     } finally {
       setIsUpdating(false);
     }
-  }, [toast]);
+  }, [toast, userData?.isAdmin]);
 
   const updateQuestDefinition = useCallback(async (quest: Quest) => {
     setIsUpdating(true);
