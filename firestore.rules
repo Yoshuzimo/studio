@@ -174,9 +174,9 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
-    
+
     // ============================
-    // Metadata Collection
+    // Quest/Data Metadata
     // ============================
     match /metadata/{docId} {
       allow read: if true;
