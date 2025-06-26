@@ -1,3 +1,4 @@
+
 // src/app/admin/page.tsx
 "use client";
 
@@ -246,14 +247,27 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
         ];
         const columnIndices = [
           43, 0, 2, 3, 4, 5, 6, 7, 8, 9, 18, 15, 19, 20, 21, 22, 23, 29, 30, 31, 32, 33, 20, 21, 22, 23,
-          1, 35, 36, 37, 38, 39, 40, 41 // AR=43, A=0, B=1, C=2, ..., AJ=35, etc.
+          1, 35, 36, 37, 38, 39, 40, 41
         ];
         const linesToSkip = 3;
 
-        const parsedQuests = parseCsv<CSVQuest>(fileText, propertyNames as string[], linesToSkip, columnIndices);
-        let questsWithLevelZeroWarningCount = 0;
+        const parsedQuestsFromCsv = parseCsv<CSVQuest>(fileText, propertyNames as string[], linesToSkip, columnIndices);
+        
+        const questsCollectionRef = collection(db, 'quests');
+        const existingQuestsSnapshot = await getDocs(questsCollectionRef);
+        const existingQuestsMap = new Map<string, Quest>();
+        existingQuestsSnapshot.forEach(doc => {
+            const questData = { id: doc.id, ...doc.data() } as Quest;
+            const normalizedName = (questData.name || "").trim().toLowerCase();
+            if (normalizedName) {
+              existingQuestsMap.set(normalizedName, questData);
+            }
+        });
 
-        const newQuests: Quest[] = parsedQuests.map((q) => {
+        const questsToUpsert: Quest[] = parsedQuestsFromCsv.map((q) => {
+          const normalizedCsvQuestName = (q.name || "").trim().toLowerCase();
+          const existingQuest = normalizedCsvQuestName ? existingQuestsMap.get(normalizedCsvQuestName) : undefined;
+          
           const casualNotAvailable = q.casualNotAvailable?.toUpperCase() === 'TRUE';
           const normalNotAvailable = q.normalNotAvailable?.toUpperCase() === 'TRUE';
           const hardNotAvailable = q.hardNotAvailable?.toUpperCase() === 'TRUE';
@@ -284,17 +298,16 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
 
           const parsedLevel = parseInt(q.level, 10);
           const finalLevel = isNaN(parsedLevel) ? 0 : parsedLevel;
-          if (finalLevel === 0 && q.level && q.level.trim() !== "" && q.level.trim() !== "0") {
-            questsWithLevelZeroWarningCount++;
-          }
           
           const parsedEpicLevel = parseInt(q.epicBaseLevel || '', 10);
           const finalEpicLevel = isNaN(parsedEpicLevel) ? null : parsedEpicLevel;
           
           const mapUrls = [q.mapUrl1, q.mapUrl2, q.mapUrl3, q.mapUrl4, q.mapUrl5, q.mapUrl6, q.mapUrl7].filter(url => url && url.trim() !== '');
+          
+          const id = existingQuest?.id || (q.id || "").trim() || doc(collection(db, 'quests')).id;
 
           return {
-            id: (q.id || "").trim() || doc(collection(db, 'quests')).id,
+            id,
             name: q.name, level: finalLevel,
             adventurePackName: normalizeAdventurePackNameForStorage(q.adventurePack) || null,
             location: q.location === "" || q.location === undefined ? null : q.location,
@@ -313,7 +326,7 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
           };
         });
         
-        await setQuests(newQuests);
+        await setQuests(questsToUpsert);
       }
     } catch (error) {
         console.error(`[AdminPage] CSV Parsing/Upload Error for ${dataType} in handleFileUpload:`, error);
