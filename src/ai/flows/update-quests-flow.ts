@@ -42,8 +42,8 @@ const QuestSchema = z.object({
     epicNormalNotAvailable: z.boolean().optional(),
     epicHardNotAvailable: z.boolean().optional(),
     epicEliteNotAvailable: z.boolean().optional(),
-    wikiUrl: z.string().url().nullable().optional().or(z.literal('')),
-    mapUrls: z.array(z.string().url()).optional(),
+    wikiUrl: z.string().optional().nullable(),
+    mapUrls: z.array(z.string()).optional(),
 });
 
 const UpdateQuestsInputSchema = z.object({
@@ -57,8 +57,6 @@ const UpdateQuestsOutputSchema = z.object({
 });
 export type UpdateQuestsOutput = z.infer<typeof UpdateQuestsOutputSchema>;
 
-const BATCH_OPERATION_LIMIT = 490;
-
 export async function updateQuests(input: UpdateQuestsInput): Promise<UpdateQuestsOutput> {
   return updateQuestsFlow(input);
 }
@@ -71,41 +69,51 @@ const updateQuestsFlow = ai.defineFlow(
   },
   async ({ quests: newQuests }) => {
     const questsCollectionRef = collection(db, 'quests');
-    
-    // Delete all existing documents
+    const BATCH_OPERATION_LIMIT = 490; // Firestore write batch limit is 500
+
+    // 1. Delete all existing documents in batches
     const oldQuestsSnapshot = await getDocs(questsCollectionRef);
-    let deleteBatch = writeBatch(db);
-    let deleteCount = 0;
-    oldQuestsSnapshot.forEach(docSnap => {
-      deleteBatch.delete(docSnap.ref);
-      deleteCount++;
-      if (deleteCount % BATCH_OPERATION_LIMIT === 0) {
-        deleteBatch.commit();
-        deleteBatch = writeBatch(db);
-      }
-    });
-    if (deleteCount > 0 && deleteCount % BATCH_OPERATION_LIMIT !== 0) {
-      await deleteBatch.commit();
+    const deletePromises: Promise<void>[] = [];
+    if (!oldQuestsSnapshot.empty) {
+        let deleteBatch = writeBatch(db);
+        let deleteCount = 0;
+        for (const docSnap of oldQuestsSnapshot.docs) {
+            deleteBatch.delete(docSnap.ref);
+            deleteCount++;
+            if (deleteCount === BATCH_OPERATION_LIMIT) {
+                deletePromises.push(deleteBatch.commit());
+                deleteBatch = writeBatch(db);
+                deleteCount = 0;
+            }
+        }
+        if (deleteCount > 0) {
+            deletePromises.push(deleteBatch.commit());
+        }
+        await Promise.all(deletePromises);
     }
     
-    // Add all new documents
-    let addBatch = writeBatch(db);
-    let addCount = 0;
-    newQuests.forEach(quest => {
-      // Ensure quest has an ID, but use the one from CSV if present
-      const questDocRef = doc(questsCollectionRef, quest.id);
-      addBatch.set(questDocRef, quest);
-      addCount++;
-      if (addCount % BATCH_OPERATION_LIMIT === 0) {
-        addBatch.commit();
-        addBatch = writeBatch(db);
-      }
-    });
-    if (addCount > 0 && addCount % BATCH_OPERATION_LIMIT !== 0) {
-      await addBatch.commit();
+    // 2. Add all new documents in batches
+    const addPromises: Promise<void>[] = [];
+    if (newQuests.length > 0) {
+        let addBatch = writeBatch(db);
+        let addCount = 0;
+        for (const quest of newQuests) {
+            const questDocRef = doc(questsCollectionRef, quest.id);
+            addBatch.set(questDocRef, quest);
+            addCount++;
+            if (addCount === BATCH_OPERATION_LIMIT) {
+                addPromises.push(addBatch.commit());
+                addBatch = writeBatch(db);
+                addCount = 0;
+            }
+        }
+        if (addCount > 0) {
+            addPromises.push(addBatch.commit());
+        }
+        await Promise.all(addPromises);
     }
     
-    // Update metadata timestamp to trigger clients to refetch
+    // 3. Update metadata timestamp to trigger clients to refetch
     const metadataDocRef = doc(db, 'metadata', 'questData');
     await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() });
 
