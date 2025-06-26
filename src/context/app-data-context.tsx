@@ -1,4 +1,3 @@
-
 // src/context/app-data-context.tsx
 "use client";
 
@@ -13,7 +12,6 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from './auth-context';
 import { ADVENTURE_PACKS_DATA } from '@/data/adventure-packs';
-import { updateQuests } from '@/ai/flows/update-quests-flow';
 
 export interface QuestCompletionUpdate {
   questId: string;
@@ -298,7 +296,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         await setDoc(ownedPacksDocRef, { names: packsToSave }, { merge: true });
         lastKnownOwnedPacksRef.current = currentOwnedPacksString;
       } catch (error) {
-        toast({ title: "Error Saving Owned Packs", description: (error as Error).message, variant: 'destructive' });
+        toast({ title: "Error Saving Owned Packs", description: (error as Error).message, variant: "destructive" });
       } finally {
         setIsUpdating(false);
       }
@@ -372,11 +370,54 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
     setIsUpdating(true);
     try {
-      const result = await updateQuests({ quests: newQuests });
-      setQuestsState(newQuests); // Optimistically update local state
-      toast({ title: 'Quests Updated', description: result.message });
+      const questsCollectionRef = collection(db, 'quests');
+      
+      const oldQuestsSnapshot = await getDocs(questsCollectionRef);
+      if (!oldQuestsSnapshot.empty) {
+        let deleteBatch = writeBatch(db);
+        let deleteCount = 0;
+        for (const docSnap of oldQuestsSnapshot.docs) {
+          deleteBatch.delete(docSnap.ref);
+          deleteCount++;
+          if (deleteCount === BATCH_OPERATION_LIMIT) {
+            await deleteBatch.commit();
+            deleteBatch = writeBatch(db);
+            deleteCount = 0;
+          }
+        }
+        if (deleteCount > 0) {
+          await deleteBatch.commit();
+        }
+      }
+      
+      if (newQuests.length > 0) {
+        let addBatch = writeBatch(db);
+        let addCount = 0;
+        for (const quest of newQuests) {
+          const questDocRef = doc(questsCollectionRef, quest.id);
+          addBatch.set(questDocRef, quest);
+          addCount++;
+          if (addCount === BATCH_OPERATION_LIMIT) {
+            await addBatch.commit();
+            addBatch = writeBatch(db);
+            addCount = 0;
+          }
+        }
+        if (addCount > 0) {
+          await addBatch.commit();
+        }
+      }
+      
+      const metadataDocRef = doc(db, 'metadata', 'questData');
+      await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() });
+
+      setQuestsState(newQuests);
+      
+      toast({ title: 'Quests Updated', description: `Successfully updated ${newQuests.length} quests in the database.` });
     } catch (error) {
-      toast({ title: "Quest Update Failed", description: (error as Error).message, variant: 'destructive' });
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+      toast({ title: "Quest Update Failed", description: `An error occurred: ${errorMessage}. Check Firestore rules and console for details.`, variant: "destructive" });
+      console.error("[AppDataProvider] Quest update failed:", error);
     } finally {
       setIsUpdating(false);
     }
