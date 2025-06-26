@@ -153,7 +153,7 @@ export interface Suggestion {
 
 export interface SuggestionFirebaseData {
   text: string;
-  createdAt: FirestoreTimestampType | FieldValue; // For writing
+  createdAt: FieldValue; // For writing
   suggesterId: string;
   suggesterName: string;
 }
@@ -176,7 +176,7 @@ export interface MessageFirebaseData {
   receiverId: string;
   receiverName: string;
   text: string;
-  timestamp: FirestoreTimestampType | FieldValue; // For writing
+  timestamp: FieldValue; // For writing
   isRead: boolean;
   relatedSuggestionId?: string;
 }
@@ -221,7 +221,7 @@ export interface RoleChangeLogFirebaseData {
   };
   newRoleApplied?: string;
   status: "requested" | "successful" | "failed";
-  timestampRequested: FirestoreTimestampType | FieldValue;
-  timestampFinalized?: FirestoreTimestampType | FieldValue;
+  timestampRequested: FieldValue;
+  timestampFinalized?: FieldValue;
   errorDetails?: string;
 }

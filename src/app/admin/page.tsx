@@ -236,7 +236,7 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
 
       } else if (dataType === 'Quests') {
         const propertyNames: (keyof CSVQuest)[] = [
-            'questGiver', 'name', 'location', 'level', 'casualSoloExp', 
+            'id', 'questGiver', 'name', 'location', 'level', 'casualSoloExp', 
             'normalExp', 'hardExp', 'eliteExp', 'duration', 'adventurePack', 
             'baseFavor', 'patron', 'casualNotAvailable', 'normalNotAvailable', 
             'hardNotAvailable', 'eliteNotAvailable',
@@ -245,8 +245,8 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
             'wikiUrl', 'mapUrl1', 'mapUrl2', 'mapUrl3', 'mapUrl4', 'mapUrl5', 'mapUrl6', 'mapUrl7'
         ];
         const columnIndices = [
-          0, 2, 3, 4, 5, 6, 7, 8, 9, 18, 15, 19, 20, 21, 22, 23, 29, 30, 31, 32, 33, 20, 21, 22, 23,
-          1, 35, 36, 37, 38, 39, 40, 41 // B=1, AJ=35, etc.
+          43, 0, 2, 3, 4, 5, 6, 7, 8, 9, 18, 15, 19, 20, 21, 22, 23, 29, 30, 31, 32, 33, 20, 21, 22, 23,
+          1, 35, 36, 37, 38, 39, 40, 41 // AR=43, A=0, B=1, C=2, ..., AJ=35, etc.
         ];
         const linesToSkip = 3;
 
@@ -294,7 +294,7 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
           const mapUrls = [q.mapUrl1, q.mapUrl2, q.mapUrl3, q.mapUrl4, q.mapUrl5, q.mapUrl6, q.mapUrl7].filter(url => url && url.trim() !== '');
 
           return {
-            id: q.id || doc(collection(db, 'quests')).id,
+            id: (q.id || "").trim() || doc(collection(db, 'quests')).id,
             name: q.name, level: finalLevel,
             adventurePackName: normalizeAdventurePackNameForStorage(q.adventurePack) || null,
             location: q.location === "" || q.location === undefined ? null : q.location,

@@ -68,58 +68,67 @@ const updateQuestsFlow = ai.defineFlow(
     outputSchema: UpdateQuestsOutputSchema,
   },
   async ({ quests: newQuests }) => {
-    const questsCollectionRef = collection(db, 'quests');
-    const BATCH_OPERATION_LIMIT = 490; // Firestore write batch limit is 500
+    try {
+      const questsCollectionRef = collection(db, 'quests');
+      const BATCH_OPERATION_LIMIT = 490;
 
-    // 1. Delete all existing documents in batches
-    const oldQuestsSnapshot = await getDocs(questsCollectionRef);
-    const deletePromises: Promise<void>[] = [];
-    if (!oldQuestsSnapshot.empty) {
+      // 1. Delete all existing documents in batches
+      const oldQuestsSnapshot = await getDocs(questsCollectionRef);
+      const deletePromises: Promise<void>[] = [];
+      if (!oldQuestsSnapshot.empty) {
         let deleteBatch = writeBatch(db);
         let deleteCount = 0;
         for (const docSnap of oldQuestsSnapshot.docs) {
-            deleteBatch.delete(docSnap.ref);
-            deleteCount++;
-            if (deleteCount === BATCH_OPERATION_LIMIT) {
-                deletePromises.push(deleteBatch.commit());
-                deleteBatch = writeBatch(db);
-                deleteCount = 0;
-            }
+          deleteBatch.delete(docSnap.ref);
+          deleteCount++;
+          if (deleteCount === BATCH_OPERATION_LIMIT) {
+            deletePromises.push(deleteBatch.commit());
+            deleteBatch = writeBatch(db);
+            deleteCount = 0;
+          }
         }
         if (deleteCount > 0) {
-            deletePromises.push(deleteBatch.commit());
+          deletePromises.push(deleteBatch.commit());
         }
         await Promise.all(deletePromises);
-    }
-    
-    // 2. Add all new documents in batches
-    const addPromises: Promise<void>[] = [];
-    if (newQuests.length > 0) {
+      }
+      
+      // 2. Add all new documents in batches
+      const addPromises: Promise<void>[] = [];
+      if (newQuests.length > 0) {
         let addBatch = writeBatch(db);
         let addCount = 0;
         for (const quest of newQuests) {
-            const questDocRef = doc(questsCollectionRef, quest.id);
-            addBatch.set(questDocRef, quest);
-            addCount++;
-            if (addCount === BATCH_OPERATION_LIMIT) {
-                addPromises.push(addBatch.commit());
-                addBatch = writeBatch(db);
-                addCount = 0;
-            }
+          if (!quest.id || quest.id.trim() === '') {
+            console.warn("Skipping quest with invalid ID:", quest.name);
+            continue;
+          }
+          const questDocRef = doc(questsCollectionRef, quest.id);
+          addBatch.set(questDocRef, quest);
+          addCount++;
+          if (addCount === BATCH_OPERATION_LIMIT) {
+            addPromises.push(addBatch.commit());
+            addBatch = writeBatch(db);
+            addCount = 0;
+          }
         }
         if (addCount > 0) {
-            addPromises.push(addBatch.commit());
+          addPromises.push(addBatch.commit());
         }
         await Promise.all(addPromises);
-    }
-    
-    // 3. Update metadata timestamp to trigger clients to refetch
-    const metadataDocRef = doc(db, 'metadata', 'questData');
-    await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() });
+      }
+      
+      // 3. Update metadata timestamp to trigger clients to refetch
+      const metadataDocRef = doc(db, 'metadata', 'questData');
+      await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() });
 
-    return {
-      message: `Successfully updated ${newQuests.length} quests in the database.`,
-      questsWritten: newQuests.length,
-    };
+      return {
+        message: `Successfully updated ${newQuests.length} quests in the database.`,
+        questsWritten: newQuests.length,
+      };
+    } catch (error: any) {
+      console.error("Critical error in updateQuestsFlow:", error);
+      throw new Error(`A server error occurred during the quest update: ${error.message || 'Unknown error'}`);
+    }
   }
 );
