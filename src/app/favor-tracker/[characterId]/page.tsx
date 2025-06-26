@@ -375,6 +375,63 @@ export default function FavorTrackerPage() {
     setIsResetDialogOpen(false);
    };
 
+  const handleSaveBackup = () => {
+    if (!character || !quests) {
+      toast({
+        title: "Cannot generate backup",
+        description: "Character or quest data is not available.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const escapeCsvField = (field: string) => {
+      if (/[",\n]/.test(field)) {
+        return `"${field.replace(/"/g, '""')}"`;
+      }
+      return field;
+    };
+
+    const difficultyHeaders = difficultyLevels.map(d => d.csvMapKey).join(',');
+    const headerLine = `Quest Name,${difficultyHeaders}`;
+    
+    // Use all quests for a complete backup, sorted alphabetically
+    const allSortedQuests = [...quests].sort((a, b) => getSortableName(a.name).localeCompare(getSortableName(b.name)));
+
+    const csvRows = allSortedQuests.map(quest => {
+      const completionData = activeCharacterQuestCompletions.get(quest.id);
+      const row = [escapeCsvField(quest.name)];
+      difficultyLevels.forEach(dl => {
+        const isCompleted = completionData?.[dl.key] || false;
+        row.push(isCompleted ? 'TRUE' : 'FALSE');
+      });
+      return row.join(',');
+    });
+    
+    const csvContent = [
+      `DDO Toolkit Quest Completion Backup for ${character.name}`,
+      headerLine,
+      '', // Skipped line on import
+      ...csvRows
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `ddo_completions_${character.name.replace(/\s+/g, '_')}_${date}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Backup Created",
+      description: "Your quest completion data has been saved to a CSV file.",
+    });
+  };
+
   const handleQuestCompletionCsvUpload = async (file: File): Promise<QuestCompletionCsvUploadResult> => {
     if (!character) throw new Error("Character not loaded, cannot process CSV.");
     setIsCsvProcessing(true);
@@ -692,7 +749,7 @@ export default function FavorTrackerPage() {
                     )}
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                     <Button onClick={() => {}} variant="outline" disabled={pageOverallLoading || quests.length === 0} size="sm">
+                     <Button onClick={handleSaveBackup} variant="outline" disabled={pageOverallLoading || quests.length === 0} size="sm">
                        <Download className="mr-2 h-4 w-4" /> Save Backup
                     </Button>
                     <Button onClick={() => setIsUploadCsvDialogOpen(true)} variant="outline" disabled={pageOverallLoading || quests.length === 0} size="sm">
