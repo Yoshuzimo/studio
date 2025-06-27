@@ -2,7 +2,7 @@
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest, UserQuestCompletionData } from '@/types';
@@ -189,6 +189,7 @@ export default function FavorTrackerPage() {
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
   const [displayData, setDisplayData] = useState<{ sortedQuests: any[], areaAggregates: { favorMap: Map<string, number>, scoreMap: Map<string, number> } }>({ sortedQuests: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } });
+  const prevSortConfigRef = useRef(sortConfig);
 
 
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
@@ -518,7 +519,6 @@ export default function FavorTrackerPage() {
   };
 
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
-
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
 
   const processedData = useMemo(() => {
@@ -617,56 +617,63 @@ export default function FavorTrackerPage() {
     completionDep, durationAdjustments, isDataLoaded, isDebugMode
   ]);
 
-  const sortedAndFilteredData = useMemo(() => {
-    const { processedQuests, areaAggregates } = processedData;
-
-    const sortedQuests = [...processedQuests].sort((a, b) => {
-      const getSortValue = (quest: typeof a, key: SortableColumnKey) => {
-          if (key === 'areaRemainingFavor') {
-            const primaryLocation = getPrimaryLocation(quest.location);
-            return primaryLocation ? areaAggregates.favorMap.get(primaryLocation) ?? 0 : 0;
-          }
-          if (key === 'areaAdjustedRemainingFavorScore') {
-            const primaryLocation = getPrimaryLocation(quest.location);
-            return primaryLocation ? areaAggregates.scoreMap.get(primaryLocation) ?? 0 : 0;
-          }
-          if (key === 'name') return getSortableName(quest.name);
-          if (key === 'location') return getPrimaryLocation(quest.location);
-          return quest[key as keyof typeof quest];
-      };
-
-      let comparison = 0;
-      if (sortConfig) {
-          let aValue = getSortValue(a, sortConfig.key);
-          let bValue = getSortValue(b, sortConfig.key);
-
-          if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-          if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-
-          if (typeof aValue === 'string' && typeof bValue === 'string') {
-            comparison = aValue.localeCompare(bValue);
-          } else {
-            if (aValue < bValue) comparison = -1;
-            if (aValue > bValue) comparison = 1;
-          }
-          if (comparison !== 0) {
-            comparison = sortConfig.direction === 'ascending' ? comparison : -comparison;
-          }
-      }
-      
-      if (comparison === 0) {
-        return getSortableName(a.name).localeCompare(getSortableName(b.name));
-      }
-
-      return comparison;
-    });
+  useEffect(() => {
+    const sortConfigChanged = JSON.stringify(prevSortConfigRef.current) !== JSON.stringify(sortConfig);
+    prevSortConfigRef.current = sortConfig;
     
-    return { sortedQuests, areaAggregates };
+    setDisplayData(prevDisplayData => {
+        const newProcessedIds = new Set(processedData.processedQuests.map(q => q.id));
+        const newItemsAdded = processedData.processedQuests.some(q => !prevDisplayData.sortedQuests.some(dq => dq.id === q.id));
+
+        const getSortFunction = (config: SortConfig | null) => (a: any, b: any) => {
+            if (!config) return getSortableName(a.name).localeCompare(getSortableName(b.name));
+
+            const getSortValue = (quest: any, key: SortableColumnKey) => {
+                if (key === 'areaRemainingFavor') {
+                    const primaryLocation = getPrimaryLocation(quest.location);
+                    return primaryLocation ? processedData.areaAggregates.favorMap.get(primaryLocation) ?? 0 : 0;
+                }
+                if (key === 'areaAdjustedRemainingFavorScore') {
+                    const primaryLocation = getPrimaryLocation(quest.location);
+                    return primaryLocation ? processedData.areaAggregates.scoreMap.get(primaryLocation) ?? 0 : 0;
+                }
+                if (key === 'name') return getSortableName(quest.name);
+                if (key === 'location') return getPrimaryLocation(quest.location);
+                return quest[key as keyof typeof quest];
+            };
+
+            let aValue = getSortValue(a, config.key);
+            let bValue = getSortValue(b, config.key);
+
+            if (aValue === null || aValue === undefined) aValue = config.direction === 'ascending' ? Infinity : -Infinity;
+            if (bValue === null || bValue === undefined) bValue = config.direction === 'ascending' ? Infinity : -Infinity;
+            
+            let comparison = 0;
+            if (typeof aValue === 'string' && typeof bValue === 'string') {
+                comparison = aValue.localeCompare(bValue);
+            } else {
+                if (aValue < bValue) comparison = -1;
+                if (aValue > bValue) comparison = 1;
+            }
+            if (comparison !== 0) {
+                return config.direction === 'ascending' ? comparison : -comparison;
+            }
+            return getSortableName(a.name).localeCompare(getSortableName(b.name));
+        };
+        
+        if (sortConfigChanged || newItemsAdded) {
+            const sorted = [...processedData.processedQuests].sort(getSortFunction(sortConfig));
+            return { sortedQuests: sorted, areaAggregates: processedData.areaAggregates };
+        } else {
+            const dataMap = new Map(processedData.processedQuests.map(q => [q.id, q]));
+            const updatedQuests = prevDisplayData.sortedQuests
+                .filter(q => newProcessedIds.has(q.id))
+                .map(oldQuest => dataMap.get(oldQuest.id)!);
+            return { sortedQuests: updatedQuests, areaAggregates: processedData.areaAggregates };
+        }
+    });
   }, [processedData, sortConfig]);
 
-  useEffect(() => {
-    setDisplayData(sortedAndFilteredData);
-  }, [sortedAndFilteredData]);
 
   const requestSort = (key: SortableColumnKey) => {
     const specialSortKeys: SortableColumnKey[] = [
@@ -893,7 +900,6 @@ export default function FavorTrackerPage() {
                               {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
-                              {columnVisibility['duration'] && <TableCell className="whitespace-nowrap text-center">{getDurationCategory(quest.duration) || 'N/A'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
