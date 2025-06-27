@@ -1,3 +1,4 @@
+
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -187,6 +188,8 @@ export default function FavorTrackerPage() {
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
+  const [displayData, setDisplayData] = useState<{ sortedQuests: any[], areaAggregates: { favorMap: Map<string, number>, scoreMap: Map<string, number> } }>({ sortedQuests: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } });
+
 
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
 
@@ -367,7 +370,7 @@ export default function FavorTrackerPage() {
 
   const handleConfirmResetCompletions = async () => {
     if (!character || !sortedAndFilteredData) return;
-    const questsForCharacterLevel = sortedAndFilteredData.sortedQuests
+    const questsForCharacterLevel = displayData.sortedQuests
         .filter(q => q.level <= character.level && q.level > 0)
         .map(q => q.id);
     await batchResetUserQuestCompletions(character.id, questsForCharacterLevel);
@@ -518,10 +521,10 @@ export default function FavorTrackerPage() {
 
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
 
-  const sortedAndFilteredData = useMemo(() => {
+  const processedData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) {
       return {
-        sortedQuests: [],
+        processedQuests: [],
         areaAggregates: { favorMap: new Map<string, number>(), scoreMap: new Map<string, number>() },
       };
     }
@@ -608,7 +611,16 @@ export default function FavorTrackerPage() {
         }
     });
 
-    const sortedQuests = [...filteredQuests].sort((a, b) => {
+    return { processedQuests: filteredQuests, areaAggregates };
+  }, [
+    quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
+    completionDep, durationAdjustments, isDataLoaded, isDebugMode
+  ]);
+
+  const sortedAndFilteredData = useMemo(() => {
+    const { processedQuests, areaAggregates } = processedData;
+
+    const sortedQuests = [...processedQuests].sort((a, b) => {
       const getSortValue = (quest: typeof a, key: SortableColumnKey) => {
           if (key === 'areaRemainingFavor') {
             const primaryLocation = getPrimaryLocation(quest.location);
@@ -650,10 +662,11 @@ export default function FavorTrackerPage() {
     });
     
     return { sortedQuests, areaAggregates };
-  }, [
-    quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
-    completionDep, durationAdjustments, isDataLoaded, sortConfig, isDebugMode
-  ]);
+  }, [processedData, sortConfig]);
+
+  useEffect(() => {
+    setDisplayData(sortedAndFilteredData);
+  }, [sortedAndFilteredData]);
 
   const requestSort = (key: SortableColumnKey) => {
     const specialSortKeys: SortableColumnKey[] = [
@@ -709,7 +722,7 @@ export default function FavorTrackerPage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const { sortedQuests, areaAggregates } = sortedAndFilteredData;
+  const { sortedQuests, areaAggregates } = displayData;
 
   return (
     <div className="py-8 space-y-8">
