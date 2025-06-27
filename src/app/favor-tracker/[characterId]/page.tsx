@@ -146,6 +146,18 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
   return withoutThe.replace(/[^a-z0-9]/g, '');
 };
 
+type QuestWithSortValue = Quest & {
+  casualCompleted: boolean;
+  normalCompleted: boolean;
+  hardCompleted: boolean;
+  eliteCompleted: boolean;
+  remainingPossibleFavor: number;
+  adjustedRemainingFavorScore: number;
+  maxPotentialFavorSingleQuest: number;
+  hiddenReasons: string[];
+  _sortValue: any;
+};
+
 export default function FavorTrackerPage() {
   const params = useParams();
   const router = useRouter();
@@ -188,7 +200,7 @@ export default function FavorTrackerPage() {
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
-  const [displayData, setDisplayData] = useState<{ sortedQuests: any[], areaAggregates: { favorMap: Map<string, number>, scoreMap: Map<string, number> } }>({ sortedQuests: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } });
+  const [displayData, setDisplayData] = useState<{ sortedQuests: QuestWithSortValue[], areaAggregates: { favorMap: Map<string, number>, scoreMap: Map<string, number> } }>({ sortedQuests: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } });
   const prevSortConfigRef = useRef(sortConfig);
 
 
@@ -622,53 +634,71 @@ export default function FavorTrackerPage() {
     prevSortConfigRef.current = sortConfig;
     
     setDisplayData(prevDisplayData => {
-        const newProcessedIds = new Set(processedData.processedQuests.map(q => q.id));
-        const newItemsAdded = processedData.processedQuests.some(q => !prevDisplayData.sortedQuests.some(dq => dq.id === q.id));
-
-        const getSortFunction = (config: SortConfig | null) => (a: any, b: any) => {
-            if (!config) return getSortableName(a.name).localeCompare(getSortableName(b.name));
-
-            const getSortValue = (quest: any, key: SortableColumnKey) => {
-                if (key === 'areaRemainingFavor') {
-                    const primaryLocation = getPrimaryLocation(quest.location);
-                    return primaryLocation ? processedData.areaAggregates.favorMap.get(primaryLocation) ?? 0 : 0;
-                }
-                if (key === 'areaAdjustedRemainingFavorScore') {
-                    const primaryLocation = getPrimaryLocation(quest.location);
-                    return primaryLocation ? processedData.areaAggregates.scoreMap.get(primaryLocation) ?? 0 : 0;
-                }
-                if (key === 'name') return getSortableName(quest.name);
-                if (key === 'location') return getPrimaryLocation(quest.location);
-                return quest[key as keyof typeof quest];
-            };
-
-            let aValue = getSortValue(a, config.key);
-            let bValue = getSortValue(b, config.key);
-
-            if (aValue === null || aValue === undefined) aValue = config.direction === 'ascending' ? Infinity : -Infinity;
-            if (bValue === null || bValue === undefined) bValue = config.direction === 'ascending' ? Infinity : -Infinity;
+        const getSortValue = (quest: any, config: SortConfig | null) => {
+            if (!config) return getSortableName(quest.name);
+            const { key } = config;
             
-            let comparison = 0;
-            if (typeof aValue === 'string' && typeof bValue === 'string') {
-                comparison = aValue.localeCompare(bValue);
-            } else {
-                if (aValue < bValue) comparison = -1;
-                if (aValue > bValue) comparison = 1;
+            if (key === 'areaRemainingFavor') {
+                const primaryLocation = getPrimaryLocation(quest.location);
+                return primaryLocation ? processedData.areaAggregates.favorMap.get(primaryLocation) ?? 0 : 0;
             }
-            if (comparison !== 0) {
-                return config.direction === 'ascending' ? comparison : -comparison;
+            if (key === 'areaAdjustedRemainingFavorScore') {
+                const primaryLocation = getPrimaryLocation(quest.location);
+                return primaryLocation ? processedData.areaAggregates.scoreMap.get(primaryLocation) ?? 0 : 0;
             }
-            return getSortableName(a.name).localeCompare(getSortableName(b.name));
+            if (key === 'name') return getSortableName(quest.name);
+            if (key === 'location') return getPrimaryLocation(quest.location);
+            return quest[key as keyof typeof quest];
         };
         
-        if (sortConfigChanged || newItemsAdded) {
-            const sorted = [...processedData.processedQuests].sort(getSortFunction(sortConfig));
-            return { sortedQuests: sorted, areaAggregates: processedData.areaAggregates };
+        const newProcessedIds = new Set(processedData.processedQuests.map(q => q.id));
+        const prevProcessedIds = new Set(prevDisplayData.sortedQuests.map(q => q.id));
+
+        const shouldResort = sortConfigChanged || 
+                             processedData.processedQuests.length !== prevDisplayData.sortedQuests.length ||
+                             processedData.processedQuests.some(q => !prevProcessedIds.has(q.id));
+
+        if (shouldResort) {
+            const questsWithSortValue = processedData.processedQuests.map(quest => ({
+                ...quest,
+                _sortValue: getSortValue(quest, sortConfig),
+            }));
+
+            questsWithSortValue.sort((a, b) => {
+                if (!sortConfig) return 0;
+
+                let aValue = a._sortValue;
+                let bValue = b._sortValue;
+
+                if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+                if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+                
+                let comparison = 0;
+                if (typeof aValue === 'string' && typeof bValue === 'string') {
+                    comparison = aValue.localeCompare(bValue);
+                } else {
+                    if (aValue < bValue) comparison = -1;
+                    if (aValue > bValue) comparison = 1;
+                }
+                
+                if (comparison !== 0) {
+                    return sortConfig.direction === 'ascending' ? comparison : -comparison;
+                }
+                
+                return getSortableName(a.name).localeCompare(getSortableName(b.name));
+            });
+            return { sortedQuests: questsWithSortValue, areaAggregates: processedData.areaAggregates };
         } else {
             const dataMap = new Map(processedData.processedQuests.map(q => [q.id, q]));
             const updatedQuests = prevDisplayData.sortedQuests
                 .filter(q => newProcessedIds.has(q.id))
-                .map(oldQuest => dataMap.get(oldQuest.id)!);
+                .map(oldQuest => {
+                    const newQuestData = dataMap.get(oldQuest.id)!;
+                    return {
+                        ...newQuestData,
+                        _sortValue: oldQuest._sortValue,
+                    };
+                });
             return { sortedQuests: updatedQuests, areaAggregates: processedData.areaAggregates };
         }
     });
@@ -900,12 +930,13 @@ export default function FavorTrackerPage() {
                               {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                              {columnVisibility['duration'] && <TableCell className="text-center">{quest.duration ? getDurationCategory(quest.duration) : '-'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
                               {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
-                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? areaAggregates.favorMap.get(getPrimaryLocation(quest.location)) ?? 0 : '-'}</TableCell>}
-                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? areaAggregates.scoreMap.get(getPrimaryLocation(quest.location)) ?? 0 : '-'}</TableCell>}
+                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0 : '-'}</TableCell>}
+                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0 : '-'}</TableCell>}
       
                               {difficultyLevels.map(diff => columnVisibility[diff.key] && (
                               <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
