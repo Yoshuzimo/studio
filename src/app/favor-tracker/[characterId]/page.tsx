@@ -1,4 +1,3 @@
-
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -16,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DialogFooter } from '@/components/ui/dialog';
 import { FavorTrackerCsvUploaderDialog, type QuestCompletionCsvUploadResult } from '@/components/favor-tracker/favor-tracker-csv-uploader-dialog';
 import type { QuestCompletionUpdate } from '@/context/app-data-context';
-import { Download, UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowUp, ArrowDown, Package, Loader2, RotateCcw, Upload, Award, Timer, BarChartBig, Layers, Settings, BookOpen, AlertTriangle, TrendingUp, Maximize, Pencil, Skull } from 'lucide-react';
+import { Download, UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowUp, ArrowDown, Package, Loader2, RotateCcw, Upload, Award, Timer, BarChartBig, Layers, Settings, BookOpen, AlertTriangle, TrendingUp, Maximize, Pencil, Skull, TestTube2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -721,17 +720,22 @@ export default function FavorTrackerPage() {
                 <CardTitle className="font-headline text-3xl flex items-center">
                 <UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}
                 </CardTitle>
-                <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}>
-                    <Pencil className="mr-2 h-4 w-4" /> Edit Character
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => toast({ title: "Coming Soon!", description: "Live import functionality is under development." })} disabled={pageOverallLoading}>
+                        <TestTube2 className="mr-2 h-4 w-4" /> Import Live (Experimental)
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}>
+                        <Pencil className="mr-2 h-4 w-4" /> Edit Character
+                    </Button>
+                </div>
             </div>
             <CardDescription>Level {character.level}</CardDescription>
             <div className="pt-4 flex flex-col space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                     <div className="flex items-center space-x-2">
-                        <Checkbox id="show-completed-with-zero-favor" checked={showCompletedQuestsWithZeroRemainingFavor} onCheckedChange={(checked) => setShowCompletedQuestsWithZeroRemainingFavor(!!checked)} disabled={pageOverallLoading} aria-label="Toggle visibility of fully completed quests with zero remaining favor"/>
-                        <Label htmlFor="show-completed-with-zero-favor" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Completed (0 Rem. Favor)</Label>
+                        <Checkbox id="show-completed" checked={showCompletedQuestsWithZeroRemainingFavor} onCheckedChange={(checked) => setShowCompletedQuestsWithZeroRemainingFavor(!!checked)} disabled={pageOverallLoading} aria-label="Toggle visibility of fully completed quests"/>
+                        <Label htmlFor="show-completed" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Completed</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                         <Checkbox id="on-cormyr" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} aria-label="Toggle hiding of 'The Curse of the Five Fangs' quest"/>
