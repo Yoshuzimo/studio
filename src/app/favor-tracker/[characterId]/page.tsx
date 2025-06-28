@@ -638,13 +638,10 @@ export default function FavorTrackerPage() {
             if (!config) return getSortableName(quest.name);
             const { key } = config;
             
-            if (key === 'areaRemainingFavor') {
+            if (key === 'areaRemainingFavor' || key === 'areaAdjustedRemainingFavorScore') {
                 const primaryLocation = getPrimaryLocation(quest.location);
-                return primaryLocation ? processedData.areaAggregates.favorMap.get(primaryLocation) ?? 0 : 0;
-            }
-            if (key === 'areaAdjustedRemainingFavorScore') {
-                const primaryLocation = getPrimaryLocation(quest.location);
-                return primaryLocation ? processedData.areaAggregates.scoreMap.get(primaryLocation) ?? 0 : 0;
+                const mapToUse = key === 'areaRemainingFavor' ? processedData.areaAggregates.favorMap : processedData.areaAggregates.scoreMap;
+                return primaryLocation ? mapToUse.get(primaryLocation) ?? 0 : 0;
             }
             if (key === 'name') return getSortableName(quest.name);
             if (key === 'location') return getPrimaryLocation(quest.location);
@@ -652,11 +649,10 @@ export default function FavorTrackerPage() {
         };
         
         const newProcessedIds = new Set(processedData.processedQuests.map(q => q.id));
-        const prevProcessedIds = new Set(prevDisplayData.sortedQuests.map(q => q.id));
 
         const shouldResort = sortConfigChanged || 
                              processedData.processedQuests.length !== prevDisplayData.sortedQuests.length ||
-                             processedData.processedQuests.some(q => !prevProcessedIds.has(q.id));
+                             processedData.processedQuests.some(q => !newProcessedIds.has(q.id));
 
         if (shouldResort) {
             const questsWithSortValue = processedData.processedQuests.map(quest => ({
@@ -667,11 +663,14 @@ export default function FavorTrackerPage() {
             questsWithSortValue.sort((a, b) => {
                 if (!sortConfig) return 0;
 
+                const primarySortKey = sortConfig.key;
+                const primarySortDirection = sortConfig.direction;
+
                 let aValue = a._sortValue;
                 let bValue = b._sortValue;
-
-                if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
-                if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+                
+                if (aValue === null || aValue === undefined) aValue = primarySortDirection === 'ascending' ? Infinity : -Infinity;
+                if (bValue === null || bValue === undefined) bValue = primarySortDirection === 'ascending' ? Infinity : -Infinity;
                 
                 let comparison = 0;
                 if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -682,7 +681,16 @@ export default function FavorTrackerPage() {
                 }
                 
                 if (comparison !== 0) {
-                    return sortConfig.direction === 'ascending' ? comparison : -comparison;
+                    return primarySortDirection === 'ascending' ? comparison : -comparison;
+                }
+
+                if (primarySortKey === 'areaRemainingFavor' || primarySortKey === 'areaAdjustedRemainingFavorScore') {
+                    const locationA = a.location || '';
+                    const locationB = b.location || '';
+                    const locationComparison = locationA.localeCompare(locationB);
+                    if (locationComparison !== 0) {
+                        return locationComparison;
+                    }
                 }
                 
                 return getSortableName(a.name).localeCompare(getSortableName(b.name));
@@ -703,7 +711,6 @@ export default function FavorTrackerPage() {
         }
     });
   }, [processedData, sortConfig]);
-
 
   const requestSort = (key: SortableColumnKey) => {
     const specialSortKeys: SortableColumnKey[] = [
