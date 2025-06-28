@@ -630,33 +630,36 @@ export default function FavorTrackerPage() {
   ]);
 
   useEffect(() => {
+    const getSortValue = (quest: QuestWithSortValue, config: SortConfig) => {
+        const { key } = config;
+        
+        if (key === 'areaRemainingFavor' || key === 'areaAdjustedRemainingFavorScore') {
+            const primaryLocation = getPrimaryLocation(quest.location);
+            const mapToUse = key === 'areaRemainingFavor' ? processedData.areaAggregates.favorMap : processedData.areaAggregates.scoreMap;
+            return primaryLocation ? mapToUse.get(primaryLocation) ?? 0 : 0;
+        }
+        if (key === 'name') return getSortableName(quest.name);
+        if (key === 'location') return quest.location; // Sort by full location string
+        return quest[key as keyof typeof quest];
+    };
+    
+    // Determine if a full re-sort is needed
     const sortConfigChanged = JSON.stringify(prevSortConfigRef.current) !== JSON.stringify(sortConfig);
     prevSortConfigRef.current = sortConfig;
-    
+
     setDisplayData(prevDisplayData => {
-        const getSortValue = (quest: any, config: SortConfig | null) => {
-            if (!config) return getSortableName(quest.name);
-            const { key } = config;
-            
-            if (key === 'areaRemainingFavor' || key === 'areaAdjustedRemainingFavorScore') {
-                const primaryLocation = getPrimaryLocation(quest.location);
-                const mapToUse = key === 'areaRemainingFavor' ? processedData.areaAggregates.favorMap : processedData.areaAggregates.scoreMap;
-                return primaryLocation ? mapToUse.get(primaryLocation) ?? 0 : 0;
-            }
-            if (key === 'name') return getSortableName(quest.name);
-            if (key === 'location') return quest.location || '';
-            return quest[key as keyof typeof quest];
-        };
-        
-        const newProcessedIds = new Set(processedData.processedQuests.map(q => q.id));
         const prevVisibleIds = new Set(prevDisplayData.sortedQuests.map(q => q.id));
+        const newVisibleIds = new Set(processedData.processedQuests.map(q => q.id));
         const itemsAdded = processedData.processedQuests.some(q => !prevVisibleIds.has(q.id));
-        const shouldResort = sortConfigChanged || itemsAdded;
+        const shouldResort = sortConfigChanged || itemsAdded || !isDataLoaded;
+        
+        let sortedQuests;
 
         if (shouldResort) {
+            // Full re-sort with new snapshot
             const questsWithSortValue = processedData.processedQuests.map(quest => ({
                 ...quest,
-                _sortValue: getSortValue(quest, sortConfig), // Take snapshot
+                _sortValue: sortConfig ? getSortValue(quest, sortConfig) : getSortableName(quest.name),
             }));
 
             questsWithSortValue.sort((a, b) => {
@@ -680,7 +683,7 @@ export default function FavorTrackerPage() {
                 
                 if (comparison !== 0) return primarySortDirection === 'ascending' ? comparison : -comparison;
 
-                // Secondary sort for Area columns
+                // Secondary sort for Area columns by full location
                 if (primarySortKey === 'areaRemainingFavor' || primarySortKey === 'areaAdjustedRemainingFavorScore') {
                     const locationA = a.location || '';
                     const locationB = b.location || '';
@@ -691,42 +694,38 @@ export default function FavorTrackerPage() {
                 // Tertiary sort by name
                 return getSortableName(a.name).localeCompare(getSortableName(b.name));
             });
-            return { sortedQuests: questsWithSortValue, areaAggregates: processedData.areaAggregates };
+            sortedQuests = questsWithSortValue;
         } else {
+            // Incremental update: filter out completed quests, but maintain order
             const dataMap = new Map(processedData.processedQuests.map(q => [q.id, q]));
-            const updatedQuests = prevDisplayData.sortedQuests
-                .filter(q => newProcessedIds.has(q.id))
+            sortedQuests = prevDisplayData.sortedQuests
+                .filter(q => newVisibleIds.has(q.id))
                 .map(oldQuest => {
                     const newQuestData = dataMap.get(oldQuest.id)!;
-                    return { ...newQuestData, _sortValue: oldQuest._sortValue };
+                    return { ...newQuestData, _sortValue: oldQuest._sortValue }; // Keep old snapshot
                 });
-            return { sortedQuests: updatedQuests, areaAggregates: processedData.areaAggregates };
         }
+        
+        return { sortedQuests, areaAggregates: processedData.areaAggregates };
     });
-  }, [processedData, sortConfig]);
+  }, [processedData, sortConfig, isDataLoaded]);
 
   const requestSort = (key: SortableColumnKey) => {
-    const specialSortKeys: SortableColumnKey[] = [
-      'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
-    ];
-  
-    let direction: 'ascending' | 'descending' = 'ascending';
-    
-    if (specialSortKeys.includes(key)) {
-      direction = 'descending';
-    }
-  
+    let newDirection: 'ascending' | 'descending' = 'ascending';
+
+    // If it's the same column, toggle direction
     if (sortConfig && sortConfig.key === key) {
-      if (sortConfig.direction === 'ascending') {
-        direction = 'descending';
-      } else {
-        // Cycle back to the default sort
-        setSortConfig({ key: 'name', direction: 'ascending' });
-        return;
+      newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+    } else {
+      // If it's a new column, set a default direction
+      const specialSortKeys: SortableColumnKey[] = [
+        'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
+      ];
+      if (specialSortKeys.includes(key)) {
+        newDirection = 'descending';
       }
     }
-    
-    setSortConfig({ key, direction });
+    setSortConfig({ key, direction: newDirection });
   };
   
   const getSortIndicator = (columnKey: SortableColumnKey) => {
