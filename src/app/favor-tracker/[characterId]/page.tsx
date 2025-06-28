@@ -644,28 +644,26 @@ export default function FavorTrackerPage() {
                 return primaryLocation ? mapToUse.get(primaryLocation) ?? 0 : 0;
             }
             if (key === 'name') return getSortableName(quest.name);
-            if (key === 'location') return getPrimaryLocation(quest.location);
+            if (key === 'location') return quest.location || '';
             return quest[key as keyof typeof quest];
         };
         
         const newProcessedIds = new Set(processedData.processedQuests.map(q => q.id));
-
-        const shouldResort = sortConfigChanged || 
-                             processedData.processedQuests.length !== prevDisplayData.sortedQuests.length ||
-                             processedData.processedQuests.some(q => !newProcessedIds.has(q.id));
+        const prevVisibleIds = new Set(prevDisplayData.sortedQuests.map(q => q.id));
+        const itemsAdded = processedData.processedQuests.some(q => !prevVisibleIds.has(q.id));
+        const shouldResort = sortConfigChanged || itemsAdded;
 
         if (shouldResort) {
             const questsWithSortValue = processedData.processedQuests.map(quest => ({
                 ...quest,
-                _sortValue: getSortValue(quest, sortConfig),
+                _sortValue: getSortValue(quest, sortConfig), // Take snapshot
             }));
 
             questsWithSortValue.sort((a, b) => {
                 if (!sortConfig) return 0;
-
                 const primarySortKey = sortConfig.key;
                 const primarySortDirection = sortConfig.direction;
-
+                
                 let aValue = a._sortValue;
                 let bValue = b._sortValue;
                 
@@ -680,19 +678,17 @@ export default function FavorTrackerPage() {
                     if (aValue > bValue) comparison = 1;
                 }
                 
-                if (comparison !== 0) {
-                    return primarySortDirection === 'ascending' ? comparison : -comparison;
-                }
+                if (comparison !== 0) return primarySortDirection === 'ascending' ? comparison : -comparison;
 
+                // Secondary sort for Area columns
                 if (primarySortKey === 'areaRemainingFavor' || primarySortKey === 'areaAdjustedRemainingFavorScore') {
                     const locationA = a.location || '';
                     const locationB = b.location || '';
                     const locationComparison = locationA.localeCompare(locationB);
-                    if (locationComparison !== 0) {
-                        return locationComparison;
-                    }
+                    if (locationComparison !== 0) return locationComparison;
                 }
                 
+                // Tertiary sort by name
                 return getSortableName(a.name).localeCompare(getSortableName(b.name));
             });
             return { sortedQuests: questsWithSortValue, areaAggregates: processedData.areaAggregates };
@@ -702,10 +698,7 @@ export default function FavorTrackerPage() {
                 .filter(q => newProcessedIds.has(q.id))
                 .map(oldQuest => {
                     const newQuestData = dataMap.get(oldQuest.id)!;
-                    return {
-                        ...newQuestData,
-                        _sortValue: oldQuest._sortValue,
-                    };
+                    return { ...newQuestData, _sortValue: oldQuest._sortValue };
                 });
             return { sortedQuests: updatedQuests, areaAggregates: processedData.areaAggregates };
         }
