@@ -90,9 +90,17 @@ interface CharacterFavorTrackerPreferences {
 function parseDurationToMinutes(durationString?: string | null): number | null {
   if (!durationString || durationString.trim() === "") return null;
   let parsableString = durationString.toUpperCase();
-  if (parsableString.startsWith('PT')) parsableString = parsableString.substring(2);
-  if (parsableString.endsWith('M')) parsableString = parsableString.slice(0, -1);
-  const minutes = parseInt(parsableString, 10);
+  if (parsableString.startsWith('PT') && parsableString.endsWith('M') && parsableString.length > 3) {
+    const numericPart = parsableString.substring(2, parsableString.length - 1);
+    if (/^\d+$/.test(numericPart)) finalDurationString = numericPart;
+  } else if (parsableString.endsWith('M') && !parsableString.startsWith('PT') && /^\d+M$/.test(parsableString)) {
+    finalDurationString = parsableString.slice(0, -1);
+  } else if (parsableString.length >= 2 && /^\d\s/.test(parsableString)) {
+     finalDurationString = parsableString.substring(2).trim();
+  }
+  
+  let finalDurationString = parsableString;
+  const minutes = parseInt(finalDurationString, 10);
   return isNaN(minutes) ? null : minutes;
 }
 function getDurationCategory(durationInput?: string | null): DurationCategory | null {
@@ -156,6 +164,9 @@ type QuestWithSortValue = Quest & {
   maxPotentialFavorSingleQuest: number;
   hiddenReasons: string[];
   _sortValue: any;
+  _areaFavorSortValue: number;
+  _areaScoreSortValue: number;
+  _locationSortValue: string;
 };
 
 export default function FavorTrackerPage() {
@@ -410,7 +421,6 @@ export default function FavorTrackerPage() {
     const difficultyHeaders = difficultyLevels.map(d => d.csvMapKey).join(',');
     const headerLine = `Quest Name,${difficultyHeaders}`;
     
-    // Use all quests for a complete backup, sorted alphabetically
     const allSortedQuests = [...quests].sort((a, b) => getSortableName(a.name).localeCompare(getSortableName(b.name)));
 
     const csvRows = allSortedQuests.map(quest => {
@@ -426,7 +436,7 @@ export default function FavorTrackerPage() {
     const csvContent = [
       `DDO Toolkit Quest Completion Backup for ${character.name}`,
       headerLine,
-      '', // Skipped line on import
+      '', 
       ...csvRows
     ].join('\n');
 
@@ -644,11 +654,10 @@ export default function FavorTrackerPage() {
             return primaryLocation ? mapToUse.get(primaryLocation) ?? 0 : 0;
         }
         if (key === 'name') return getSortableName(quest.name);
-        if (key === 'location') return quest.location; // Sort by full location string
+        if (key === 'location') return quest.location;
         return quest[key as keyof typeof quest];
     };
     
-    // Determine if a full re-sort is needed
     const sortConfigChanged = JSON.stringify(prevSortConfigRef.current) !== JSON.stringify(sortConfig);
 
     setDisplayData(prevDisplayData => {
@@ -661,7 +670,6 @@ export default function FavorTrackerPage() {
 
         if (shouldResort) {
             prevSortConfigRef.current = sortConfig;
-            // Full re-sort with new snapshot
             const questsWithSortValue = processedData.processedQuests.map(quest => ({
                 ...quest,
                 _sortValue: sortConfig ? getSortValue(quest, sortConfig) : getSortableName(quest.name),
@@ -688,7 +696,6 @@ export default function FavorTrackerPage() {
                 
                 if (comparison !== 0) return primarySortDirection === 'ascending' ? comparison : -comparison;
 
-                // Secondary sort for Area columns by full location
                 if (primarySortKey === 'areaRemainingFavor' || primarySortKey === 'areaAdjustedRemainingFavorScore') {
                     const locationA = a.location || '';
                     const locationB = b.location || '';
@@ -696,18 +703,16 @@ export default function FavorTrackerPage() {
                     if (locationComparison !== 0) return locationComparison;
                 }
                 
-                // Tertiary sort by name
                 return getSortableName(a.name).localeCompare(getSortableName(b.name));
             });
             sortedQuests = questsWithSortValue;
         } else {
-            // Incremental update: filter out completed quests, but maintain order
             const dataMap = new Map(processedData.processedQuests.map(q => [q.id, q]));
             sortedQuests = prevDisplayData.sortedQuests
                 .filter(q => newVisibleIds.has(q.id))
                 .map(oldQuest => {
                     const newQuestData = dataMap.get(oldQuest.id)!;
-                    return { ...newQuestData, _sortValue: oldQuest._sortValue }; // Keep old snapshot
+                    return { ...newQuestData, _sortValue: oldQuest._sortValue };
                 });
         }
         
@@ -719,10 +724,8 @@ export default function FavorTrackerPage() {
     let newDirection: 'ascending' | 'descending' = 'ascending';
 
     if (sortConfig && sortConfig.key === key) {
-        // Toggle direction if the same column is clicked again
         newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
-        // Default sort directions for specific columns when clicked for the first time
         const specialSortKeys: SortableColumnKey[] = [
             'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
         ];
@@ -818,7 +821,9 @@ export default function FavorTrackerPage() {
                 </div>
             </div>
             <CardDescription>Level {character.level}</CardDescription>
-            <div className="pt-4 border-t mt-4">
+          </CardHeader>
+          <CardContent className="pt-2">
+            <div className="pt-4 border-t">
                 <div className="flex justify-around items-center text-sm">
                     <div className="text-center">
                         <div className="text-muted-foreground text-xs">Quests Done</div>
@@ -836,7 +841,7 @@ export default function FavorTrackerPage() {
                     </div>
                 </div>
             </div>
-            <div className="pt-4 flex flex-col space-y-4">
+            <div className="pt-4 border-t mt-4 flex flex-col space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                     <div className="flex items-center space-x-2">
@@ -893,9 +898,9 @@ export default function FavorTrackerPage() {
                 </RadioGroup>
               </div>
             </div>
-          </CardHeader>
+          </CardContent>
         </Card>
-      </Card>
+      )}
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
         <CardHeader className="sticky top-0 z-20 bg-card border-b">
           <div className="flex justify-between items-center">
@@ -973,7 +978,6 @@ export default function FavorTrackerPage() {
                               {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
-                              {columnVisibility['duration'] && <TableCell className="text-center">{quest.duration ? getDurationCategory(quest.duration) : '-'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
