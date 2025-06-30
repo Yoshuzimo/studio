@@ -719,16 +719,16 @@ export default function FavorTrackerPage() {
     let newDirection: 'ascending' | 'descending' = 'ascending';
 
     if (sortConfig && sortConfig.key === key) {
-        setSortConfig({ key, direction: sortConfig.direction }); // Refresh sort with same settings
-        return;
-    }
-    
-    // Default sort directions for specific columns
-    const specialSortKeys: SortableColumnKey[] = [
-        'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
-    ];
-    if (specialSortKeys.includes(key)) {
-        newDirection = 'descending';
+        // Toggle direction if the same column is clicked again
+        newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+    } else {
+        // Default sort directions for specific columns when clicked for the first time
+        const specialSortKeys: SortableColumnKey[] = [
+            'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
+        ];
+        if (specialSortKeys.includes(key)) {
+            newDirection = 'descending';
+        }
     }
     
     setSortConfig({ key, direction: newDirection });
@@ -800,7 +800,7 @@ export default function FavorTrackerPage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const { sortedQuests } = displayData;
+  const { sortedQuests, areaAggregates } = displayData;
 
   return (
     <div className="py-8 space-y-8">
@@ -854,19 +854,6 @@ export default function FavorTrackerPage() {
                         {appDataIsLoading && !isCsvProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} Reset Completions
                     </Button>
                 </div>
-              </div>
-              <div>
-                  <Label className="text-sm font-medium block mb-2 mt-2">Duration Adjustments (<Timer className="inline h-4 w-4 mr-1"/> Score Multiplier)</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                    {(Object.keys(durationAdjustments) as DurationCategory[]).map(category => (
-                      <div key={category} className="space-y-1">
-                        <Label htmlFor={`adj-${category.toLowerCase().replace(/\s+/g, '-')}`} className="text-xs">{category}</Label>
-                        <Input type="number" id={`adj-${category.toLowerCase().replace(/\s+/g, '-')}`} value={durationAdjustments[category]}
-                          onChange={(e) => { const numValue = parseFloat(e.target.value); if (!isNaN(numValue)) setDurationAdjustments(prev => ({ ...prev, [category]: numValue })); else if (e.target.value === "") setDurationAdjustments(prev => ({ ...prev, [category]: 0 })); }}
-                          step="0.1" className="h-8 text-sm" disabled={pageOverallLoading} placeholder="e.g. 1.0"/>
-                      </div>
-                    ))}
-                  </div>
               </div>
                <div className="pt-2 border-t border-border mt-4">
                 <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
@@ -1047,4 +1034,3 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
-
