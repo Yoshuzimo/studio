@@ -812,15 +812,30 @@ export default function FavorTrackerPage() {
                 <UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => toast({ title: "Coming Soon!", description: "Live import functionality is under development." })} disabled={pageOverallLoading}>
-                        <TestTube2 className="mr-2 h-4 w-4" /> Import Live (Experimental)
-                    </Button>
                     <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}>
                         <Pencil className="mr-2 h-4 w-4" /> Edit Character
                     </Button>
                 </div>
             </div>
             <CardDescription>Level {character.level}</CardDescription>
+            <div className="pt-4 border-t mt-4">
+                <div className="flex justify-around items-center text-sm">
+                    <div className="text-center">
+                        <div className="text-muted-foreground text-xs">Quests Done</div>
+                        <div className="font-bold text-lg">{pageStats.questsCompleted}</div>
+                    </div>
+                    <Separator orientation="vertical" className="h-8" />
+                    <div className="text-center">
+                        <div className="text-muted-foreground text-xs">Favor Earned</div>
+                        <div className="font-bold text-lg">{pageStats.favorEarned}</div>
+                    </div>
+                    <Separator orientation="vertical" className="h-8" />
+                    <div className="text-center">
+                        <div className="text-muted-foreground text-xs">Favor Remaining</div>
+                        <div className="font-bold text-lg">{pageStats.favorRemaining}</div>
+                    </div>
+                </div>
+            </div>
             <div className="pt-4 flex flex-col space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -926,16 +941,7 @@ export default function FavorTrackerPage() {
               </Popover>
             </div>
           </div>
-          <div className="flex justify-between items-center pt-2">
-            <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
-            <div className="flex items-center space-x-4 text-sm whitespace-nowrap">
-                <div><span className="text-muted-foreground">Quests Completed:</span> <span className="font-semibold">{pageStats.questsCompleted}</span></div>
-                <Separator orientation="vertical" className="h-4" />
-                <div><span className="text-muted-foreground">Favor Earned:</span> <span className="font-semibold">{pageStats.favorEarned}</span></div>
-                <Separator orientation="vertical" className="h-4" />
-                <div><span className="text-muted-foreground">Favor Remaining:</span> <span className="font-semibold">{pageStats.favorRemaining}</span></div>
-            </div>
-          </div>
+          <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
            {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
