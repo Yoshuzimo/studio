@@ -200,7 +200,7 @@ export default function FavorTrackerPage() {
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
-  const [displayData, setDisplayData] = useState<{ sortedQuests: QuestWithSortValue[], areaAggregates: { favorMap: Map<string, number>, scoreMap: Map<string, number> } }>({ sortedQuests: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } });
+  const [displayData, setDisplayData] = useState<{ allProcessedQuests: QuestWithSortValue[], sortedQuests: QuestWithSortValue[], areaAggregates: { favorMap: Map<string, number>, scoreMap: Map<string, number> } }>({ allProcessedQuests: [], sortedQuests: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } });
   const prevSortConfigRef = useRef(sortConfig);
 
 
@@ -536,6 +536,7 @@ export default function FavorTrackerPage() {
   const processedData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) {
       return {
+        allProcessedQuests: [],
         processedQuests: [],
         areaAggregates: { favorMap: new Map<string, number>(), scoreMap: new Map<string, number>() },
       };
@@ -546,16 +547,20 @@ export default function FavorTrackerPage() {
         return !!completion?.[difficultyKey];
     };
 
+    const calculateFavorMetrics = (q: Quest) => {
+        if (!q.baseFavor) return { earned: 0, remaining: 0 };
+        let highestMultiplier = 0;
+        if (getQuestCompletion(q.id, 'eliteCompleted') && !q.eliteNotAvailable) highestMultiplier = 3;
+        else if (getQuestCompletion(q.id, 'hardCompleted') && !q.hardNotAvailable) highestMultiplier = 2;
+        else if (getQuestCompletion(q.id, 'normalCompleted') && !q.normalNotAvailable) highestMultiplier = 1;
+        else if (getQuestCompletion(q.id, 'casualCompleted') && !q.casualNotAvailable) highestMultiplier = 0.5;
+        const earned = q.baseFavor * highestMultiplier;
+        const remaining = (q.baseFavor * 3) - earned;
+        return { earned, remaining };
+    };
+
     const allProcessedQuests = quests.map(quest => {
-        const calculateRemainingPossibleFavor = (q: Quest): number => {
-            if (!q.baseFavor) return 0;
-            let remainingFavor = 0;
-            if (!getQuestCompletion(q.id, 'eliteCompleted') && !q.eliteNotAvailable) remainingFavor += q.baseFavor * 1;
-            if (!getQuestCompletion(q.id, 'hardCompleted') && !q.hardNotAvailable) remainingFavor += q.baseFavor * 1;
-            if (!getQuestCompletion(q.id, 'normalCompleted') && !q.normalNotAvailable) remainingFavor += q.baseFavor * 0.5;
-            return remainingFavor;
-        };
-        const remainingPossibleFavor = calculateRemainingPossibleFavor(quest);
+        const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest);
 
         const calculateAdjustedRemainingFavorScore = (q: Quest, remainingFavor: number): number => {
             if (remainingFavor <= 0) return 0;
@@ -623,7 +628,7 @@ export default function FavorTrackerPage() {
         }
     });
 
-    return { processedQuests: filteredQuests, areaAggregates };
+    return { allProcessedQuests, processedQuests: filteredQuests, areaAggregates };
   }, [
     quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
     completionDep, durationAdjustments, isDataLoaded, isDebugMode
@@ -645,7 +650,6 @@ export default function FavorTrackerPage() {
     
     // Determine if a full re-sort is needed
     const sortConfigChanged = JSON.stringify(prevSortConfigRef.current) !== JSON.stringify(sortConfig);
-    prevSortConfigRef.current = sortConfig;
 
     setDisplayData(prevDisplayData => {
         const prevVisibleIds = new Set(prevDisplayData.sortedQuests.map(q => q.id));
@@ -656,6 +660,7 @@ export default function FavorTrackerPage() {
         let sortedQuests;
 
         if (shouldResort) {
+            prevSortConfigRef.current = sortConfig;
             // Full re-sort with new snapshot
             const questsWithSortValue = processedData.processedQuests.map(quest => ({
                 ...quest,
@@ -706,25 +711,26 @@ export default function FavorTrackerPage() {
                 });
         }
         
-        return { sortedQuests, areaAggregates: processedData.areaAggregates };
+        return { sortedQuests, areaAggregates: processedData.areaAggregates, allProcessedQuests: processedData.allProcessedQuests };
     });
   }, [processedData, sortConfig, isDataLoaded]);
 
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
 
-    // If it's the same column, toggle direction
     if (sortConfig && sortConfig.key === key) {
-      newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
-    } else {
-      // If it's a new column, set a default direction
-      const specialSortKeys: SortableColumnKey[] = [
-        'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
-      ];
-      if (specialSortKeys.includes(key)) {
-        newDirection = 'descending';
-      }
+        setSortConfig({ key, direction: sortConfig.direction }); // Refresh sort with same settings
+        return;
     }
+    
+    // Default sort directions for specific columns
+    const specialSortKeys: SortableColumnKey[] = [
+        'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
+    ];
+    if (specialSortKeys.includes(key)) {
+        newDirection = 'descending';
+    }
+    
     setSortConfig({ key, direction: newDirection });
   };
   
@@ -733,6 +739,42 @@ export default function FavorTrackerPage() {
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
   };
   
+  const pageStats = useMemo(() => {
+    const allQuests = displayData.allProcessedQuests;
+    const visibleQuests = displayData.sortedQuests;
+
+    if (!allQuests.length) {
+        return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
+    }
+
+    const favorEarned = allQuests.reduce((total, quest) => {
+        if (!quest.baseFavor) return total;
+        
+        let highestMultiplier = 0;
+        if (quest.eliteCompleted && !quest.eliteNotAvailable) highestMultiplier = 3;
+        else if (quest.hardCompleted && !quest.hardNotAvailable) highestMultiplier = 2;
+        else if (quest.normalCompleted && !quest.normalNotAvailable) highestMultiplier = 1;
+        else if (quest.casualCompleted && !quest.casualNotAvailable) highestMultiplier = 0.5;
+        
+        return total + (quest.baseFavor * highestMultiplier);
+    }, 0);
+
+    const questsCompleted = allQuests.filter(q => 
+        q.baseFavor && q.baseFavor > 0 &&
+        q.remainingPossibleFavor <= 0 && 
+        (q.casualCompleted || q.normalCompleted || q.hardCompleted || q.eliteCompleted)
+    ).length;
+
+    const favorRemaining = visibleQuests.reduce((total, q) => total + q.remainingPossibleFavor, 0);
+
+    return {
+        questsCompleted: Math.round(questsCompleted),
+        favorEarned: Math.round(favorEarned),
+        favorRemaining: Math.round(favorRemaining)
+    };
+}, [displayData.allProcessedQuests, displayData.sortedQuests]);
+
+
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
     header => !header.isDifficulty && header.key !== 'maxPotentialFavorSingleQuest'
   );
@@ -758,7 +800,7 @@ export default function FavorTrackerPage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const { sortedQuests, areaAggregates } = displayData;
+  const { sortedQuests } = displayData;
 
   return (
     <div className="py-8 space-y-8">
@@ -851,7 +893,7 @@ export default function FavorTrackerPage() {
             </div>
           </CardHeader>
         </Card>
-      )}
+      </Card>
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
         <CardHeader className="sticky top-0 z-20 bg-card border-b">
           <div className="flex justify-between items-center">
@@ -897,7 +939,16 @@ export default function FavorTrackerPage() {
               </Popover>
             </div>
           </div>
-          <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
+          <div className="flex justify-between items-center pt-2">
+            <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
+            <div className="flex items-center space-x-4 text-sm whitespace-nowrap">
+                <div><span className="text-muted-foreground">Quests Completed:</span> <span className="font-semibold">{pageStats.questsCompleted}</span></div>
+                <Separator orientation="vertical" className="h-4" />
+                <div><span className="text-muted-foreground">Favor Earned:</span> <span className="font-semibold">{pageStats.favorEarned}</span></div>
+                <Separator orientation="vertical" className="h-4" />
+                <div><span className="text-muted-foreground">Favor Remaining:</span> <span className="font-semibold">{pageStats.favorRemaining}</span></div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="pt-6 flex-grow overflow-y-auto">
            {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
@@ -996,3 +1047,4 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
+
