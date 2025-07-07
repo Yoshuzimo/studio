@@ -319,7 +319,7 @@ export default function QuestGuidePage() {
       }
       
       if (comparison !== 0) {
-          return sortConfig.direction === 'ascending' ? comparison : -comparison;
+        return sortConfig.direction === 'ascending' ? comparison : -comparison;
       }
       
       return getSortableName(a.name).localeCompare(getSortableName(b.name));
@@ -333,16 +333,12 @@ export default function QuestGuidePage() {
       direction = 'descending';
     }
 
-    if (sortConfig && sortConfig.key === key) {
-      if (sortConfig.direction === 'ascending') {
-        direction = 'descending';
-      } else {
-        // Cycle back to the default sort
-        setSortConfig({ key: 'experienceScore', direction: 'descending' });
-        return;
-      }
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    } else if (sortConfig && sortConfig.key === key && sortConfig.direction === 'descending') {
+      setSortConfig({ key: 'experienceScore', direction: 'descending' });
+      return;
     }
-    
     setSortConfig({ key, direction });
   };
   
@@ -419,7 +415,7 @@ export default function QuestGuidePage() {
         </CardHeader>
       </Card>
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
-        <CardHeader className="bg-card border-b">
+        <CardHeader className="bg-card border-b flex-shrink-0">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <BookOpen className="mr-2 h-6 w-6 text-primary" /> Quest Guide

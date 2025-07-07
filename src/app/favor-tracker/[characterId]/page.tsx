@@ -401,62 +401,6 @@ export default function FavorTrackerPage() {
     setIsResetDialogOpen(false);
    };
 
-  const handleSaveBackup = () => {
-    if (!character || !quests) {
-      toast({
-        title: "Cannot generate backup",
-        description: "Character or quest data is not available.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const escapeCsvField = (field: string) => {
-      if (/[",\n]/.test(field)) {
-        return `"${field.replace(/"/g, '""')}"`;
-      }
-      return field;
-    };
-
-    const difficultyHeaders = difficultyLevels.map(d => d.csvMapKey).join(',');
-    const headerLine = `Quest Name,${difficultyHeaders}`;
-    
-    const allSortedQuests = [...quests].sort((a, b) => getSortableName(a.name).localeCompare(getSortableName(b.name)));
-
-    const csvRows = allSortedQuests.map(quest => {
-      const completionData = activeCharacterQuestCompletions.get(quest.id);
-      const row = [escapeCsvField(quest.name)];
-      difficultyLevels.forEach(dl => {
-        const isCompleted = completionData?.[dl.key] || false;
-        row.push(isCompleted ? 'TRUE' : 'FALSE');
-      });
-      return row.join(',');
-    });
-    
-    const csvContent = [
-      `DDO Toolkit Quest Completion Backup for ${character.name}`,
-      headerLine,
-      '', 
-      ...csvRows
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const date = new Date().toISOString().slice(0, 10);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `ddo_completions_${character.name.replace(/\s+/g, '_')}_${date}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    toast({
-      title: "Backup Created",
-      description: "Your quest completion data has been saved to a CSV file.",
-    });
-  };
-
   const handleQuestCompletionCsvUpload = async (file: File): Promise<QuestCompletionCsvUploadResult> => {
     if (!character) throw new Error("Character not loaded, cannot process CSV.");
     setIsCsvProcessing(true);
@@ -752,14 +696,8 @@ export default function FavorTrackerPage() {
 
     const favorEarned = allQuests.reduce((total, quest) => {
         if (!quest.baseFavor) return total;
-        
-        let highestMultiplier = 0;
-        if (quest.eliteCompleted && !quest.eliteNotAvailable) highestMultiplier = 3;
-        else if (quest.hardCompleted && !quest.hardNotAvailable) highestMultiplier = 2;
-        else if (quest.normalCompleted && !quest.normalNotAvailable) highestMultiplier = 1;
-        else if (quest.casualCompleted && !quest.casualNotAvailable) highestMultiplier = 0.5;
-        
-        return total + (quest.baseFavor * highestMultiplier);
+        const { earned } = calculateFavorMetrics(quest);
+        return total + earned;
     }, 0);
 
     const questsCompleted = allQuests.filter(q => 
@@ -814,11 +752,9 @@ export default function FavorTrackerPage() {
                 <CardTitle className="font-headline text-3xl flex items-center">
                 <UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}
                 </CardTitle>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}>
-                        <Pencil className="mr-2 h-4 w-4" /> Edit Character
-                    </Button>
-                </div>
+                <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}>
+                    <Pencil className="mr-2 h-4 w-4" /> Edit Character
+                </Button>
             </div>
             <CardDescription>Level {character.level}</CardDescription>
           </CardHeader>
@@ -864,8 +800,8 @@ export default function FavorTrackerPage() {
                     )}
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                     <Button onClick={handleSaveBackup} variant="outline" disabled={pageOverallLoading || quests.length === 0} size="sm">
-                       <Download className="mr-2 h-4 w-4" /> Save Backup
+                     <Button onClick={() => {}} variant="outline" disabled={true} size="sm">
+                       <TestTube2 className="mr-2 h-4 w-4" /> Import Live (Coming Soon)
                     </Button>
                     <Button onClick={() => setIsUploadCsvDialogOpen(true)} variant="outline" disabled={pageOverallLoading || quests.length === 0} size="sm">
                         {isCsvProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />} Upload CSV
@@ -902,7 +838,7 @@ export default function FavorTrackerPage() {
         </Card>
       )}
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
-        <CardHeader className="sticky top-0 z-20 bg-card border-b">
+        <CardHeader className="flex-shrink-0 bg-card border-b">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <ListOrdered className="mr-2 h-6 w-6 text-primary" /> Favor Tracker
@@ -1044,3 +980,4 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
+

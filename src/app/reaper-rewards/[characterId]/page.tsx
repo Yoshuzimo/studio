@@ -423,7 +423,7 @@ export default function ReaperRewardsPage() {
         </CardHeader>
       </Card>
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
-        <CardHeader className="bg-card border-b">
+        <CardHeader className="bg-card border-b flex-shrink-0">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <Skull className="mr-2 h-6 w-6 text-primary" /> Reaper Rewards
@@ -547,3 +547,4 @@ export default function ReaperRewardsPage() {
     </div>
   );
 }
+
