@@ -2,7 +2,7 @@
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest, UserQuestCompletionData } from '@/types';
@@ -169,7 +169,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: 2024-07-26-B');
+  console.log('Favor Tracker page code version: FAVOR-TRACKER-LAYOUT-FIX-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -524,7 +524,7 @@ export default function FavorTrackerPage() {
     const earned = quest.baseFavor * highestMultiplier;
     const remaining = (quest.baseFavor * 3) - earned;
     return { earned, remaining };
-}, []);
+  }, []);
 
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
@@ -614,9 +614,37 @@ export default function FavorTrackerPage() {
     completionDep, durationAdjustments, isDataLoaded, isDebugMode
   ]);
 
+  const pageStats = useMemo(() => {
+    const allQuests = displayData.allProcessedQuests;
+    const visibleQuests = sortedAndFilteredData.sortedQuests;
+
+    if (!allQuests.length) {
+        return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
+    }
+
+    const favorEarned = allQuests.reduce((total, quest) => {
+        if (!quest.baseFavor) return total;
+        const { earned } = calculateFavorMetrics(quest, getQuestCompletion);
+        return total + earned;
+    }, 0);
+
+    const questsCompleted = allQuests.filter(q => 
+        q.baseFavor && q.baseFavor > 0 &&
+        q.remainingPossibleFavor <= 0 && 
+        (q.casualCompleted || q.normalCompleted || q.hardCompleted || q.eliteCompleted)
+    ).length;
+
+    const favorRemaining = visibleQuests.reduce((total, q) => total + q.remainingPossibleFavor, 0);
+
+    return {
+        questsCompleted: Math.round(questsCompleted),
+        favorEarned: Math.round(favorEarned),
+        favorRemaining: Math.round(favorRemaining)
+    };
+  }, [displayData.allProcessedQuests, sortedAndFilteredData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
+  
   const sortedAndFilteredData = useMemo(() => {
     if (!sortConfig || !character) {
-      // Return the processed but unsorted (or default sorted) data if no sort config
       return {
         allProcessedQuests: displayData.allProcessedQuests,
         sortedQuests: displayData.processedQuests,
@@ -670,17 +698,14 @@ export default function FavorTrackerPage() {
     });
 
     return { ...displayData, sortedQuests };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayData, sortConfig, character]);
   
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
     
-    // If clicking the currently sorted column, toggle its direction and refresh
     if (sortConfig && sortConfig.key === key) {
         newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
-        // If it's a new column, set a default direction.
         const specialSortKeys: SortableColumnKey[] = [
             'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
         ];
@@ -691,7 +716,6 @@ export default function FavorTrackerPage() {
     
     const newSortConfig = { key, direction: newDirection };
     setSortConfig(newSortConfig);
-    // Take a snapshot of the currently filtered items for stable sorting
     sortingSnapshotRef.current = {
         quests: displayData.processedQuests,
         config: newSortConfig
@@ -702,36 +726,6 @@ export default function FavorTrackerPage() {
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
   };
-  
-  const pageStats = useMemo(() => {
-    const allQuests = displayData.allProcessedQuests;
-    const visibleQuests = sortedAndFilteredData.sortedQuests;
-
-    if (!allQuests.length) {
-        return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
-    }
-
-    const favorEarned = allQuests.reduce((total, quest) => {
-        if (!quest.baseFavor) return total;
-        const { earned } = calculateFavorMetrics(quest, getQuestCompletion);
-        return total + earned;
-    }, 0);
-
-    const questsCompleted = allQuests.filter(q => 
-        q.baseFavor && q.baseFavor > 0 &&
-        q.remainingPossibleFavor <= 0 && 
-        (q.casualCompleted || q.normalCompleted || q.hardCompleted || q.eliteCompleted)
-    ).length;
-
-    const favorRemaining = visibleQuests.reduce((total, q) => total + q.remainingPossibleFavor, 0);
-
-    return {
-        questsCompleted: Math.round(questsCompleted),
-        favorEarned: Math.round(favorEarned),
-        favorRemaining: Math.round(favorRemaining)
-    };
-  }, [displayData.allProcessedQuests, sortedAndFilteredData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
-
 
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
     header => !header.isDifficulty && header.key !== 'maxPotentialFavorSingleQuest'
@@ -758,7 +752,7 @@ export default function FavorTrackerPage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const { sortedQuests, areaAggregates } = sortedAndFilteredData;
+  const { sortedQuests } = sortedAndFilteredData;
 
   return (
     <div className="py-8 space-y-8">
@@ -854,7 +848,7 @@ export default function FavorTrackerPage() {
           </CardContent>
         </Card>
       )}
-      <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
+      <Card className="flex flex-col h-[80vh]">
         <CardHeader className="flex-shrink-0 bg-card border-b">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
@@ -872,7 +866,7 @@ export default function FavorTrackerPage() {
                     <div className="grid grid-cols-2 gap-4">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-${header.key}`} checked={popoverColumnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
+                          <Checkbox id={`vis-${header.key}`} checked={columnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
                           <Label htmlFor={`vis-${header.key}`} className="font-normal">{header.label}</Label>
                         </div>
                       ))}
@@ -882,7 +876,7 @@ export default function FavorTrackerPage() {
                      <div className="grid grid-cols-2 gap-4">
                         {difficultyLevels.map(dl => (
                             <div key={dl.key} className="flex items-center space-x-2">
-                            <Checkbox id={`vis-${dl.key}`} checked={popoverColumnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
+                            <Checkbox id={`vis-${dl.key}`} checked={columnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
                             <Label htmlFor={`vis-${dl.key}`} className="font-normal">{dl.label}</Label>
                             </div>
                         ))}
@@ -941,8 +935,8 @@ export default function FavorTrackerPage() {
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
                               {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
-                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0 : '-'}</TableCell>}
-                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0 : '-'}</TableCell>}
+                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
+                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
       
                               {difficultyLevels.map(diff => columnVisibility[diff.key] && (
                               <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
