@@ -360,6 +360,7 @@ export default function QuestGuidePage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
+  const sortedQuests = sortedAndFilteredQuests;
   const popoverVisibleNonDifficultyHeaders = tableHeaders.filter(header => !header.isDifficulty);
   const visibleTableHeaders = tableHeaders.filter(h => columnVisibility[h.key as SortableQuestGuideColumnKey]);
 
@@ -416,11 +417,11 @@ export default function QuestGuidePage() {
         </CardHeader>
       </Card>
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
-        <CardHeader className="bg-card border-b flex-shrink-0">
+        <CardHeader className="flex-shrink-0 bg-card border-b">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <BookOpen className="mr-2 h-6 w-6 text-primary" /> Quest Guide
-              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedAndFilteredQuests.length} quests)</span>}
+              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedQuests.length} quests)</span>}
             </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/reaper-rewards/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Button></Link>
@@ -460,9 +461,9 @@ export default function QuestGuidePage() {
           <CardDescription>Experience guide for {character.name}. Shows relevant Heroic or Epic EXP based on character level. Score is Max EXP adjusted by quest duration.</CardDescription>
         </CardHeader>
         <CardContent className="p-0 flex-1 min-h-0">
-          {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
+          {pageOverallLoading && sortedQuests.length === 0 ? (
             <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div>
-          ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
+          ) : !pageOverallLoading && sortedQuests.length === 0 ? (
             <div className="p-6 text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
@@ -490,7 +491,7 @@ export default function QuestGuidePage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {sortedAndFilteredQuests.map((quest) => (
+                    {sortedQuests.map((quest) => (
                     <TooltipProvider key={quest.id} delayDuration={0}>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -507,7 +508,7 @@ export default function QuestGuidePage() {
                               {columnVisibility['adjustedNormalExp'] && <TableCell className="text-center">{quest.adjustedNormalExp ?? '-'}</TableCell>}
                               {columnVisibility['adjustedHardExp'] && <TableCell className="text-center">{quest.adjustedHardExp ?? '-'}</TableCell>}
                               {columnVisibility['adjustedEliteExp'] && <TableCell className="text-center">{quest.adjustedEliteExp ?? '-'}</TableCell>}
-                              {columnVisibility['maxExp'] && <TableCell className="text-center">{quest.maxExp ?? '-'}</TableCell>}
+                              {columnVisibility['maxExp'] && <TableCell className="text-center font-bold">{quest.maxExp ?? '-'}</TableCell>}
                               {columnVisibility['experienceScore'] && <TableCell className="text-center">{quest.experienceScore ?? '-'}</TableCell>}
                           </TableRow>
                         </TooltipTrigger>
