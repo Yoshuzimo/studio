@@ -2,7 +2,7 @@
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest, UserQuestCompletionData } from '@/types';
@@ -613,35 +613,6 @@ export default function FavorTrackerPage() {
     quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
     completionDep, durationAdjustments, isDataLoaded, isDebugMode
   ]);
-
-  const pageStats = useMemo(() => {
-    const allQuests = displayData.allProcessedQuests;
-    const visibleQuests = sortedAndFilteredData.sortedQuests;
-
-    if (!allQuests.length) {
-        return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
-    }
-
-    const favorEarned = allQuests.reduce((total, quest) => {
-        if (!quest.baseFavor) return total;
-        const { earned } = calculateFavorMetrics(quest, getQuestCompletion);
-        return total + earned;
-    }, 0);
-
-    const questsCompleted = allQuests.filter(q => 
-        q.baseFavor && q.baseFavor > 0 &&
-        q.remainingPossibleFavor <= 0 && 
-        (q.casualCompleted || q.normalCompleted || q.hardCompleted || q.eliteCompleted)
-    ).length;
-
-    const favorRemaining = visibleQuests.reduce((total, q) => total + q.remainingPossibleFavor, 0);
-
-    return {
-        questsCompleted: Math.round(questsCompleted),
-        favorEarned: Math.round(favorEarned),
-        favorRemaining: Math.round(favorRemaining)
-    };
-  }, [displayData.allProcessedQuests, sortedAndFilteredData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
   
   const sortedAndFilteredData = useMemo(() => {
     if (!sortConfig || !character) {
@@ -699,6 +670,35 @@ export default function FavorTrackerPage() {
 
     return { ...displayData, sortedQuests };
   }, [displayData, sortConfig, character]);
+  
+  const pageStats = useMemo(() => {
+    const allQuests = displayData.allProcessedQuests;
+    const visibleQuests = sortedAndFilteredData.sortedQuests;
+
+    if (!allQuests.length) {
+        return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
+    }
+
+    const favorEarned = allQuests.reduce((total, quest) => {
+        if (!quest.baseFavor) return total;
+        const { earned } = calculateFavorMetrics(quest, getQuestCompletion);
+        return total + earned;
+    }, 0);
+
+    const questsCompleted = allQuests.filter(q => 
+        q.baseFavor && q.baseFavor > 0 &&
+        q.remainingPossibleFavor <= 0 && 
+        (q.casualCompleted || q.normalCompleted || q.hardCompleted || q.eliteCompleted)
+    ).length;
+
+    const favorRemaining = visibleQuests.reduce((total, q) => total + q.remainingPossibleFavor, 0);
+
+    return {
+        questsCompleted: Math.round(questsCompleted),
+        favorEarned: Math.round(favorEarned),
+        favorRemaining: Math.round(favorRemaining)
+    };
+  }, [displayData.allProcessedQuests, sortedAndFilteredData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
   
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
