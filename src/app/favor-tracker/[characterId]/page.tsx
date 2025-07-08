@@ -1,3 +1,4 @@
+
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -105,7 +106,7 @@ function getDurationCategory(durationInput?: string | null): DurationCategory | 
   if (!durationInput || durationInput.trim() === "") return null;
   const normalizedInput = durationInput.trim();
   if (DURATION_CATEGORIES.includes(normalizedInput as DurationCategory)) return normalizedInput as DurationCategory;
-  const minutes = parseDurationToMinutes(durationInput);
+  const minutes = parseDurationToMinutes(normalizedInput);
   if (minutes === null) return null;
   if (minutes <= 10) return "Very Short"; if (minutes <= 20) return "Short"; if (minutes <= 30) return "Medium"; if (minutes <= 45) return "Long"; return "Very Long";
 }
@@ -168,7 +169,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: FAVOR-TRACKER-LAYOUT-FIX-V1');
+  console.log('Favor Tracker page code version: FAVOR-TRACKER-SYNTAX-FIX-V2');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -507,7 +508,7 @@ export default function FavorTrackerPage() {
     link.click();
     document.body.removeChild(link);
   };
-  
+
   const getQuestCompletion = useCallback((questId: string, difficultyKey: DifficultyKey): boolean => {
     const completion = activeCharacterQuestCompletions.get(questId);
     return !!completion?.[difficultyKey];
@@ -902,14 +903,12 @@ export default function FavorTrackerPage() {
             <div className="h-full overflow-y-auto">
                <Table>
                 <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
-                <TableHeader className="sticky top-0 bg-card z-10">
-                    <TableRow className="hover:bg-card">
+                <TableHeader className="sticky top-0 z-10">
+                    <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
                         <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>
-                            {header.icon && <header.icon className="mr-1.5 h-4 w-4" />}
-                            {header.label}
-                            {header.isSortable && getSortIndicator(header.key as SortableColumnKey)}
+                            {header.icon && <header.icon className="mr-1.5 h-4 w-4" />} {header.label} {header.isSortable && getSortIndicator(header.key as SortableColumnKey)}
                         </Button>
                         </TableHead>
                     ))}
@@ -937,7 +936,7 @@ export default function FavorTrackerPage() {
                               {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
                               {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
                               {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
-      
+
                               {difficultyLevels.map(diff => columnVisibility[diff.key] && (
                               <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
