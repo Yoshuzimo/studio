@@ -2,7 +2,7 @@
 // src/app/quest-guide/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest } from '@/types';
@@ -109,7 +109,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function QuestGuidePage() {
-  console.log('Quest Guide page code version: 2024-07-26-B');
+  console.log('Quest Guide page code version: QUEST-GUIDE-LAYOUT-FIX-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth(); 
@@ -362,8 +362,8 @@ export default function QuestGuidePage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const popoverVisibleNonDifficultyHeaders = tableHeaders.filter(header => !header.isDifficulty);
-  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key as SortableQuestGuideColumnKey]);
+  const popoverVisibleNonDifficultyHeaders = tableHeaders.filter(h => !h.isDifficulty);
+  const visibleTableHeaders = tableHeaders.filter(h => columnVisibility[h.key as SortableQuestGuideColumnKey]);
 
   return (
     <div className="py-8 space-y-8">
@@ -417,7 +417,7 @@ export default function QuestGuidePage() {
             </div>
         </CardHeader>
       </Card>
-      <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
+      <Card className="flex flex-col h-[80vh]">
         <CardHeader className="flex-shrink-0 bg-card border-b">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
