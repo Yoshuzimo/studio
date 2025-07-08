@@ -169,7 +169,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: FAVOR-TRACKER-REBUILD-V2');
+  console.log('Favor Tracker page code version: FAVOR-TRACKER-REBUILD-V3');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -516,13 +516,25 @@ export default function FavorTrackerPage() {
 
   const calculateFavorMetrics = useCallback((quest: Quest, getCompletionFn: (questId: string, difficultyKey: DifficultyKey) => boolean) => {
     if (!quest.baseFavor) return { earned: 0, remaining: 0 };
-    let highestMultiplier = 0;
-    if (getCompletionFn(quest.id, 'eliteCompleted') && !quest.eliteNotAvailable) highestMultiplier = 3;
-    else if (getCompletionFn(quest.id, 'hardCompleted') && !quest.hardNotAvailable) highestMultiplier = 2;
-    else if (getCompletionFn(quest.id, 'normalCompleted') && !quest.normalNotAvailable) highestMultiplier = 1;
-    else if (getCompletionFn(quest.id, 'casualCompleted') && !quest.casualNotAvailable) highestMultiplier = 0.5;
-    const earned = quest.baseFavor * highestMultiplier;
-    const remaining = (quest.baseFavor * 3) - earned;
+  
+    // Determine highest *completed* multiplier
+    let highestCompletedMultiplier = 0;
+    if (getCompletionFn(quest.id, 'eliteCompleted') && !quest.eliteNotAvailable) highestCompletedMultiplier = 3;
+    else if (getCompletionFn(quest.id, 'hardCompleted') && !quest.hardNotAvailable) highestCompletedMultiplier = 2;
+    else if (getCompletionFn(quest.id, 'normalCompleted') && !quest.normalNotAvailable) highestCompletedMultiplier = 1;
+    else if (getCompletionFn(quest.id, 'casualCompleted') && !quest.casualNotAvailable) highestCompletedMultiplier = 0.5;
+  
+    // Determine highest *available* multiplier
+    let highestAvailableMultiplier = 0;
+    if (!quest.eliteNotAvailable) highestAvailableMultiplier = 3;
+    else if (!quest.hardNotAvailable) highestAvailableMultiplier = 2;
+    else if (!quest.normalNotAvailable) highestAvailableMultiplier = 1;
+    else if (!quest.casualNotAvailable) highestAvailableMultiplier = 0.5;
+  
+    const earned = quest.baseFavor * highestCompletedMultiplier;
+    const maxPossible = quest.baseFavor * highestAvailableMultiplier;
+    const remaining = maxPossible - earned;
+  
     return { earned, remaining };
   }, []);
 
@@ -728,10 +740,10 @@ export default function FavorTrackerPage() {
   };
 
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
-    header => !header.isDifficulty && header.key !== 'maxPotentialFavorSingleQuest'
+    header => !header.isDifficulty
   );
 
-  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
+  const visibleTableHeaders = allTableHeaders.filter(h => popoverColumnVisibility[h.key]);
 
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
@@ -926,19 +938,19 @@ export default function FavorTrackerPage() {
                             )}
                             onClick={() => handleRowClick(quest)}
                           >
-                              {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
-                              {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
-                              {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
-                              {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
-                              {columnVisibility['duration'] && <TableCell className="text-center whitespace-nowrap">{quest.duration || 'N/A'}</TableCell>}
-                              {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
-                              {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
-                              {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
-                              {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
-                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
-                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
+                              {popoverColumnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
+                              {popoverColumnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
+                              {popoverColumnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
+                              {popoverColumnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                              {popoverColumnVisibility['duration'] && <TableCell className="text-center whitespace-nowrap">{quest.duration || 'N/A'}</TableCell>}
+                              {popoverColumnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
+                              {popoverColumnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
+                              {popoverColumnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
+                              {popoverColumnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
+                              {popoverColumnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
+                              {popoverColumnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
 
-                              {difficultyLevels.map(diff => columnVisibility[diff.key] && (
+                              {difficultyLevels.map(diff => popoverColumnVisibility[diff.key] && (
                               <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
                                   checked={(quest as any)[diff.key]}
