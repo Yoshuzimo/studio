@@ -36,7 +36,7 @@ export default function UsefulLinksPage() {
   const { currentUser, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
 
-  const [openInOverlay, setOpenInOverlay] = useState(true);
+  const [openInOverlay, setOpenInOverlay] = useState(false);
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const [selectedLink, setSelectedLink] = useState<UsefulLink | null>(null);
 
@@ -86,6 +86,7 @@ export default function UsefulLinksPage() {
               id="open-in-overlay"
               checked={openInOverlay}
               onCheckedChange={(checked) => setOpenInOverlay(!!checked)}
+              disabled
             />
             <Label htmlFor="open-in-overlay" className="cursor-pointer">
               Open In This Window
