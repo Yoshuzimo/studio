@@ -1,13 +1,16 @@
-
 // src/app/useful-links/page.tsx
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Link as LinkIcon, Loader2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
+import { cn } from '@/lib/utils';
 
 
 interface UsefulLink {
@@ -33,11 +36,24 @@ export default function UsefulLinksPage() {
   const { currentUser, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
 
+  const [openInOverlay, setOpenInOverlay] = useState(true);
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
+  const [selectedLink, setSelectedLink] = useState<UsefulLink | null>(null);
+
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
       router.replace('/login');
     }
   }, [authIsLoading, currentUser, router]);
+
+  const handleLinkClick = (link: UsefulLink) => {
+    if (openInOverlay) {
+      setSelectedLink(link);
+      setIsOverlayOpen(true);
+    } else {
+      window.open(link.url, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   if (authIsLoading || (!currentUser && !authIsLoading)) {
     return (
@@ -65,6 +81,16 @@ export default function UsefulLinksPage() {
         <h1 className="font-headline text-3xl font-bold flex items-center">
           <LinkIcon className="mr-3 h-8 w-8 text-primary" /> Useful Links
         </h1>
+        <div className="flex items-center space-x-2">
+            <Checkbox
+              id="open-in-overlay"
+              checked={openInOverlay}
+              onCheckedChange={(checked) => setOpenInOverlay(!!checked)}
+            />
+            <Label htmlFor="open-in-overlay" className="cursor-pointer">
+              Open In This Window
+            </Label>
+        </div>
       </div>
 
       <Card>
@@ -77,18 +103,24 @@ export default function UsefulLinksPage() {
             <ul className="space-y-6">
               {links.map((link) => (
                 <li key={link.name}>
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow group"
-                    aria-label={`Navigate to ${link.name}`}
+                  <div
+                    onClick={() => handleLinkClick(link)}
+                    className="block p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow group cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleLinkClick(link)}
+                    aria-label={`Open link for ${link.name}`}
                   >
-                    <h3 className="text-lg font-semibold text-destructive group-hover:underline">{link.name}</h3>
+                    <h3 className={cn(
+                        "text-lg font-semibold text-destructive",
+                        !openInOverlay && "group-hover:underline"
+                      )}>
+                        {link.name}
+                      </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {link.description}
                     </p>
-                  </a>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -97,6 +129,15 @@ export default function UsefulLinksPage() {
           )}
         </CardContent>
       </Card>
+      
+      {selectedLink && (
+        <QuestWikiPopover
+          isOpen={isOverlayOpen}
+          onOpenChange={setIsOverlayOpen}
+          questName={selectedLink.name}
+          wikiUrl={selectedLink.url}
+        />
+      )}
     </div>
   );
 }
