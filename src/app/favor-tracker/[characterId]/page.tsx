@@ -1,3 +1,4 @@
+
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -912,11 +913,13 @@ export default function FavorTrackerPage() {
           </div>
           <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
         </CardHeader>
-        <CardContent className="p-0 flex-1 min-h-0 overflow-y-auto">
+        <CardContent className="p-0 flex-1 min-h-0">
            {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
            : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="p-6 text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
-           : ( <Table>
-                <TableCaption className="py-4 sticky bottom-0 bg-card">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
+           : ( 
+            <div className="h-full overflow-y-auto">
+               <Table>
+                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
                 <TableHeader className="sticky top-0 z-10 bg-card"> <TableRow>
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
@@ -942,6 +945,7 @@ export default function FavorTrackerPage() {
                               {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                              {columnVisibility['duration'] && <TableCell className="text-center whitespace-nowrap">{quest.duration || 'N/A'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
@@ -971,6 +975,7 @@ export default function FavorTrackerPage() {
                     ))}
                 </TableBody>
                 </Table>
+            </div>
           )}
         </CardContent>
       </Card>

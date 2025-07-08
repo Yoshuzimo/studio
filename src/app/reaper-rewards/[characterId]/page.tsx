@@ -1,3 +1,4 @@
+
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
@@ -422,7 +423,7 @@ export default function ReaperRewardsPage() {
         </CardHeader>
       </Card>
       <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
-        <CardHeader className="bg-card border-b flex-shrink-0">
+        <CardHeader className="flex-shrink-0 bg-card border-b">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <Skull className="mr-2 h-6 w-6 text-primary" /> Reaper Rewards
