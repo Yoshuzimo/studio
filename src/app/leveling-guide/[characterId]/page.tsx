@@ -1,3 +1,4 @@
+
 // src/app/leveling-guide/[characterId]/page.tsx
 "use client";
 
@@ -385,8 +386,8 @@ export default function LevelingGuidePage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="on-cormyr-guide" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} />
-                    <Label htmlFor="on-cormyr-guide" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
+                    <Checkbox id="on-cormyr-reaper" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} />
+                    <Label htmlFor="on-cormyr-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox id="show-raids-guide" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
@@ -442,7 +443,7 @@ export default function LevelingGuidePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${header.key}`} checked={!!columnVisibility[header.key as SortableLevelingGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key as SortableLevelingGuideColumnKey, !!checked)} />
+                          <Checkbox id={`vis-guide-${header.key}`} checked={!!popoverColumnVisibility[header.key as SortableLevelingGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key as SortableLevelingGuideColumnKey, !!checked)} />
                           <Label htmlFor={`vis-guide-${header.key}`} className="font-normal whitespace-nowrap">{header.label}</Label>
                         </div>
                       ))}
@@ -452,7 +453,7 @@ export default function LevelingGuidePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {difficultyColumnKeys.map(key => (
                           <div key={key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${key}`} checked={!!columnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key as SortableLevelingGuideColumnKey, !!checked)} />
+                          <Checkbox id={`vis-guide-${key}`} checked={!!popoverColumnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key as SortableLevelingGuideColumnKey, !!checked)} />
                           <Label htmlFor={`vis-guide-${key}`} className="font-normal whitespace-nowrap">{allTableHeaders.find(h=>h.key===key)?.label}</Label>
                           </div>
                       ))}
@@ -481,7 +482,7 @@ export default function LevelingGuidePage() {
           ) : (
             <div className="h-full overflow-y-auto">
                 <Table>
-                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character.name} at level {character.level}.</TableCaption>
+                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest guide for {character.name} at level {character.level}.</TableCaption>
                 <TableHeader className="sticky top-0 z-10">
                     <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => (
@@ -510,7 +511,7 @@ export default function LevelingGuidePage() {
                               onClick={() => handleRowClick(quest)}
                             >
                               {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
-                              {columnVisibility['level'] && <TableCell className="text-center">{(quest as any).baseLevel}</TableCell>}
+                              {columnVisibility['level'] && <TableCell className="text-center">{getRelevantQuestDetails(quest, character).baseLevel}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}

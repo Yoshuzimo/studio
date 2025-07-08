@@ -866,17 +866,17 @@ export default function FavorTrackerPage() {
                     <div className="grid grid-cols-2 gap-4">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-${header.key}`} checked={columnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
+                          <Checkbox id={`vis-${header.key}`} checked={popoverColumnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
                           <Label htmlFor={`vis-${header.key}`} className="font-normal">{header.label}</Label>
                         </div>
                       ))}
                     </div>
                     <Separator />
                     <h4 className="font-medium leading-none pt-2">Difficulty Columns</h4>
-                     <div className="grid grid-cols-2 gap-4">
+                     <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                         {difficultyLevels.map(dl => (
                             <div key={dl.key} className="flex items-center space-x-2">
-                            <Checkbox id={`vis-${dl.key}`} checked={columnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
+                            <Checkbox id={`vis-${dl.key}`} checked={popoverColumnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
                             <Label htmlFor={`vis-${dl.key}`} className="font-normal">{dl.label}</Label>
                             </div>
                         ))}

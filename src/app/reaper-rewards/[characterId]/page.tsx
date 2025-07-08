@@ -1,3 +1,4 @@
+
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
@@ -440,7 +441,7 @@ export default function ReaperRewardsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {allTableHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-reaper-${header.key}`} checked={!!columnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
+                          <Checkbox id={`vis-reaper-${header.key}`} checked={!!popoverColumnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
                           <Label htmlFor={`vis-reaper-${header.key}`} className="font-normal whitespace-nowrap">{header.label}</Label>
                         </div>
                       ))}
