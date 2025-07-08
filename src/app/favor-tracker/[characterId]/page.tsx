@@ -516,17 +516,17 @@ export default function FavorTrackerPage() {
     return !!completion?.[difficultyKey];
   }, [activeCharacterQuestCompletions]);
 
-  const calculateFavorMetrics = useCallback((q: Quest) => {
-      if (!q.baseFavor) return { earned: 0, remaining: 0 };
-      let highestMultiplier = 0;
-      if (getQuestCompletion(q.id, 'eliteCompleted') && !q.eliteNotAvailable) highestMultiplier = 3;
-      else if (getQuestCompletion(q.id, 'hardCompleted') && !q.hardNotAvailable) highestMultiplier = 2;
-      else if (getQuestCompletion(q.id, 'normalCompleted') && !q.normalNotAvailable) highestMultiplier = 1;
-      else if (getQuestCompletion(q.id, 'casualCompleted') && !q.casualNotAvailable) highestMultiplier = 0.5;
-      const earned = q.baseFavor * highestMultiplier;
-      const remaining = (q.baseFavor * 3) - earned;
-      return { earned, remaining };
-  }, [getQuestCompletion]);
+  const calculateFavorMetrics = useCallback((quest: Quest, getCompletionFn: (questId: string, difficultyKey: DifficultyKey) => boolean) => {
+    if (!quest.baseFavor) return { earned: 0, remaining: 0 };
+    let highestMultiplier = 0;
+    if (getCompletionFn(quest.id, 'eliteCompleted') && !quest.eliteNotAvailable) highestMultiplier = 3;
+    else if (getCompletionFn(quest.id, 'hardCompleted') && !quest.hardNotAvailable) highestMultiplier = 2;
+    else if (getCompletionFn(quest.id, 'normalCompleted') && !quest.normalNotAvailable) highestMultiplier = 1;
+    else if (getCompletionFn(quest.id, 'casualCompleted') && !quest.casualNotAvailable) highestMultiplier = 0.5;
+    const earned = quest.baseFavor * highestMultiplier;
+    const remaining = (quest.baseFavor * 3) - earned;
+    return { earned, remaining };
+}, []);
 
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
@@ -541,7 +541,7 @@ export default function FavorTrackerPage() {
     }
 
     const allProcessedQuests = quests.map(quest => {
-        const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest);
+        const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest, getQuestCompletion);
 
         const calculateAdjustedRemainingFavorScore = (q: Quest, remainingFavor: number): number => {
             if (remainingFavor <= 0) return 0;
@@ -640,10 +640,11 @@ export default function FavorTrackerPage() {
         let sortedQuests;
 
         if (shouldResort) {
-            prevSortConfigRef.current = { ...sortConfig, version: sortVersion }; // Snapshot the sort config with version
+            prevSortConfigRef.current = { ...(sortConfig || {}), version: sortVersion } as any; 
             const questsWithSortValue = processedData.processedQuests.map(quest => ({
                 ...quest,
                 _sortValue: sortConfig ? getSortValue(quest, sortConfig) : getSortableName(quest.name),
+                _locationSortValue: getPrimaryLocation(quest.location) || '',
             }));
 
             questsWithSortValue.sort((a, b) => {
@@ -668,9 +669,7 @@ export default function FavorTrackerPage() {
                 if (comparison !== 0) return primarySortDirection === 'ascending' ? comparison : -comparison;
 
                 if (primarySortKey === 'areaRemainingFavor' || primarySortKey === 'areaAdjustedRemainingFavorScore') {
-                    const locationA = a.location || '';
-                    const locationB = b.location || '';
-                    const locationComparison = locationA.localeCompare(locationB);
+                    const locationComparison = a._locationSortValue.localeCompare(b._locationSortValue);
                     if (locationComparison !== 0) return locationComparison;
                 }
                 
@@ -683,7 +682,7 @@ export default function FavorTrackerPage() {
                 .filter(q => newVisibleIds.has(q.id))
                 .map(oldQuest => {
                     const newQuestData = dataMap.get(oldQuest.id)!;
-                    return { ...newQuestData, _sortValue: oldQuest._sortValue };
+                    return { ...newQuestData, _sortValue: oldQuest._sortValue, _locationSortValue: oldQuest._locationSortValue };
                 });
         }
         
@@ -696,10 +695,8 @@ export default function FavorTrackerPage() {
     let newDirection: 'ascending' | 'descending' = 'ascending';
     
     if (sortConfig && sortConfig.key === key) {
-        // If clicking the same column, toggle direction
         newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
-        // Default directions for new column
         const specialSortKeys: SortableColumnKey[] = [
             'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
         ];
@@ -709,7 +706,7 @@ export default function FavorTrackerPage() {
     }
     
     setSortConfig({ key, direction: newDirection });
-    setSortVersion(v => v + 1); // Increment version to force a re-sort
+    setSortVersion(v => v + 1); 
   };
   
   const getSortIndicator = (columnKey: SortableColumnKey) => {
@@ -727,7 +724,7 @@ export default function FavorTrackerPage() {
 
     const favorEarned = allQuests.reduce((total, quest) => {
         if (!quest.baseFavor) return total;
-        const { earned } = calculateFavorMetrics(quest);
+        const { earned } = calculateFavorMetrics(quest, getQuestCompletion);
         return total + earned;
     }, 0);
 
@@ -744,7 +741,7 @@ export default function FavorTrackerPage() {
         favorEarned: Math.round(favorEarned),
         favorRemaining: Math.round(favorRemaining)
     };
-}, [displayData.allProcessedQuests, displayData.sortedQuests, calculateFavorMetrics]);
+}, [displayData.allProcessedQuests, displayData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
 
 
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
@@ -915,11 +912,11 @@ export default function FavorTrackerPage() {
           </div>
           <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 flex-1 min-h-0">
-           {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
-           : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
-           : ( <div className="h-full overflow-auto"> <Table>
-                <TableCaption className="py-4">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
+        <CardContent className="p-0 flex-1 min-h-0 overflow-y-auto">
+           {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
+           : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="p-6 text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
+           : ( <Table>
+                <TableCaption className="py-4 sticky bottom-0 bg-card">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
                 <TableHeader className="sticky top-0 z-10 bg-card"> <TableRow>
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
@@ -973,7 +970,7 @@ export default function FavorTrackerPage() {
                     </TooltipProvider>
                     ))}
                 </TableBody>
-                </Table> </div>
+                </Table>
           )}
         </CardContent>
       </Card>
