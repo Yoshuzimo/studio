@@ -458,18 +458,18 @@ export default function QuestGuidePage() {
           </div>
           <CardDescription>Experience guide for {character.name}. Shows relevant Heroic or Epic EXP based on character level. Score is Max EXP adjusted by quest duration.</CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 flex-1 min-h-0">
+        <CardContent className="p-0 flex-1 min-h-0">
           {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
-            <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div>
+            <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div>
           ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
-            <div className="text-center py-10">
+            <div className="p-6 text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
             </div>
           ) : (
-            <div className="h-full overflow-auto">
+            <div className="h-full overflow-y-auto">
                 <Table>
-                <TableCaption className="py-4">End of quest guide for {character.name} at level {character.level}.</TableCaption>
+                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest guide for {character.name} at level {character.level}.</TableCaption>
                 <TableHeader className="sticky top-0 z-10 bg-card">
                     <TableRow>
                     {visibleTableHeaders.map((header) => (

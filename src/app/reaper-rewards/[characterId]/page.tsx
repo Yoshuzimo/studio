@@ -249,7 +249,7 @@ export default function ReaperRewardsPage() {
   };
 
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
-
+  
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
 
@@ -366,7 +366,7 @@ export default function ReaperRewardsPage() {
     }
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
   };
-
+  
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
   }
@@ -457,18 +457,18 @@ export default function ReaperRewardsPage() {
               Estimated Reaper Experience (RXP) for {character.name}. Quests are filtered based on Reaper XP eligibility rules for the character's level.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 flex-1 min-h-0">
+        <CardContent className="p-0 flex-1 min-h-0">
           {pageOverallLoading && sortedQuests.length === 0 ? (
-            <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /><p>Filtering quests...</p></div>
+            <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /><p>Filtering quests...</p></div>
           ) : !pageOverallLoading && sortedQuests.length === 0 ? (
-            <div className="text-center py-10">
+            <div className="p-6 text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
             </div>
           ) : (
-            <div className="h-full overflow-auto">
+            <div className="h-full overflow-y-auto">
               <Table>
-                <TableCaption className="py-4">End of quest list for {character.name}.</TableCaption>
+                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character.name}.</TableCaption>
                 <TableHeader className="sticky top-0 z-10 bg-card">
                   <TableRow>
                     {visibleTableHeaders.map(header => (
