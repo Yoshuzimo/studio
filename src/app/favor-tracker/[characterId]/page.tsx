@@ -1,3 +1,4 @@
+
 // Favor-Tracker-V1
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -187,7 +188,7 @@ export default function FavorTrackerPage() {
 
   const [character, setCharacter] = useState<Character | null>(null);
   const characterId = params.characterId as string;
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'ascending' });
 
   const [showCompletedQuestsWithZeroRemainingFavor, setShowCompletedQuestsWithZeroRemainingFavor] = useState(false);
   const [onCormyr, setOnCormyr] = useState(false);
@@ -256,7 +257,7 @@ export default function FavorTrackerPage() {
 
           const defaultVis = getDefaultColumnVisibility();
           const mergedVisibility: Record<SortableColumnKey | string, boolean> = {} as any;
-          allTableHeaders.forEach(header => { mergedVisibility[header.key] = prefs.columnVisibility?.[header.key] ?? defaultVis[header.key]; });
+          allTableHeaders.forEach(header => { mergedVisibility[header.key] = popoverColumnVisibility[header.key] ?? prefs.columnVisibility?.[header.key] ?? defaultVis[header.key]; });
           setColumnVisibility(mergedVisibility);
         } else {
           setSortConfig({ key: 'name', direction: 'ascending' });
@@ -524,28 +525,25 @@ export default function FavorTrackerPage() {
       { key: 'casualCompleted' as const, mult: 0.5, notAvailable: quest.casualNotAvailable },
     ];
 
-    const highestAvailable = difficultiesWithComputedMult.find(d => !d.notAvailable);
-
-    // Special rule: if only C/S is available, its multiplier for favor is 1.0, not 0.5.
-    if (highestAvailable && highestAvailable.key === 'casualCompleted') {
-        const casualDiff = difficultiesWithComputedMult.find(d => d.key === 'casualCompleted');
-        if(casualDiff) casualDiff.mult = 1.0;
+    const availableDifficulties = difficultiesWithComputedMult.filter(d => !d.notAvailable);
+    if (availableDifficulties.length === 1 && availableDifficulties[0].key === 'casualCompleted') {
+      availableDifficulties[0].mult = 1.0;
     }
 
     let highestCompletedMultiplier = 0;
-    for (const diff of difficultiesWithComputedMult) {
-        if (!diff.notAvailable && getCompletionFn(quest.id, diff.key)) {
-            highestCompletedMultiplier = diff.mult;
-            break; 
+    for (const diff of availableDifficulties) {
+        if (getCompletionFn(quest.id, diff.key)) {
+            highestCompletedMultiplier = Math.max(highestCompletedMultiplier, diff.mult);
         }
     }
-
-    const highestAvailableMultiplier = highestAvailable ? highestAvailable.mult : 0;
+    
+    const highestAvailableMultiplier = availableDifficulties.reduce((max, d) => Math.max(max, d.mult), 0);
+    
     const earned = quest.baseFavor * highestCompletedMultiplier;
     const maxPossible = quest.baseFavor * highestAvailableMultiplier;
     const remaining = Math.max(0, maxPossible - earned);
     
-    return { earned, remaining, maxPossible };
+    return { earned: Math.round(earned), remaining: Math.round(remaining), maxPossible: Math.round(maxPossible) };
   }, []);
 
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
@@ -888,7 +886,7 @@ export default function FavorTrackerPage() {
                     <div className="grid grid-cols-2 gap-4">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-${header.key}`} checked={popoverColumnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
+                          <Checkbox id={`vis-${header.key}`} checked={!!popoverColumnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
                           <Label htmlFor={`vis-${header.key}`} className="font-normal">{header.label}</Label>
                         </div>
                       ))}
@@ -898,7 +896,7 @@ export default function FavorTrackerPage() {
                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                         {difficultyLevels.map(dl => (
                             <div key={dl.key} className="flex items-center space-x-2">
-                            <Checkbox id={`vis-${dl.key}`} checked={popoverColumnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
+                            <Checkbox id={`vis-${dl.key}`} checked={!!popoverColumnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
                             <Label htmlFor={`vis-${dl.key}`} className="font-normal">{dl.label}</Label>
                             </div>
                         ))}
@@ -954,18 +952,18 @@ export default function FavorTrackerPage() {
                               {popoverColumnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
                               {popoverColumnVisibility['duration'] && <TableCell className="text-center whitespace-nowrap">{quest.duration || 'N/A'}</TableCell>}
                               {popoverColumnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
-                              {popoverColumnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
-                              {popoverColumnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
-                              {popoverColumnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.adjustedRemainingFavorScore ?? '-'}</TableCell>}
+                              {popoverColumnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{(quest as any).maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
+                              {popoverColumnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{(quest as any).remainingPossibleFavor ?? '-'}</TableCell>}
+                              {popoverColumnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{(quest as any).adjustedRemainingFavorScore ?? '-'}</TableCell>}
                               {popoverColumnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
                               {popoverColumnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
 
                               {difficultyLevels.map(diff => popoverColumnVisibility[diff.key] && (
                               <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
-                                  checked={quest[diff.key]}
+                                  checked={(quest as any)[diff.key]}
                                   onCheckedChange={(checked) => handleCompletionChange(quest.id, diff.key, !!checked)}
-                                  disabled={!!quest[diff.notAvailableKey] || pageOverallLoading}
+                                  disabled={!!(quest as any)[diff.notAvailableKey] || pageOverallLoading}
                                   aria-label={`${quest.name} ${diff.label} completion status`}
                                   />
                               </TableCell>
