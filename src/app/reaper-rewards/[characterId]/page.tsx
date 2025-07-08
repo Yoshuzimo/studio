@@ -62,7 +62,7 @@ function getDurationCategory(durationInput?: string | null): DurationCategory | 
   if (!durationInput || durationInput.trim() === "") return null;
   const normalizedInput = durationInput.trim();
   if (DURATION_CATEGORIES.includes(normalizedInput as DurationCategory)) return normalizedInput as DurationCategory;
-  const minutes = parseDurationToMinutes(normalizedInput);
+  const minutes = parseDurationToMinutes(durationInput);
   if (minutes === null) return null;
   if (minutes <= 5) return "Very Short";
   if (minutes <= 10) return "Short";
@@ -470,8 +470,8 @@ export default function ReaperRewardsPage() {
             <div className="h-full overflow-y-auto">
               <Table>
                 <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character.name}.</TableCaption>
-                <TableHeader className="sticky top-0 z-10 bg-card">
-                  <TableRow>
+                <TableHeader className="sticky top-0 z-10">
+                  <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map(header => (
                       <TableHead key={header.key} className={cn(header.className)}>
                         <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableReaperColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>

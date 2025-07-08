@@ -458,7 +458,9 @@ export default function QuestGuidePage() {
               </Popover>
             </div>
           </div>
-          <CardDescription>Experience guide for {character.name}. Shows relevant Heroic or Epic EXP based on character level. Score is Max EXP adjusted by quest duration.</CardDescription>
+          <CardDescription>
+              Experience guide for {character.name}. Shows relevant Heroic or Epic EXP based on character level. Score is Max EXP adjusted by quest duration.
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0 flex-1 min-h-0">
           {pageOverallLoading && sortedQuests.length === 0 ? (
@@ -472,8 +474,8 @@ export default function QuestGuidePage() {
             <div className="h-full overflow-y-auto">
                 <Table>
                 <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest guide for {character.name} at level {character.level}.</TableCaption>
-                <TableHeader className="sticky top-0 z-10 bg-card">
-                    <TableRow>
+                <TableHeader className="sticky top-0 z-10">
+                    <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
                         <Button 

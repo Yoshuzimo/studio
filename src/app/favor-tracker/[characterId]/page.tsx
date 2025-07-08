@@ -676,11 +676,11 @@ export default function FavorTrackerPage() {
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
     
-    // If clicking the currently sorted column, toggle its direction.
-    // If it's a new column, set a default direction.
+    // If clicking the currently sorted column, toggle its direction and refresh
     if (sortConfig && sortConfig.key === key) {
         newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
+        // If it's a new column, set a default direction.
         const specialSortKeys: SortableColumnKey[] = [
             'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
         ];
@@ -758,7 +758,7 @@ export default function FavorTrackerPage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const { sortedQuests, areaAggregates } = sortedAndFilteredData;
+  const { sortedQuests, areaAggregates, allProcessedQuests: displayData } = sortedAndFilteredData;
 
   return (
     <div className="py-8 space-y-8">
@@ -908,7 +908,8 @@ export default function FavorTrackerPage() {
             <div className="h-full overflow-y-auto">
                <Table>
                 <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
-                <TableHeader className="sticky top-0 z-10 bg-card"> <TableRow>
+                <TableHeader className="sticky top-0 z-10"> 
+                    <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
                         <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>
