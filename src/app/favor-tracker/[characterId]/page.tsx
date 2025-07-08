@@ -2,6 +2,7 @@
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
@@ -169,7 +170,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: FAVOR-TRACKER-SYNTAX-FIX-V2');
+  console.log('Favor Tracker page code version: FAVOR-TRACKER-LAYOUT-FIX-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -462,7 +463,7 @@ export default function FavorTrackerPage() {
     } catch (error) { console.error("Quest Completion CSV Upload Error:", error); throw error; }
     finally { setIsCsvProcessing(false); }
   };
-  
+
   const handleRowClick = (quest: Quest) => {
     if (clickAction === 'wiki') {
         if (quest.wikiUrl) {
@@ -547,7 +548,7 @@ export default function FavorTrackerPage() {
             const adjustmentFactor = durationCategory ? (durationAdjustments[durationCategory] ?? 1.0) : 1.0;
             return Math.round(remainingFavor * adjustmentFactor);
         };
-        
+
         const hiddenReasons: string[] = [];
         const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
         if (!isEligibleLevel) {
@@ -560,7 +561,7 @@ export default function FavorTrackerPage() {
         if (!isOwned) {
             hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
         }
-        
+
         if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") {
           hiddenReasons.push('Hidden by "On Cormyr" filter');
         }
@@ -572,11 +573,11 @@ export default function FavorTrackerPage() {
         if (quest.name.toLowerCase().includes("test")) {
           hiddenReasons.push('Is a test quest');
         }
-        
+
         if (!isDebugMode && !showCompletedQuestsWithZeroRemainingFavor && remainingPossibleFavor <= 0) {
             hiddenReasons.push('Completed with 0 remaining favor');
         }
-        
+
         return {
             ...quest,
             casualCompleted: getQuestCompletion(quest.id, 'casualCompleted'),
@@ -613,7 +614,36 @@ export default function FavorTrackerPage() {
     quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
     completionDep, durationAdjustments, isDataLoaded, isDebugMode
   ]);
-  
+
+  const pageStats = useMemo(() => {
+    const allQuests = displayData.allProcessedQuests;
+    const visibleQuests = sortedAndFilteredData.sortedQuests;
+
+    if (!allQuests.length) {
+        return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
+    }
+
+    const favorEarned = allQuests.reduce((total, quest) => {
+        if (!quest.baseFavor) return total;
+        const { earned } = calculateFavorMetrics(quest, getQuestCompletion);
+        return total + earned;
+    }, 0);
+
+    const questsCompleted = allQuests.filter(q => 
+        q.baseFavor && q.baseFavor > 0 &&
+        q.remainingPossibleFavor <= 0 && 
+        (q.casualCompleted || q.normalCompleted || q.hardCompleted || q.eliteCompleted)
+    ).length;
+
+    const favorRemaining = visibleQuests.reduce((total, q) => total + q.remainingPossibleFavor, 0);
+
+    return {
+        questsCompleted: Math.round(questsCompleted),
+        favorEarned: Math.round(favorEarned),
+        favorRemaining: Math.round(favorRemaining)
+    };
+  }, [displayData.allProcessedQuests, sortedAndFilteredData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
+
   const sortedAndFilteredData = useMemo(() => {
     if (!sortConfig || !character) {
       return {
@@ -638,14 +668,14 @@ export default function FavorTrackerPage() {
       if (key === 'location') return quest.location || '';
       return (quest as any)[key];
     };
-    
+
     const sortedQuests = [...questsToSort].sort((a, b) => {
         const aValue = getSortValue(a, sortConfig);
         const bValue = getSortValue(b, sortConfig);
-        
+
         let aComparable = aValue === null || aValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
         let bComparable = bValue === null || bValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
-        
+
         let comparison = 0;
         if (typeof aComparable === 'string' && typeof bComparable === 'string') {
             comparison = aComparable.localeCompare(bComparable);
@@ -670,7 +700,7 @@ export default function FavorTrackerPage() {
 
     return { ...displayData, sortedQuests };
   }, [displayData, sortConfig, character]);
-  
+
   const pageStats = useMemo(() => {
     const allQuests = displayData.allProcessedQuests;
     const visibleQuests = sortedAndFilteredData.sortedQuests;
@@ -702,7 +732,7 @@ export default function FavorTrackerPage() {
   
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
-    
+
     if (sortConfig && sortConfig.key === key) {
         newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
@@ -713,7 +743,7 @@ export default function FavorTrackerPage() {
             newDirection = 'descending';
         }
     }
-    
+
     const newSortConfig = { key, direction: newDirection };
     setSortConfig(newSortConfig);
     sortingSnapshotRef.current = {
@@ -721,7 +751,7 @@ export default function FavorTrackerPage() {
         config: newSortConfig
     };
   };
-  
+
   const getSortIndicator = (columnKey: SortableColumnKey) => {
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
@@ -730,13 +760,13 @@ export default function FavorTrackerPage() {
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
     header => !header.isDifficulty && header.key !== 'maxPotentialFavorSingleQuest'
   );
-  
+
   const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
 
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
   }
-  
+
   if (!currentUser) { 
      return (
       <div className="container mx-auto py-8 text-center">
@@ -747,11 +777,11 @@ export default function FavorTrackerPage() {
       </div>
     );
   }
-  
+
   if (!character) { 
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
-  
+
   const { sortedQuests } = sortedAndFilteredData;
 
   return (
@@ -768,6 +798,7 @@ export default function FavorTrackerPage() {
                 </Button>
             </div>
             <CardDescription>Level {character.level}</CardDescription>
+          </CardHeader>
            <CardContent className="pt-2">
             <div className="pt-4 border-t">
                 <div className="flex justify-around items-center text-sm">
@@ -903,7 +934,7 @@ export default function FavorTrackerPage() {
             <div className="h-full overflow-y-auto">
                <Table>
                 <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
-                <TableHeader className="sticky top-0 z-10">
+                <TableHeader className="sticky top-0 z-10"> 
                     <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
