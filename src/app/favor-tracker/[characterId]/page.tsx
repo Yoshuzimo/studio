@@ -1,4 +1,3 @@
-
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -98,7 +97,7 @@ function parseDurationToMinutes(durationString?: string | null): number | null {
   } else if (parsableString.length >= 2 && /^\d\s/.test(parsableString)) {
      parsableString = parsableString.substring(2).trim();
   }
-  
+
   const minutes = parseInt(parsableString, 10);
   return isNaN(minutes) ? null : minutes;
 }
@@ -169,7 +168,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: FAVOR-TRACKER-SYNTAX-FIX-V2');
+  console.log('Favor Tracker page code version: FAVOR-TRACKER-LAYOUT-FIX-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -188,7 +187,7 @@ export default function FavorTrackerPage() {
   const [character, setCharacter] = useState<Character | null>(null);
   const characterId = params.characterId as string;
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
-  
+
   const [showCompletedQuestsWithZeroRemainingFavor, setShowCompletedQuestsWithZeroRemainingFavor] = useState(false);
   const [onCormyr, setOnCormyr] = useState(false);
   const [showRaids, setShowRaids] = useState(false);
@@ -204,13 +203,13 @@ export default function FavorTrackerPage() {
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
-  
+
   const [clickAction, setClickAction] = useState<'none' | 'wiki' | 'map'>('none');
   const [isWikiOpen, setIsWikiOpen] = useState(false);
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
-  
+
   const sortingSnapshotRef = useRef<{ quests: QuestWithSortValue[], config: SortConfig } | null>(null);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
@@ -304,7 +303,7 @@ export default function FavorTrackerPage() {
     setIsEditModalOpen(false);
     setEditingCharacter(null);
   };
-  
+
   const openEditModal = (characterToEdit: Character) => {
     setEditingCharacter(characterToEdit);
     setIsEditModalOpen(true);
@@ -740,7 +739,11 @@ export default function FavorTrackerPage() {
   if (!currentUser) { 
      return (
       <div className="container mx-auto py-8 text-center">
-        <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" /><h1 className="text-2xl font-bold">Access Denied</h1><p className="text-muted-foreground mt-2">Please log in to view this page.</p><Button onClick={() => router.push('/login')} className="mt-6">Log In</Button></div>
+        <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
+        <h1 className="text-2xl font-bold">Access Denied</h1>
+        <p className="text-muted-foreground mt-2">Please log in to view this page.</p>
+        <Button onClick={() => router.push('/login')} className="mt-6">Log In</Button>
+      </div>
     );
   }
   
@@ -894,11 +897,11 @@ export default function FavorTrackerPage() {
         </CardHeader>
         <CardContent className="p-0 flex-1 min-h-0">
            {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
-           : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="p-6 text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL ${character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
+           : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="p-6 text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
            : ( 
             <div className="h-full overflow-y-auto">
                <Table>
-                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for ${character?.name} at level ${character?.level}.</TableCaption>
+                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
                 <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow className="hover:bg-card">
                     {visibleTableHeaders.map((header) => (
@@ -927,6 +930,7 @@ export default function FavorTrackerPage() {
                               {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                              {columnVisibility['duration'] && <TableCell className="text-center whitespace-nowrap">{quest.duration || 'N/A'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{quest.maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{quest.remainingPossibleFavor ?? '-'}</TableCell>}
@@ -961,7 +965,7 @@ export default function FavorTrackerPage() {
         </CardContent>
       </Card>
       {character && (
-        <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}> <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle>Reset Quest Completions?</AlertDialogTitle> <AlertDialogDescription> This will reset all quest completion data for ${character.name} for the quests currently visible in the table. This action cannot be undone. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel disabled={pageOverallLoading} onClick={() => setIsResetDialogOpen(false)}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleConfirmResetCompletions} variant="destructive" disabled={pageOverallLoading}> {appDataIsLoading && !isCsvProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Reset Completions </AlertDialogAction> </AlertDialogFooter> </AlertDialogContent> </AlertDialog>
+        <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}> <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle>Reset Quest Completions?</AlertDialogTitle> <AlertDialogDescription> This will reset all quest completion data for {character.name} for the quests currently visible in the table. This action cannot be undone. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel disabled={pageOverallLoading} onClick={() => setIsResetDialogOpen(false)}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleConfirmResetCompletions} variant="destructive" disabled={pageOverallLoading}> {appDataIsLoading && !isCsvProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Reset Completions </AlertDialogAction> </AlertDialogFooter> </AlertDialogContent> </AlertDialog>
       )}
       {character && (
         <FavorTrackerCsvUploaderDialog isOpen={isUploadCsvDialogOpen} onOpenChange={setIsUploadCsvDialogOpen} onCsvUpload={handleQuestCompletionCsvUpload} isUploading={isCsvProcessing} characterName={character.name} difficultyLevelLabels={difficultyLevels.map(dl => ({label: dl.label, csvKey: dl.csvMapKey}))} />
