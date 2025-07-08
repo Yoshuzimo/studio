@@ -1,4 +1,3 @@
-
 // Favor-Tracker-V1
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -170,7 +169,6 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: FAVOR-TRACKER-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -508,26 +506,25 @@ export default function FavorTrackerPage() {
   const calculateFavorMetrics = useCallback((quest: Quest, getCompletionFn: (questId: string, difficultyKey: DifficultyKey) => boolean) => {
     if (!quest.baseFavor) return { earned: 0, remaining: 0, maxPossible: 0 };
     
-    const difficultiesWithComputedMult = [
-      { key: 'eliteCompleted' as const, mult: 3, notAvailable: quest.eliteNotAvailable },
-      { key: 'hardCompleted' as const, mult: 2, notAvailable: quest.hardNotAvailable },
-      { key: 'normalCompleted' as const, mult: 1, notAvailable: quest.normalNotAvailable },
-      { key: 'casualCompleted' as const, mult: 0.5, notAvailable: quest.casualNotAvailable },
-    ];
-
-    const availableDifficulties = difficultiesWithComputedMult.filter(d => !d.notAvailable);
-    if (availableDifficulties.length === 1 && availableDifficulties[0].key === 'casualCompleted') {
-      availableDifficulties[0].mult = 1.0;
+    let difficultiesWithMultipliers = [
+      { key: 'eliteCompleted', mult: 3, notAvailable: quest.eliteNotAvailable },
+      { key: 'hardCompleted', mult: 2, notAvailable: quest.hardNotAvailable },
+      { key: 'normalCompleted', mult: 1, notAvailable: quest.normalNotAvailable },
+      { key: 'casualCompleted', mult: 0.5, notAvailable: quest.casualNotAvailable },
+    ].filter(d => !d.notAvailable);
+    
+    if (difficultiesWithMultipliers.length === 1 && difficultiesWithMultipliers[0].key === 'casualCompleted') {
+      difficultiesWithMultipliers[0].mult = 1.0;
     }
-
+  
     let highestCompletedMultiplier = 0;
-    for (const diff of availableDifficulties) {
-        if (getCompletionFn(quest.id, diff.key)) {
-            highestCompletedMultiplier = Math.max(highestCompletedMultiplier, diff.mult);
-        }
+    for (const diff of difficultiesWithMultipliers) {
+      if (getCompletionFn(quest.id, diff.key as DifficultyKey)) {
+        highestCompletedMultiplier = Math.max(highestCompletedMultiplier, diff.mult);
+      }
     }
     
-    const highestAvailableMultiplier = availableDifficulties.reduce((max, d) => Math.max(max, d.mult), 0);
+    const highestAvailableMultiplier = difficultiesWithMultipliers.reduce((max, d) => Math.max(max, d.mult), 0);
     
     const earned = quest.baseFavor * highestCompletedMultiplier;
     const maxPossible = quest.baseFavor * highestAvailableMultiplier;
@@ -625,16 +622,12 @@ export default function FavorTrackerPage() {
   ]);
 
   const sortedAndFilteredData = useMemo(() => {
-    if (!sortConfig || !character) {
-      return {
-        allProcessedQuests: displayData.allProcessedQuests,
-        sortedQuests: displayData.processedQuests,
-        areaAggregates: displayData.areaAggregates
-      };
+    if (!character) {
+      return { sortedQuests: [] };
     }
-
+  
     const questsToSort = displayData.processedQuests;
-
+  
     const getSortValue = (quest: QuestWithSortValue, config: SortConfig) => {
       const { key } = config;
       if (key === 'areaRemainingFavor' || key === 'areaAdjustedRemainingFavorScore') {
@@ -646,36 +639,38 @@ export default function FavorTrackerPage() {
       if (key === 'location') return quest.location || '';
       return (quest as any)[key];
     };
-
+  
     const sortedQuests = [...questsToSort].sort((a, b) => {
-        const aValue = getSortValue(a, sortConfig);
-        const bValue = getSortValue(b, sortConfig);
-
-        let aComparable = aValue === null || aValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
-        let bComparable = bValue === null || bValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
-
-        let comparison = 0;
-        if (typeof aComparable === 'string' && typeof bComparable === 'string') {
-            comparison = aComparable.localeCompare(bComparable);
-        } else {
-            if (aComparable < bComparable) comparison = -1;
-            if (aComparable > bComparable) comparison = 1;
-        }
-
-        if (comparison !== 0) {
-            return sortConfig.direction === 'ascending' ? comparison : -comparison;
-        }
-
-        if (sortConfig.key === 'areaRemainingFavor' || sortConfig.key === 'areaAdjustedRemainingFavorScore') {
-          const aLocation = a.location || '';
-          const bLocation = b.location || '';
-          const locationComparison = aLocation.localeCompare(bLocation);
-          if (locationComparison !== 0) return locationComparison;
-        }
-
-        return getSortableName(a.name).localeCompare(getSortableName(b.name));
+      if (!sortConfig) return 0;
+  
+      const aValue = getSortValue(a, sortConfig);
+      const bValue = getSortValue(b, sortConfig);
+  
+      let aComparable = aValue === null || aValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
+      let bComparable = bValue === null || bValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
+  
+      let comparison = 0;
+      if (typeof aComparable === 'string' && typeof bComparable === 'string') {
+        comparison = aComparable.localeCompare(bComparable);
+      } else {
+        if (aComparable < bComparable) comparison = -1;
+        if (aComparable > bComparable) comparison = 1;
+      }
+  
+      if (comparison !== 0) {
+        return sortConfig.direction === 'ascending' ? comparison : -comparison;
+      }
+  
+      if (sortConfig.key === 'areaRemainingFavor' || sortConfig.key === 'areaAdjustedRemainingFavorScore') {
+        const aLocation = a.location || '';
+        const bLocation = b.location || '';
+        const locationComparison = aLocation.localeCompare(bLocation);
+        if (locationComparison !== 0) return locationComparison;
+      }
+  
+      return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
-
+  
     return { ...displayData, sortedQuests };
   }, [displayData, sortConfig, character]);
   
@@ -870,7 +865,7 @@ export default function FavorTrackerPage() {
                     <div className="grid grid-cols-2 gap-4">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-${header.key}`} checked={!!columnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
+                          <Checkbox id={`vis-${header.key}`} checked={!!popoverColumnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
                           <Label htmlFor={`vis-${header.key}`} className="font-normal">{header.label}</Label>
                         </div>
                       ))}
@@ -880,7 +875,7 @@ export default function FavorTrackerPage() {
                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                         {difficultyLevels.map(dl => (
                             <div key={dl.key} className="flex items-center space-x-2">
-                            <Checkbox id={`vis-${dl.key}`} checked={!!columnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
+                            <Checkbox id={`vis-${dl.key}`} checked={!!popoverColumnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
                             <Label htmlFor={`vis-${dl.key}`} className="font-normal">{dl.label}</Label>
                             </div>
                         ))}
@@ -934,7 +929,6 @@ export default function FavorTrackerPage() {
                               {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
-                              {columnVisibility['duration'] && <TableCell className="text-center whitespace-nowrap">{quest.duration || 'N/A'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{(quest as any).maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{(quest as any).remainingPossibleFavor ?? '-'}</TableCell>}
@@ -1002,236 +996,3 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
-
-```
-- vercel/path0/src/types/index.ts:
-```ts
-
-import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
-
-export interface User {
-  id: string;
-  email: string | null;
-  displayName?: string | null;
-  isAdmin?: boolean;
-  isOwner?: boolean;
-  isCreator?: boolean;
-  createdAt?: FirestoreTimestampType | FieldValue;
-  emailVerified: boolean;
-  iconUrl: string | null;
-}
-
-export interface PublicUserProfile {
-  displayName: string | null;
-  iconUrl: string | null;
-  updatedAt: FirestoreTimestampType | FieldValue;
-}
-
-export interface PublicUserProfileFirebaseData {
-  displayName: string | null;
-  iconUrl: string | null;
-  updatedAt: FieldValue;
-}
-
-export interface Character {
-  id:string;
-  userId: string;
-  name: string;
-  level: number;
-  iconUrl: string | null;
-}
-
-export interface AdventurePack {
-  id: string;
-  name: string;
-  pointsCost?: number | null;
-  totalFavor?: number | null;
-}
-
-export interface Quest {
-  id: string;
-  name: string;
-  level: number; // Represents Heroic Base Level
-  adventurePackName?: string | null;
-  location?: string | null;
-  questGiver?: string | null;
-  
-  // Heroic Tier EXP
-  casualExp?: number | null;
-  normalExp?: number | null;
-  hardExp?: number | null;
-  eliteExp?: number | null;
-  
-  duration?: string | null;
-  baseFavor?: number | null; // Universal base favor for the quest concept
-  patron?: string | null;
-  
-  // Heroic Tier Availability
-  casualNotAvailable?: boolean;
-  normalNotAvailable?: boolean;
-  hardNotAvailable?: boolean;
-  eliteNotAvailable?: boolean;
-
-  // Epic Tier Details
-  epicBaseLevel?: number | null;
-  epicCasualExp?: number | null;
-  epicNormalExp?: number | null;
-  epicHardExp?: number | null;
-  epicEliteExp?: number | null;
-  epicCasualNotAvailable?: boolean;
-  epicNormalNotAvailable?: boolean;
-  epicHardNotAvailable?: boolean;
-  epicEliteNotAvailable?: boolean;
-
-  // New fields for wiki and maps
-  wikiUrl?: string | null;
-  mapUrls?: string[];
-}
-
-export interface UserQuestCompletionData {
-  questName?: string; 
-  casualCompleted?: boolean;
-  normalCompleted?: boolean;
-  hardCompleted?: boolean;
-  eliteCompleted?: boolean;
-  lastUpdatedAt?: FirestoreTimestampType | FieldValue;
-}
-
-
-export interface CSVQuest {
-  id?: string;
-  name: string;
-  location?: string;
-  level: string; // Heroic base level
-  questGiver?: string;
-  
-  // Heroic EXP
-  casualSoloExp?: string; // Assumed to be Heroic Casual
-  normalExp?: string;     // Assumed to be Heroic Normal
-  hardExp?: string;       // Assumed to be Heroic Hard
-  eliteExp?: string;      // Assumed to be Heroic Elite
-  
-  duration?: string;
-  baseFavor?: string;
-  adventurePack?: string;
-  patron?: string;
-
-  // Heroic Availability
-  casualNotAvailable?: string;
-  normalNotAvailable?: string;
-  hardNotAvailable?: string;
-  eliteNotAvailable?: string;
-
-  // Epic Tier - New CSV Columns Needed
-  epicBaseLevel?: string;
-  epicCasualExp?: string;
-  epicNormalExp?: string;
-  epicHardExp?: string;
-  epicEliteExp?: string;
-  epicCasualNotAvailable?: string;
-  epicNormalNotAvailable?: string;
-  epicHardNotAvailable?: string;
-  epicEliteNotAvailable?: string;
-
-  // New fields for wiki and maps
-  wikiUrl?: string;
-  mapUrl1?: string;
-  mapUrl2?: string;
-  mapUrl3?: string;
-  mapUrl4?: string;
-  mapUrl5?: string;
-  mapUrl6?: string;
-  mapUrl7?: string;
-}
-
-export interface CSVAdventurePack {
-  id?: string;
-  name: string;
-  pointsCost?: string;
-  totalFavor?: string;
-}
-
-export interface Suggestion {
-  id: string;
-  text: string;
-  createdAt: FirestoreTimestampType;
-  suggesterId: string;
-  suggesterName: string;
-}
-
-export interface SuggestionFirebaseData {
-  text: string;
-  createdAt: FieldValue; // For writing
-  suggesterId: string;
-  suggesterName: string;
-}
-
-export interface Message {
-  id: string;
-  senderId: string;
-  senderName: string;
-  receiverId: string;
-  receiverName: string;
-  text: string;
-  timestamp: FirestoreTimestampType;
-  isRead: boolean;
-  relatedSuggestionId?: string;
-}
-
-export interface MessageFirebaseData {
-  senderId: string;
-  senderName: string;
-  receiverId: string;
-  receiverName: string;
-  text: string;
-  timestamp: FieldValue; // For writing
-  isRead: boolean;
-  relatedSuggestionId?: string;
-}
-
-export interface PermissionSettings {
-    isAdmin: boolean;
-    isOwner: boolean;
-    isCreator?: boolean; // Optional for updates, but part of User type
-}
-
-export interface RoleChangeLog {
-  id: string;
-  changerId: string;
-  changerDisplayName: string;
-  changerTier: string; // e.g., "Admin", "Owner", "Creator"
-  targetUserId: string;
-  targetUserDisplayName: string;
-  targetUserOriginalRole: string;
-  requestedChange: {
-    action: 'updateAdmin' | 'updateOwner';
-    makeAdmin?: boolean;
-    makeOwner?: boolean;
-  };
-  newRoleApplied?: string; // New role after change
-  status: "requested" | "successful" | "failed";
-  timestampRequested: FirestoreTimestampType;
-  timestampFinalized?: FirestoreTimestampType;
-  errorDetails?: string;
-}
-
-export interface RoleChangeLogFirebaseData {
-  changerId: string;
-  changerDisplayName: string;
-  changerTier: string;
-  targetUserId: string;
-  targetUserDisplayName: string;
-  targetUserOriginalRole: string;
-  requestedChange: {
-    action: 'updateAdmin' | 'updateOwner';
-    makeAdmin?: boolean;
-    makeOwner?: boolean;
-  };
-  newRoleApplied?: string;
-  status: "requested" | "successful" | "failed";
-  timestampRequested: FieldValue;
-  timestampFinalized?: FieldValue;
-  errorDetails?: string;
-}
-
-```
