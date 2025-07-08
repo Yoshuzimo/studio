@@ -1,3 +1,4 @@
+
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
@@ -9,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { UserCircle, MapPin, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, AlertTriangle, Skull, ListOrdered, Pencil, UserSquare } from 'lucide-react';
+import { UserCircle, MapPin, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, AlertTriangle, Skull, ListOrdered, Pencil, UserSquare, TestTube2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -114,7 +115,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function ReaperRewardsPage() {
-  console.log('Reaper Rewards page code version: 2024-07-26-A');
+  console.log('Reaper Rewards page code version: 2024-07-26-B');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();

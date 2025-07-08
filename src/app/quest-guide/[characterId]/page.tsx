@@ -1,3 +1,4 @@
+
 // src/app/quest-guide/[characterId]/page.tsx
 "use client";
 
@@ -10,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, BarChartHorizontalBig, Timer, Activity, AlertTriangle, Pencil, Skull } from 'lucide-react';
+import { UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, BarChartHorizontalBig, Timer, Activity, AlertTriangle, Pencil, Skull, TestTube2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -108,7 +109,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function QuestGuidePage() {
-  console.log('Quest Guide page code version: 2024-07-26-A');
+  console.log('Quest Guide page code version: 2024-07-26-B');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth(); 
@@ -361,7 +362,6 @@ export default function QuestGuidePage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const sortedQuests = sortedAndFilteredQuests;
   const popoverVisibleNonDifficultyHeaders = tableHeaders.filter(header => !header.isDifficulty);
   const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key as SortableQuestGuideColumnKey]);
 
@@ -422,7 +422,7 @@ export default function QuestGuidePage() {
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <BookOpen className="mr-2 h-6 w-6 text-primary" /> Quest Guide
-              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedQuests.length} quests)</span>}
+              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedAndFilteredQuests.length} quests)</span>}
             </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/reaper-rewards/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Button></Link>
@@ -464,9 +464,9 @@ export default function QuestGuidePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0 flex-1 min-h-0">
-          {pageOverallLoading && sortedQuests.length === 0 ? (
+          {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /><p>Filtering quests...</p></div>
-          ) : !pageOverallLoading && sortedQuests.length === 0 ? (
+          ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="p-6 text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
@@ -494,7 +494,7 @@ export default function QuestGuidePage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {sortedQuests.map((quest) => (
+                    {sortedAndFilteredQuests.map((quest) => (
                     <TooltipProvider key={quest.id} delayDuration={0}>
                       <Tooltip>
                         <TooltipTrigger asChild>

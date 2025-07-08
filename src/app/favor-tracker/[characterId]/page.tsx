@@ -1,3 +1,4 @@
+
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -168,7 +169,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: 2024-07-26-A');
+  console.log('Favor Tracker page code version: 2024-07-26-B');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -389,7 +390,7 @@ export default function FavorTrackerPage() {
   };
 
   const handleConfirmResetCompletions = async () => {
-    if (!character || !sortedAndFilteredData) return;
+    if (!character || !displayData) return;
     const questsForCharacterLevel = displayData.allProcessedQuests
         .filter(q => q.level <= character.level && q.level > 0)
         .map(q => q.id);
@@ -481,7 +482,7 @@ export default function FavorTrackerPage() {
   };
 
   const handleDownloadBackup = () => {
-    if (!character || sortedAndFilteredData.allProcessedQuests.length === 0) return;
+    if (!character || !displayData.allProcessedQuests.length) return;
 
     const questNameHeader = "Quest Name";
     const difficultyHeaders = difficultyLevels.map(dl => `"${dl.csvMapKey}"`).join(',');
@@ -489,7 +490,7 @@ export default function FavorTrackerPage() {
     const headerRow2 = `"${questNameHeader}",,,,,,,,"${difficultyHeaders}"`;
     const headerRow3 = ``; // Blank line
 
-    const dataRows = sortedAndFilteredData.allProcessedQuests
+    const dataRows = displayData.allProcessedQuests
       .filter(q => q.level > 0)
       .sort((a,b) => getSortableName(a.name).localeCompare(getSortableName(b.name)))
       .map(quest => {
@@ -528,7 +529,7 @@ export default function FavorTrackerPage() {
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
 
-  const processedData = useMemo(() => {
+  const displayData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) {
       return {
         allProcessedQuests: [],
@@ -565,7 +566,7 @@ export default function FavorTrackerPage() {
         }
 
         if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) {
-          hiddenReasons.push('Is a Raid (hidden by filter)');
+          hiddenReasons.push('Is a Raid (hidden by filter).');
         }
 
         if (quest.name.toLowerCase().includes("test")) {
@@ -617,21 +618,21 @@ export default function FavorTrackerPage() {
     if (!sortConfig || !character) {
       // Return the processed but unsorted (or default sorted) data if no sort config
       return {
-        allProcessedQuests: processedData.allProcessedQuests,
-        sortedQuests: processedData.processedQuests,
-        areaAggregates: processedData.areaAggregates
+        allProcessedQuests: displayData.allProcessedQuests,
+        sortedQuests: displayData.processedQuests,
+        areaAggregates: displayData.areaAggregates
       };
     }
 
     const questsToSort = sortingSnapshotRef.current?.config === sortConfig
         ? sortingSnapshotRef.current.quests
-        : processedData.processedQuests;
+        : displayData.processedQuests;
 
     const getSortValue = (quest: QuestWithSortValue, config: SortConfig) => {
       const { key } = config;
       if (key === 'areaRemainingFavor' || key === 'areaAdjustedRemainingFavorScore') {
         const primaryLocation = getPrimaryLocation(quest.location);
-        const mapToUse = key === 'areaRemainingFavor' ? processedData.areaAggregates.favorMap : processedData.areaAggregates.scoreMap;
+        const mapToUse = key === 'areaRemainingFavor' ? displayData.areaAggregates.favorMap : displayData.areaAggregates.scoreMap;
         return primaryLocation ? mapToUse.get(primaryLocation) ?? 0 : 0;
       }
       if (key === 'name') return getSortableName(quest.name);
@@ -668,9 +669,9 @@ export default function FavorTrackerPage() {
         return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
 
-    return { ...processedData, sortedQuests };
+    return { ...displayData, sortedQuests };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processedData, sortConfig, character]);
+  }, [displayData, sortConfig, character]);
   
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
@@ -692,7 +693,7 @@ export default function FavorTrackerPage() {
     setSortConfig(newSortConfig);
     // Take a snapshot of the currently filtered items for stable sorting
     sortingSnapshotRef.current = {
-        quests: processedData.processedQuests,
+        quests: displayData.processedQuests,
         config: newSortConfig
     };
   };
@@ -703,7 +704,7 @@ export default function FavorTrackerPage() {
   };
   
   const pageStats = useMemo(() => {
-    const allQuests = sortedAndFilteredData.allProcessedQuests;
+    const allQuests = displayData.allProcessedQuests;
     const visibleQuests = sortedAndFilteredData.sortedQuests;
 
     if (!allQuests.length) {
@@ -729,7 +730,7 @@ export default function FavorTrackerPage() {
         favorEarned: Math.round(favorEarned),
         favorRemaining: Math.round(favorRemaining)
     };
-  }, [sortedAndFilteredData.allProcessedQuests, sortedAndFilteredData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
+  }, [displayData.allProcessedQuests, sortedAndFilteredData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
 
 
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
@@ -757,7 +758,7 @@ export default function FavorTrackerPage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
   
-  const { sortedQuests, areaAggregates, allProcessedQuests: displayData } = sortedAndFilteredData;
+  const { sortedQuests, areaAggregates } = sortedAndFilteredData;
 
   return (
     <div className="py-8 space-y-8">
@@ -774,7 +775,7 @@ export default function FavorTrackerPage() {
             </div>
             <CardDescription>Level {character.level}</CardDescription>
           </CardHeader>
-          <CardContent className="pt-2">
+           <CardContent className="pt-2">
             <div className="pt-4 border-t">
                 <div className="flex justify-around items-center text-sm">
                     <div className="text-center">
