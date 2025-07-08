@@ -2,7 +2,6 @@
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
@@ -170,7 +169,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: FAVOR-TRACKER-LAYOUT-FIX-V1');
+  console.log('Favor Tracker page code version: FAVOR-TRACKER-REBUILD-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -615,35 +614,6 @@ export default function FavorTrackerPage() {
     completionDep, durationAdjustments, isDataLoaded, isDebugMode
   ]);
 
-  const pageStats = useMemo(() => {
-    const allQuests = displayData.allProcessedQuests;
-    const visibleQuests = sortedAndFilteredData.sortedQuests;
-
-    if (!allQuests.length) {
-        return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
-    }
-
-    const favorEarned = allQuests.reduce((total, quest) => {
-        if (!quest.baseFavor) return total;
-        const { earned } = calculateFavorMetrics(quest, getQuestCompletion);
-        return total + earned;
-    }, 0);
-
-    const questsCompleted = allQuests.filter(q => 
-        q.baseFavor && q.baseFavor > 0 &&
-        q.remainingPossibleFavor <= 0 && 
-        (q.casualCompleted || q.normalCompleted || q.hardCompleted || q.eliteCompleted)
-    ).length;
-
-    const favorRemaining = visibleQuests.reduce((total, q) => total + q.remainingPossibleFavor, 0);
-
-    return {
-        questsCompleted: Math.round(questsCompleted),
-        favorEarned: Math.round(favorEarned),
-        favorRemaining: Math.round(favorRemaining)
-    };
-  }, [displayData.allProcessedQuests, sortedAndFilteredData.sortedQuests, calculateFavorMetrics, getQuestCompletion]);
-
   const sortedAndFilteredData = useMemo(() => {
     if (!sortConfig || !character) {
       return {
@@ -700,7 +670,7 @@ export default function FavorTrackerPage() {
 
     return { ...displayData, sortedQuests };
   }, [displayData, sortConfig, character]);
-
+  
   const pageStats = useMemo(() => {
     const allQuests = displayData.allProcessedQuests;
     const visibleQuests = sortedAndFilteredData.sortedQuests;
@@ -887,7 +857,7 @@ export default function FavorTrackerPage() {
             </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/reaper-rewards/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Button></Link>
-              <Link href={`/leveling-guide/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><BookOpen className="mr-2 h-4 w-4" />Leveling Guide</Button></Link>
+              <Link href={`/quest-guide/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><BookOpen className="mr-2 h-4 w-4" />Quest Guide</Button></Link>
               <Popover open={isSettingsPopoverOpen} onOpenChange={handleSettingsPopoverOpenChange}>
                 <PopoverTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" disabled={pageOverallLoading}><Settings className="h-4 w-4" /><span className="sr-only">Column Settings</span></Button></PopoverTrigger>
                 <PopoverContent className="w-auto p-4 min-w-[360px] sm:min-w-[480px] md:min-w-[600px]">
