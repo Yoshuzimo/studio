@@ -1,4 +1,3 @@
-
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -169,6 +168,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
+  console.log('Favor Tracker page code version: 2024-07-26-A');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -774,7 +774,7 @@ export default function FavorTrackerPage() {
             </div>
             <CardDescription>Level {character.level}</CardDescription>
           </CardHeader>
-           <CardContent className="pt-2">
+          <CardContent className="pt-2">
             <div className="pt-4 border-t">
                 <div className="flex justify-around items-center text-sm">
                     <div className="text-center">

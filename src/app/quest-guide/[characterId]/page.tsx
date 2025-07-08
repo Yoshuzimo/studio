@@ -1,4 +1,3 @@
-
 // src/app/quest-guide/[characterId]/page.tsx
 "use client";
 
@@ -109,6 +108,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function QuestGuidePage() {
+  console.log('Quest Guide page code version: 2024-07-26-A');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth(); 
@@ -363,7 +363,7 @@ export default function QuestGuidePage() {
   
   const sortedQuests = sortedAndFilteredQuests;
   const popoverVisibleNonDifficultyHeaders = tableHeaders.filter(header => !header.isDifficulty);
-  const visibleTableHeaders = tableHeaders.filter(h => columnVisibility[h.key as SortableQuestGuideColumnKey]);
+  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key as SortableQuestGuideColumnKey]);
 
   return (
     <div className="py-8 space-y-8">

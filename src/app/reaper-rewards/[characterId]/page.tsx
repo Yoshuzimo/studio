@@ -1,4 +1,3 @@
-
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
@@ -115,6 +114,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function ReaperRewardsPage() {
+  console.log('Reaper Rewards page code version: 2024-07-26-A');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
