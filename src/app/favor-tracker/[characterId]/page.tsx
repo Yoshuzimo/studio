@@ -1,3 +1,4 @@
+
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -105,7 +106,7 @@ function getDurationCategory(durationInput?: string | null): DurationCategory | 
   if (!durationInput || durationInput.trim() === "") return null;
   const normalizedInput = durationInput.trim();
   if (DURATION_CATEGORIES.includes(normalizedInput as DurationCategory)) return normalizedInput as DurationCategory;
-  const minutes = parseDurationToMinutes(normalizedInput);
+  const minutes = parseDurationToMinutes(durationInput);
   if (minutes === null) return null;
   if (minutes <= 10) return "Very Short"; if (minutes <= 20) return "Short"; if (minutes <= 30) return "Medium"; if (minutes <= 45) return "Long"; return "Very Long";
 }
@@ -898,8 +899,8 @@ export default function FavorTrackerPage() {
             <div className="h-full overflow-y-auto">
                <Table>
                 <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for ${character?.name} at level ${character?.level}.</TableCaption>
-                <TableHeader className="sticky top-0 z-10"> 
-                    <TableRow className="bg-card hover:bg-card">
+                <TableHeader className="sticky top-0 bg-card z-10">
+                    <TableRow className="hover:bg-card">
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
                         <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>
