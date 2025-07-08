@@ -2,7 +2,7 @@
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest } from '@/types';
@@ -115,7 +115,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function ReaperRewardsPage() {
-  console.log('Reaper Rewards page code version: 2024-07-26-B');
+  console.log('Reaper Rewards page code version: REAPER-REWARDS-LAYOUT-FIX-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -192,6 +192,7 @@ export default function ReaperRewardsPage() {
 
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
 
   const handlePopoverColumnVisibilityChange = (key: string, checked: boolean) => {
@@ -199,7 +200,6 @@ export default function ReaperRewardsPage() {
   };
   const handleApplyColumnSettings = () => {
     setColumnVisibility(popoverColumnVisibility);
-    savePreferences({ columnVisibility: popoverColumnVisibility });
     setIsSettingsPopoverOpen(false);
   };
   const handleCancelColumnSettings = () => setIsSettingsPopoverOpen(false);
@@ -423,7 +423,7 @@ export default function ReaperRewardsPage() {
           </div>
         </CardHeader>
       </Card>
-      <Card className="sticky top-14 lg:top-[60px] z-20 flex flex-col max-h-[calc(70vh+5rem)]">
+      <Card className="flex flex-col h-[80vh]">
         <CardHeader className="flex-shrink-0 bg-card border-b">
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
