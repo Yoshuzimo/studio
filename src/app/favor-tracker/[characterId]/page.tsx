@@ -517,34 +517,36 @@ export default function FavorTrackerPage() {
   const calculateFavorMetrics = useCallback((quest: Quest, getCompletionFn: (questId: string, difficultyKey: DifficultyKey) => boolean) => {
     if (!quest.baseFavor) return { earned: 0, remaining: 0 };
 
-    // Determine the highest available difficulty to apply special casual rule
-    const isEliteAvailable = !quest.eliteNotAvailable;
-    const isHardAvailable = !quest.hardNotAvailable;
-    const isNormalAvailable = !quest.normalNotAvailable;
-    const isCasualAvailable = !quest.casualNotAvailable;
+    const difficulties = [
+        { key: 'eliteCompleted' as const, mult: 3, notAvailable: quest.eliteNotAvailable },
+        { key: 'hardCompleted' as const, mult: 2, notAvailable: quest.hardNotAvailable },
+        { key: 'normalCompleted' as const, mult: 1, notAvailable: quest.normalNotAvailable },
+        { key: 'casualCompleted' as const, mult: 0.5, notAvailable: quest.casualNotAvailable },
+    ];
+    
+    const highestAvailable = difficulties.find(d => !d.notAvailable);
 
-    // If Casual is the highest available difficulty, its multiplier is 1x. Otherwise, it's 0.5x.
-    const isCasualTheHighestAvailable = isCasualAvailable && !isNormalAvailable && !isHardAvailable && !isEliteAvailable;
-    const casualMultiplier = isCasualTheHighestAvailable ? 1 : 0.5;
-
-    // Determine highest *completed* multiplier using the new casual rule
+    if (highestAvailable && highestAvailable.key === 'casualCompleted') {
+        const casualDiff = difficulties.find(d => d.key === 'casualCompleted');
+        if (casualDiff) {
+            casualDiff.mult = 1;
+        }
+    }
+    
     let highestCompletedMultiplier = 0;
-    if (getCompletionFn(quest.id, 'eliteCompleted') && isEliteAvailable) highestCompletedMultiplier = 3;
-    else if (getCompletionFn(quest.id, 'hardCompleted') && isHardAvailable) highestCompletedMultiplier = 2;
-    else if (getCompletionFn(quest.id, 'normalCompleted') && isNormalAvailable) highestCompletedMultiplier = 1;
-    else if (getCompletionFn(quest.id, 'casualCompleted') && isCasualAvailable) highestCompletedMultiplier = casualMultiplier;
-
-    // Determine highest *available* multiplier using the new casual rule
-    let highestAvailableMultiplier = 0;
-    if (isEliteAvailable) highestAvailableMultiplier = 3;
-    else if (isHardAvailable) highestAvailableMultiplier = 2;
-    else if (isNormalAvailable) highestAvailableMultiplier = 1;
-    else if (isCasualAvailable) highestAvailableMultiplier = casualMultiplier;
+    for (const diff of difficulties) {
+        if (!diff.notAvailable && getCompletionFn(quest.id, diff.key)) {
+            highestCompletedMultiplier = diff.mult;
+            break; 
+        }
+    }
+    
+    const highestAvailableMultiplier = highestAvailable ? highestAvailable.mult : 0;
 
     const earned = quest.baseFavor * highestCompletedMultiplier;
     const maxPossible = quest.baseFavor * highestAvailableMultiplier;
-    const remaining = maxPossible - earned;
-
+    const remaining = Math.max(0, maxPossible - earned);
+    
     return { earned, remaining };
   }, []);
 
@@ -1020,3 +1022,5 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
+
+    
