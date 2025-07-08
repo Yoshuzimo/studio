@@ -212,7 +212,7 @@ export default function FavorTrackerPage() {
 
   const [displayData, setDisplayData] = useState<{ allProcessedQuests: QuestWithSortValue[], sortedQuests: QuestWithSortValue[], areaAggregates: { favorMap: Map<string, number>, scoreMap: Map<string, number> } }>({ allProcessedQuests: [], sortedQuests: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } });
   const prevSortConfigRef = useRef(sortConfig);
-
+  const [sortVersion, setSortVersion] = useState(0);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
 
@@ -635,12 +635,12 @@ export default function FavorTrackerPage() {
         const prevVisibleIds = new Set(prevDisplayData.sortedQuests.map(q => q.id));
         const newVisibleIds = new Set(processedData.processedQuests.map(q => q.id));
         const itemsAdded = processedData.processedQuests.some(q => !prevVisibleIds.has(q.id));
-        const shouldResort = sortConfigChanged || itemsAdded || !isDataLoaded;
+        const shouldResort = sortConfigChanged || itemsAdded || !isDataLoaded || sortVersion !== prevSortConfigRef.current?.version;
         
         let sortedQuests;
 
         if (shouldResort) {
-            prevSortConfigRef.current = sortConfig;
+            prevSortConfigRef.current = { ...sortConfig, version: sortVersion }; // Snapshot the sort config with version
             const questsWithSortValue = processedData.processedQuests.map(quest => ({
                 ...quest,
                 _sortValue: sortConfig ? getSortValue(quest, sortConfig) : getSortableName(quest.name),
@@ -689,14 +689,17 @@ export default function FavorTrackerPage() {
         
         return { sortedQuests, areaAggregates: processedData.areaAggregates, allProcessedQuests: processedData.allProcessedQuests };
     });
-  }, [processedData, sortConfig, isDataLoaded]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processedData, sortConfig, sortVersion, isDataLoaded]);
 
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
-
+    
     if (sortConfig && sortConfig.key === key) {
+        // If clicking the same column, toggle direction
         newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
+        // Default directions for new column
         const specialSortKeys: SortableColumnKey[] = [
             'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
         ];
@@ -706,6 +709,7 @@ export default function FavorTrackerPage() {
     }
     
     setSortConfig({ key, direction: newDirection });
+    setSortVersion(v => v + 1); // Increment version to force a re-sort
   };
   
   const getSortIndicator = (columnKey: SortableColumnKey) => {
@@ -911,14 +915,14 @@ export default function FavorTrackerPage() {
           </div>
           <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 flex-grow overflow-y-auto">
+        <CardContent className="pt-6 flex-1 min-h-0">
            {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
            : !pageOverallLoading && sortedQuests.length === 0 && character ? ( <div className="text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
-           : ( <div className="overflow-x-auto"> <Table>
+           : ( <div className="h-full overflow-auto"> <Table>
                 <TableCaption className="py-4">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
-                <TableHeader> <TableRow>
+                <TableHeader className="sticky top-0 z-10 bg-card"> <TableRow>
                     {visibleTableHeaders.map((header) => (
-                        <TableHead key={header.key} className={cn("sticky top-0 bg-card z-10", header.className)}>
+                        <TableHead key={header.key} className={cn(header.className)}>
                         <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>
                             {header.icon && <header.icon className="mr-1.5 h-4 w-4" />} {header.label} {header.isSortable && getSortIndicator(header.key as SortableColumnKey)}
                         </Button>
@@ -1007,5 +1011,3 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
-
-    

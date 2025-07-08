@@ -1,4 +1,3 @@
-
 // src/app/quest-guide/[characterId]/page.tsx
 "use client";
 
@@ -310,6 +309,7 @@ export default function QuestGuidePage() {
       
       if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
       if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+
       let comparison = 0;
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         comparison = aValue.localeCompare(bValue);
@@ -458,7 +458,7 @@ export default function QuestGuidePage() {
           </div>
           <CardDescription>Experience guide for {character.name}. Shows relevant Heroic or Epic EXP based on character level. Score is Max EXP adjusted by quest duration.</CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 flex-grow overflow-y-auto">
+        <CardContent className="pt-6 flex-1 min-h-0">
           {pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
             <div className="text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div>
           ) : !pageOverallLoading && sortedAndFilteredQuests.length === 0 ? (
@@ -467,13 +467,13 @@ export default function QuestGuidePage() {
               <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="h-full overflow-auto">
                 <Table>
                 <TableCaption className="py-4">End of quest guide for {character.name} at level {character.level}.</TableCaption>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-card">
                     <TableRow>
                     {visibleTableHeaders.map((header) => (
-                        <TableHead key={header.key} className={cn("sticky top-0 bg-card z-10", header.className)}>
+                        <TableHead key={header.key} className={cn(header.className)}>
                         <Button 
                             variant="ghost" 
                             onClick={() => header.isSortable && requestSort(header.key as ActualSortKey)} 
