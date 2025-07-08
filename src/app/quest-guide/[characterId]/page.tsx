@@ -89,10 +89,11 @@ function parseDurationToMinutes(durationString?: string | null): number | null {
   return isNaN(minutes) ? null : minutes;
 }
 function getDurationCategory(durationInput?: string | null): DurationCategory | null { 
+  const DURATION_CATEGORIES: DurationCategory[] = ["Very Short", "Short", "Medium", "Long", "Very Long"];
   if (!durationInput || durationInput.trim() === "") return null;
   const normalizedInput = durationInput.trim();
   if (DURATION_CATEGORIES.includes(normalizedInput as DurationCategory)) return normalizedInput as DurationCategory;
-  const minutes = parseDurationToMinutes(normalizedInput);
+  const minutes = parseDurationToMinutes(durationInput);
   if (minutes === null) return null;
   if (minutes <= 10) return "Very Short"; if (minutes <= 20) return "Short"; if (minutes <= 30) return "Medium"; if (minutes <= 45) return "Long"; return "Very Long";
 }
@@ -343,7 +344,7 @@ export default function QuestGuidePage() {
     setSortConfig({ key, direction });
   };
   
-  const getSortIndicator = (columnKey: ActualSortKey) => { 
+  const getSortIndicator = (columnKey: SortableQuestGuideColumnKey) => { 
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />; 
   };
@@ -464,7 +465,7 @@ export default function QuestGuidePage() {
         </CardHeader>
         <CardContent className="p-0 flex-1 min-h-0">
           {pageOverallLoading && sortedQuests.length === 0 ? (
-            <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div>
+            <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /><p>Filtering quests...</p></div>
           ) : !pageOverallLoading && sortedQuests.length === 0 ? (
             <div className="p-6 text-center py-10">
               <p className="text-xl text-muted-foreground mb-4">No quests available for {character.name} based on current level and filters.</p>
@@ -486,7 +487,7 @@ export default function QuestGuidePage() {
                         >
                             {header.icon && <header.icon className="mr-1.5 h-4 w-4" />}
                             {header.label}
-                            {header.isSortable && getSortIndicator(header.key as ActualSortKey)}
+                            {header.isSortable && getSortIndicator(header.key as SortableQuestGuideColumnKey)}
                         </Button>
                         </TableHead>
                     ))}

@@ -92,15 +92,14 @@ function parseDurationToMinutes(durationString?: string | null): number | null {
   let parsableString = durationString.toUpperCase();
   if (parsableString.startsWith('PT') && parsableString.endsWith('M') && parsableString.length > 3) {
     const numericPart = parsableString.substring(2, parsableString.length - 1);
-    if (/^\d+$/.test(numericPart)) finalDurationString = numericPart;
+    if (/^\d+$/.test(numericPart)) parsableString = numericPart;
   } else if (parsableString.endsWith('M') && !parsableString.startsWith('PT') && /^\d+M$/.test(parsableString)) {
-    finalDurationString = parsableString.slice(0, -1);
+    parsableString = parsableString.slice(0, -1);
   } else if (parsableString.length >= 2 && /^\d\s/.test(parsableString)) {
-     finalDurationString = parsableString.substring(2).trim();
+     parsableString = parsableString.substring(2).trim();
   }
   
-  let finalDurationString = parsableString;
-  const minutes = parseInt(finalDurationString, 10);
+  const minutes = parseInt(parsableString, 10);
   return isNaN(minutes) ? null : minutes;
 }
 function getDurationCategory(durationInput?: string | null): DurationCategory | null {
@@ -899,7 +898,9 @@ export default function FavorTrackerPage() {
               </Popover>
             </div>
           </div>
-          <CardDescription>Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.</CardDescription>
+          <CardDescription>
+            Mark completions for each quest and difficulty. 'Favor' is remaining possible favor. 'Score' is remaining favor adjusted by quest duration. Area columns sum remaining values.
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0 flex-1 min-h-0">
            {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
