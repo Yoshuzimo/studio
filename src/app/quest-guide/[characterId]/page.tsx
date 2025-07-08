@@ -1,4 +1,3 @@
-
 // src/app/quest-guide/[characterId]/page.tsx
 "use client";
 
@@ -57,7 +56,7 @@ const allTableHeaders: { key: SortableQuestGuideColumnKey | string; label: strin
 const difficultyColumnKeys: SortableQuestGuideColumnKey[] = ['adjustedCasualExp', 'adjustedNormalExp', 'adjustedHardExp', 'adjustedEliteExp'];
 const getDefaultColumnVisibility = (): Record<SortableQuestGuideColumnKey, boolean> => {
     const initial: Record<SortableQuestGuideColumnKey, boolean> = {} as any;
-     tableHeaders.forEach(header => {
+     allTableHeaders.forEach(header => {
         if (['adventurePackName', 'questGiver'].includes(header.key)) {
             initial[header.key as SortableQuestGuideColumnKey] = false;
         } else {
@@ -115,7 +114,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function QuestGuidePage() {
-  console.log('Quest Guide page code version: QUEST-GUIDE-LAYOUT-FIX-V3');
+  console.log('Quest Guide page code version: QUEST-GUIDE-FORCE-REFRESH-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -230,9 +229,9 @@ export default function QuestGuidePage() {
   };
 
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
-
+  
   const sortedAndFilteredData = useMemo(() => {
-    if (!character || !isDataLoaded || !quests) return [];
+    if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
 
     const getRelevantQuestDetails = (quest: Quest, char: Character) => {
       const useEpic = quest.epicBaseLevel != null && char.level >= quest.epicBaseLevel;
@@ -299,7 +298,7 @@ export default function QuestGuidePage() {
       ? allProcessedQuests
       : allProcessedQuests.filter(quest => quest.hiddenReasons.length === 0);
 
-    return [...filteredQuests].sort((a, b) => {
+    const sortedQuests = [...filteredQuests].sort((a, b) => {
       if (!sortConfig || !character) return 0;
 
       let aValue: string | number | null | undefined;
@@ -333,6 +332,8 @@ export default function QuestGuidePage() {
 
       return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
+
+    return { sortedQuests };
   }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig, isDebugMode]);
 
   const requestSort = (key: SortableQuestGuideColumnKey) => {
@@ -368,7 +369,7 @@ export default function QuestGuidePage() {
      return <div className="flex justify-center items-center h-screen"><p>Character not found or access denied.</p></div>;
   }
 
-  const sortedQuests = sortedAndFilteredData;
+  const { sortedQuests } = sortedAndFilteredData;
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(h => !h.isDifficulty);
   const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
 
@@ -442,7 +443,7 @@ export default function QuestGuidePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${header.key}`} checked={!!popoverColumnVisibility[header.key as SortableQuestGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key as SortableQuestGuideColumnKey, !!checked)} />
+                          <Checkbox id={`vis-guide-${header.key}`} checked={!!columnVisibility[header.key as SortableQuestGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key as SortableQuestGuideColumnKey, !!checked)} />
                           <Label htmlFor={`vis-guide-${header.key}`} className="font-normal whitespace-nowrap">{header.label}</Label>
                         </div>
                       ))}
@@ -452,8 +453,8 @@ export default function QuestGuidePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {difficultyColumnKeys.map(key => (
                           <div key={key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${key}`} checked={!!popoverColumnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key, !!checked)} />
-                          <Label htmlFor={`vis-guide-${key}`} className="font-normal whitespace-nowrap">{tableHeaders.find(h=>h.key===key)?.label}</Label>
+                          <Checkbox id={`vis-guide-${key}`} checked={!!columnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key, !!checked)} />
+                          <Label htmlFor={`vis-guide-${key}`} className="font-normal whitespace-nowrap">{allTableHeaders.find(h=>h.key===key)?.label}</Label>
                           </div>
                       ))}
                     </div>
@@ -514,12 +515,12 @@ export default function QuestGuidePage() {
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
-                              {columnVisibility['adjustedCasualExp'] && <TableCell className="text-center">{quest.adjustedCasualExp ?? '-'}</TableCell>}
-                              {columnVisibility['adjustedNormalExp'] && <TableCell className="text-center">{quest.adjustedNormalExp ?? '-'}</TableCell>}
-                              {columnVisibility['adjustedHardExp'] && <TableCell className="text-center">{quest.adjustedHardExp ?? '-'}</TableCell>}
-                              {columnVisibility['adjustedEliteExp'] && <TableCell className="text-center">{quest.adjustedEliteExp ?? '-'}</TableCell>}
-                              {columnVisibility['maxExp'] && <TableCell className="text-center font-bold">{quest.maxExp ?? '-'}</TableCell>}
-                              {columnVisibility['experienceScore'] && <TableCell className="text-center">{quest.experienceScore ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedCasualExp'] && <TableCell className="text-center">{(quest as any).adjustedCasualExp ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedNormalExp'] && <TableCell className="text-center">{(quest as any).adjustedNormalExp ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedHardExp'] && <TableCell className="text-center">{(quest as any).adjustedHardExp ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedEliteExp'] && <TableCell className="text-center">{(quest as any).adjustedEliteExp ?? '-'}</TableCell>}
+                              {columnVisibility['maxExp'] && <TableCell className="text-center font-bold">{(quest as any).maxExp ?? '-'}</TableCell>}
+                              {columnVisibility['experienceScore'] && <TableCell className="text-center">{(quest as any).experienceScore ?? '-'}</TableCell>}
                           </TableRow>
                         </TooltipTrigger>
                         {isDebugMode && quest.hiddenReasons.length > 0 && (
@@ -564,4 +565,3 @@ export default function QuestGuidePage() {
     </div>
   );
 }
-
