@@ -212,8 +212,6 @@ export default function FavorTrackerPage() {
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
-  const sortingSnapshotRef = useRef<{ quests: QuestWithSortValue[], config: SortConfig } | null>(null);
-
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
@@ -251,8 +249,6 @@ export default function FavorTrackerPage() {
 
           if (prefs.sortConfig) {
             setSortConfig(prefs.sortConfig);
-          } else {
-            setSortConfig({ key: 'name', direction: 'ascending' });
           }
 
           const defaultVis = getDefaultColumnVisibility();
@@ -260,8 +256,6 @@ export default function FavorTrackerPage() {
           allTableHeaders.forEach(header => { mergedVisibility[header.key] = popoverColumnVisibility[header.key] ?? prefs.columnVisibility?.[header.key] ?? defaultVis[header.key]; });
           setColumnVisibility(mergedVisibility);
         } else {
-          setSortConfig({ key: 'name', direction: 'ascending' });
-          setColumnVisibility(getDefaultColumnVisibility());
           savePreferences({ 
               columnVisibility: getDefaultColumnVisibility(), 
               durationAdjustments: durationAdjustmentDefaults, 
@@ -272,11 +266,7 @@ export default function FavorTrackerPage() {
               sortConfig: { key: 'name', direction: 'ascending' }
             });
         }
-      } catch (error) { 
-        console.error("Error loading preferences:", error);
-        setSortConfig({ key: 'name', direction: 'ascending' });
-        setColumnVisibility(getDefaultColumnVisibility());
-    }
+      } catch (error) { console.error("Error loading preferences:", error); }
     }
   }, [characterId, isDataLoaded, currentUser, savePreferences]);
 
@@ -643,9 +633,7 @@ export default function FavorTrackerPage() {
       };
     }
 
-    const questsToSort = sortingSnapshotRef.current?.config === sortConfig
-        ? sortingSnapshotRef.current.quests
-        : displayData.processedQuests;
+    const questsToSort = displayData.processedQuests;
 
     const getSortValue = (quest: QuestWithSortValue, config: SortConfig) => {
       const { key } = config;
@@ -736,10 +724,6 @@ export default function FavorTrackerPage() {
 
     const newSortConfig = { key, direction: newDirection };
     setSortConfig(newSortConfig);
-    sortingSnapshotRef.current = {
-        quests: displayData.processedQuests,
-        config: newSortConfig
-    };
   };
 
   const getSortIndicator = (columnKey: SortableColumnKey) => {
@@ -751,7 +735,7 @@ export default function FavorTrackerPage() {
     header => !header.isDifficulty
   );
 
-  const visibleTableHeaders = allTableHeaders.filter(h => popoverColumnVisibility[h.key]);
+  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
 
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
@@ -886,7 +870,7 @@ export default function FavorTrackerPage() {
                     <div className="grid grid-cols-2 gap-4">
                       {popoverVisibleNonDifficultyHeaders.map(header => (
                         <div key={header.key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-${header.key}`} checked={!!popoverColumnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
+                          <Checkbox id={`vis-${header.key}`} checked={!!columnVisibility[header.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(header.key, !!checked)} />
                           <Label htmlFor={`vis-${header.key}`} className="font-normal">{header.label}</Label>
                         </div>
                       ))}
@@ -896,7 +880,7 @@ export default function FavorTrackerPage() {
                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                         {difficultyLevels.map(dl => (
                             <div key={dl.key} className="flex items-center space-x-2">
-                            <Checkbox id={`vis-${dl.key}`} checked={!!popoverColumnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
+                            <Checkbox id={`vis-${dl.key}`} checked={!!columnVisibility[dl.key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(dl.key, !!checked)} />
                             <Label htmlFor={`vis-${dl.key}`} className="font-normal">{dl.label}</Label>
                             </div>
                         ))}
@@ -946,19 +930,19 @@ export default function FavorTrackerPage() {
                             )}
                             onClick={() => handleRowClick(quest)}
                           >
-                              {popoverColumnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
-                              {popoverColumnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
-                              {popoverColumnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
-                              {popoverColumnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
-                              {popoverColumnVisibility['duration'] && <TableCell className="text-center whitespace-nowrap">{quest.duration || 'N/A'}</TableCell>}
-                              {popoverColumnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
-                              {popoverColumnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{(quest as any).maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
-                              {popoverColumnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{(quest as any).remainingPossibleFavor ?? '-'}</TableCell>}
-                              {popoverColumnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{(quest as any).adjustedRemainingFavorScore ?? '-'}</TableCell>}
-                              {popoverColumnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
-                              {popoverColumnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
+                              {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
+                              {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
+                              {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
+                              {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                              {columnVisibility['duration'] && <TableCell className="text-center whitespace-nowrap">{quest.duration || 'N/A'}</TableCell>}
+                              {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
+                              {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{(quest as any).maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
+                              {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{(quest as any).remainingPossibleFavor ?? '-'}</TableCell>}
+                              {columnVisibility['adjustedRemainingFavorScore'] && <TableCell className="text-center">{(quest as any).adjustedRemainingFavorScore ?? '-'}</TableCell>}
+                              {columnVisibility['areaRemainingFavor'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
+                              {columnVisibility['areaAdjustedRemainingFavorScore'] && <TableCell className="text-center">{quest.location ? (sortedAndFilteredData.areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0) : '-'}</TableCell>}
 
-                              {difficultyLevels.map(diff => popoverColumnVisibility[diff.key] && (
+                              {difficultyLevels.map(diff => columnVisibility[diff.key] && (
                               <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
                                   checked={(quest as any)[diff.key]}
@@ -1018,3 +1002,236 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
+
+```
+- vercel/path0/src/types/index.ts:
+```ts
+
+import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
+
+export interface User {
+  id: string;
+  email: string | null;
+  displayName?: string | null;
+  isAdmin?: boolean;
+  isOwner?: boolean;
+  isCreator?: boolean;
+  createdAt?: FirestoreTimestampType | FieldValue;
+  emailVerified: boolean;
+  iconUrl: string | null;
+}
+
+export interface PublicUserProfile {
+  displayName: string | null;
+  iconUrl: string | null;
+  updatedAt: FirestoreTimestampType | FieldValue;
+}
+
+export interface PublicUserProfileFirebaseData {
+  displayName: string | null;
+  iconUrl: string | null;
+  updatedAt: FieldValue;
+}
+
+export interface Character {
+  id:string;
+  userId: string;
+  name: string;
+  level: number;
+  iconUrl: string | null;
+}
+
+export interface AdventurePack {
+  id: string;
+  name: string;
+  pointsCost?: number | null;
+  totalFavor?: number | null;
+}
+
+export interface Quest {
+  id: string;
+  name: string;
+  level: number; // Represents Heroic Base Level
+  adventurePackName?: string | null;
+  location?: string | null;
+  questGiver?: string | null;
+  
+  // Heroic Tier EXP
+  casualExp?: number | null;
+  normalExp?: number | null;
+  hardExp?: number | null;
+  eliteExp?: number | null;
+  
+  duration?: string | null;
+  baseFavor?: number | null; // Universal base favor for the quest concept
+  patron?: string | null;
+  
+  // Heroic Tier Availability
+  casualNotAvailable?: boolean;
+  normalNotAvailable?: boolean;
+  hardNotAvailable?: boolean;
+  eliteNotAvailable?: boolean;
+
+  // Epic Tier Details
+  epicBaseLevel?: number | null;
+  epicCasualExp?: number | null;
+  epicNormalExp?: number | null;
+  epicHardExp?: number | null;
+  epicEliteExp?: number | null;
+  epicCasualNotAvailable?: boolean;
+  epicNormalNotAvailable?: boolean;
+  epicHardNotAvailable?: boolean;
+  epicEliteNotAvailable?: boolean;
+
+  // New fields for wiki and maps
+  wikiUrl?: string | null;
+  mapUrls?: string[];
+}
+
+export interface UserQuestCompletionData {
+  questName?: string; 
+  casualCompleted?: boolean;
+  normalCompleted?: boolean;
+  hardCompleted?: boolean;
+  eliteCompleted?: boolean;
+  lastUpdatedAt?: FirestoreTimestampType | FieldValue;
+}
+
+
+export interface CSVQuest {
+  id?: string;
+  name: string;
+  location?: string;
+  level: string; // Heroic base level
+  questGiver?: string;
+  
+  // Heroic EXP
+  casualSoloExp?: string; // Assumed to be Heroic Casual
+  normalExp?: string;     // Assumed to be Heroic Normal
+  hardExp?: string;       // Assumed to be Heroic Hard
+  eliteExp?: string;      // Assumed to be Heroic Elite
+  
+  duration?: string;
+  baseFavor?: string;
+  adventurePack?: string;
+  patron?: string;
+
+  // Heroic Availability
+  casualNotAvailable?: string;
+  normalNotAvailable?: string;
+  hardNotAvailable?: string;
+  eliteNotAvailable?: string;
+
+  // Epic Tier - New CSV Columns Needed
+  epicBaseLevel?: string;
+  epicCasualExp?: string;
+  epicNormalExp?: string;
+  epicHardExp?: string;
+  epicEliteExp?: string;
+  epicCasualNotAvailable?: string;
+  epicNormalNotAvailable?: string;
+  epicHardNotAvailable?: string;
+  epicEliteNotAvailable?: string;
+
+  // New fields for wiki and maps
+  wikiUrl?: string;
+  mapUrl1?: string;
+  mapUrl2?: string;
+  mapUrl3?: string;
+  mapUrl4?: string;
+  mapUrl5?: string;
+  mapUrl6?: string;
+  mapUrl7?: string;
+}
+
+export interface CSVAdventurePack {
+  id?: string;
+  name: string;
+  pointsCost?: string;
+  totalFavor?: string;
+}
+
+export interface Suggestion {
+  id: string;
+  text: string;
+  createdAt: FirestoreTimestampType;
+  suggesterId: string;
+  suggesterName: string;
+}
+
+export interface SuggestionFirebaseData {
+  text: string;
+  createdAt: FieldValue; // For writing
+  suggesterId: string;
+  suggesterName: string;
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  receiverName: string;
+  text: string;
+  timestamp: FirestoreTimestampType;
+  isRead: boolean;
+  relatedSuggestionId?: string;
+}
+
+export interface MessageFirebaseData {
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  receiverName: string;
+  text: string;
+  timestamp: FieldValue; // For writing
+  isRead: boolean;
+  relatedSuggestionId?: string;
+}
+
+export interface PermissionSettings {
+    isAdmin: boolean;
+    isOwner: boolean;
+    isCreator?: boolean; // Optional for updates, but part of User type
+}
+
+export interface RoleChangeLog {
+  id: string;
+  changerId: string;
+  changerDisplayName: string;
+  changerTier: string; // e.g., "Admin", "Owner", "Creator"
+  targetUserId: string;
+  targetUserDisplayName: string;
+  targetUserOriginalRole: string;
+  requestedChange: {
+    action: 'updateAdmin' | 'updateOwner';
+    makeAdmin?: boolean;
+    makeOwner?: boolean;
+  };
+  newRoleApplied?: string; // New role after change
+  status: "requested" | "successful" | "failed";
+  timestampRequested: FirestoreTimestampType;
+  timestampFinalized?: FirestoreTimestampType;
+  errorDetails?: string;
+}
+
+export interface RoleChangeLogFirebaseData {
+  changerId: string;
+  changerDisplayName: string;
+  changerTier: string;
+  targetUserId: string;
+  targetUserDisplayName: string;
+  targetUserOriginalRole: string;
+  requestedChange: {
+    action: 'updateAdmin' | 'updateOwner';
+    makeAdmin?: boolean;
+    makeOwner?: boolean;
+  };
+  newRoleApplied?: string;
+  status: "requested" | "successful" | "failed";
+  timestampRequested: FieldValue;
+  timestampFinalized?: FieldValue;
+  errorDetails?: string;
+}
+
+```
