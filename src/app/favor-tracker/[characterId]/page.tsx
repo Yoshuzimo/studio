@@ -1,4 +1,4 @@
-
+// Favor-Tracker-V1
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -515,39 +515,37 @@ export default function FavorTrackerPage() {
   }, [activeCharacterQuestCompletions]);
 
   const calculateFavorMetrics = useCallback((quest: Quest, getCompletionFn: (questId: string, difficultyKey: DifficultyKey) => boolean) => {
-    if (!quest.baseFavor) return { earned: 0, remaining: 0 };
-
-    const difficulties = [
-        { key: 'eliteCompleted' as const, mult: 3, notAvailable: quest.eliteNotAvailable },
-        { key: 'hardCompleted' as const, mult: 2, notAvailable: quest.hardNotAvailable },
-        { key: 'normalCompleted' as const, mult: 1, notAvailable: quest.normalNotAvailable },
-        { key: 'casualCompleted' as const, mult: 0.5, notAvailable: quest.casualNotAvailable },
+    if (!quest.baseFavor) return { earned: 0, remaining: 0, maxPossible: 0 };
+    
+    const difficultiesWithComputedMult = [
+      { key: 'eliteCompleted' as const, mult: 3, notAvailable: quest.eliteNotAvailable },
+      { key: 'hardCompleted' as const, mult: 2, notAvailable: quest.hardNotAvailable },
+      { key: 'normalCompleted' as const, mult: 1, notAvailable: quest.normalNotAvailable },
+      { key: 'casualCompleted' as const, mult: 0.5, notAvailable: quest.casualNotAvailable },
     ];
-    
-    const highestAvailable = difficulties.find(d => !d.notAvailable);
 
+    const highestAvailable = difficultiesWithComputedMult.find(d => !d.notAvailable);
+
+    // Special rule: if only C/S is available, its multiplier for favor is 1.0, not 0.5.
     if (highestAvailable && highestAvailable.key === 'casualCompleted') {
-        const casualDiff = difficulties.find(d => d.key === 'casualCompleted');
-        if (casualDiff) {
-            casualDiff.mult = 1;
-        }
+        const casualDiff = difficultiesWithComputedMult.find(d => d.key === 'casualCompleted');
+        if(casualDiff) casualDiff.mult = 1.0;
     }
-    
+
     let highestCompletedMultiplier = 0;
-    for (const diff of difficulties) {
+    for (const diff of difficultiesWithComputedMult) {
         if (!diff.notAvailable && getCompletionFn(quest.id, diff.key)) {
             highestCompletedMultiplier = diff.mult;
             break; 
         }
     }
-    
-    const highestAvailableMultiplier = highestAvailable ? highestAvailable.mult : 0;
 
+    const highestAvailableMultiplier = highestAvailable ? highestAvailable.mult : 0;
     const earned = quest.baseFavor * highestCompletedMultiplier;
     const maxPossible = quest.baseFavor * highestAvailableMultiplier;
     const remaining = Math.max(0, maxPossible - earned);
     
-    return { earned, remaining };
+    return { earned, remaining, maxPossible };
   }, []);
 
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
@@ -965,7 +963,7 @@ export default function FavorTrackerPage() {
                               {difficultyLevels.map(diff => popoverColumnVisibility[diff.key] && (
                               <TableCell key={diff.key} className="text-center" onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
-                                  checked={(quest as any)[diff.key]}
+                                  checked={quest[diff.key]}
                                   onCheckedChange={(checked) => handleCompletionChange(quest.id, diff.key, !!checked)}
                                   disabled={!!quest[diff.notAvailableKey] || pageOverallLoading}
                                   aria-label={`${quest.name} ${diff.label} completion status`}
@@ -1022,5 +1020,3 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
-
-    
