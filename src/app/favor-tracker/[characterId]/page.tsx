@@ -1,4 +1,3 @@
-
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -484,6 +483,51 @@ export default function FavorTrackerPage() {
     }
   };
 
+  const handleDownloadBackup = () => {
+    if (!character || sortedAndFilteredData.allProcessedQuests.length === 0) return;
+
+    const questNameHeader = "Quest Name";
+    const difficultyHeaders = difficultyLevels.map(dl => `"${dl.csvMapKey}"`).join(',');
+    const headerRow1 = `"${character.name}","${character.level}","${character.id}","${new Date().toISOString()}"`;
+    const headerRow2 = `"${questNameHeader}",,,,,,,,"${difficultyHeaders}"`;
+    const headerRow3 = ``; // Blank line
+
+    const dataRows = sortedAndFilteredData.allProcessedQuests
+      .filter(q => q.level > 0)
+      .sort((a,b) => getSortableName(a.name).localeCompare(getSortableName(b.name)))
+      .map(quest => {
+        const difficultyValues = difficultyLevels.map(dl => quest[dl.key] ? "TRUE" : "").join(',');
+        return `"${quest.name.replace(/"/g, '""')}",,,,,,,,${difficultyValues}`;
+      });
+
+    const csvContent = [headerRow1, headerRow2, headerRow3, ...dataRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${character.name}_favor_backup_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  const getQuestCompletion = useCallback((questId: string, difficultyKey: DifficultyKey): boolean => {
+    const completion = activeCharacterQuestCompletions.get(questId);
+    return !!completion?.[difficultyKey];
+  }, [activeCharacterQuestCompletions]);
+
+  const calculateFavorMetrics = useCallback((q: Quest) => {
+      if (!q.baseFavor) return { earned: 0, remaining: 0 };
+      let highestMultiplier = 0;
+      if (getQuestCompletion(q.id, 'eliteCompleted') && !q.eliteNotAvailable) highestMultiplier = 3;
+      else if (getQuestCompletion(q.id, 'hardCompleted') && !q.hardNotAvailable) highestMultiplier = 2;
+      else if (getQuestCompletion(q.id, 'normalCompleted') && !q.normalNotAvailable) highestMultiplier = 1;
+      else if (getQuestCompletion(q.id, 'casualCompleted') && !q.casualNotAvailable) highestMultiplier = 0.5;
+      const earned = q.baseFavor * highestMultiplier;
+      const remaining = (q.baseFavor * 3) - earned;
+      return { earned, remaining };
+  }, [getQuestCompletion]);
+
   const completionDep = JSON.stringify(Array.from(activeCharacterQuestCompletions.entries()));
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
 
@@ -495,23 +539,6 @@ export default function FavorTrackerPage() {
         areaAggregates: { favorMap: new Map<string, number>(), scoreMap: new Map<string, number>() },
       };
     }
-    
-    const getQuestCompletion = (questId: string, difficultyKey: DifficultyKey): boolean => {
-        const completion = activeCharacterQuestCompletions.get(questId);
-        return !!completion?.[difficultyKey];
-    };
-
-    const calculateFavorMetrics = (q: Quest) => {
-        if (!q.baseFavor) return { earned: 0, remaining: 0 };
-        let highestMultiplier = 0;
-        if (getQuestCompletion(q.id, 'eliteCompleted') && !q.eliteNotAvailable) highestMultiplier = 3;
-        else if (getQuestCompletion(q.id, 'hardCompleted') && !q.hardNotAvailable) highestMultiplier = 2;
-        else if (getQuestCompletion(q.id, 'normalCompleted') && !q.normalNotAvailable) highestMultiplier = 1;
-        else if (getQuestCompletion(q.id, 'casualCompleted') && !q.casualNotAvailable) highestMultiplier = 0.5;
-        const earned = q.baseFavor * highestMultiplier;
-        const remaining = (q.baseFavor * 3) - earned;
-        return { earned, remaining };
-    };
 
     const allProcessedQuests = quests.map(quest => {
         const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest);
@@ -585,7 +612,7 @@ export default function FavorTrackerPage() {
     return { allProcessedQuests, processedQuests: filteredQuests, areaAggregates };
   }, [
     quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
-    completionDep, durationAdjustments, isDataLoaded, isDebugMode
+    completionDep, durationAdjustments, isDataLoaded, isDebugMode, calculateFavorMetrics, getQuestCompletion
   ]);
 
   useEffect(() => {
@@ -713,7 +740,7 @@ export default function FavorTrackerPage() {
         favorEarned: Math.round(favorEarned),
         favorRemaining: Math.round(favorRemaining)
     };
-}, [displayData.allProcessedQuests, displayData.sortedQuests]);
+}, [displayData.allProcessedQuests, displayData.sortedQuests, calculateFavorMetrics]);
 
 
   const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(
@@ -800,8 +827,8 @@ export default function FavorTrackerPage() {
                     )}
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                     <Button onClick={() => {}} variant="outline" disabled={true} size="sm">
-                       <TestTube2 className="mr-2 h-4 w-4" /> Import Live (Coming Soon)
+                     <Button onClick={handleDownloadBackup} variant="outline" disabled={pageOverallLoading || sortedQuests.length === 0} size="sm">
+                       <Download className="mr-2 h-4 w-4" /> Save Backup
                     </Button>
                     <Button onClick={() => setIsUploadCsvDialogOpen(true)} variant="outline" disabled={pageOverallLoading || quests.length === 0} size="sm">
                         {isCsvProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />} Upload CSV
@@ -981,3 +1008,4 @@ export default function FavorTrackerPage() {
   );
 }
 
+    
