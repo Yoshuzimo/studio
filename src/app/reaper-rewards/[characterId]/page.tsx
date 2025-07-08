@@ -1,8 +1,7 @@
-
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest } from '@/types';
@@ -115,7 +114,7 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function ReaperRewardsPage() {
-  console.log('Reaper Rewards page code version: REAPER-REWARDS-LAYOUT-FIX-V1');
+  console.log('Reaper Rewards page code version: 2024-07-26-B');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -432,7 +431,7 @@ export default function ReaperRewardsPage() {
             </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/favor-tracker/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><ListOrdered className="mr-2 h-4 w-4" />Favor Tracker</Button></Link>
-              <Link href={`/quest-guide/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><BookOpen className="mr-2 h-4 w-4" />Quest Guide</Button></Link>
+              <Link href={`/leveling-guide/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><BookOpen className="mr-2 h-4 w-4" />Leveling Guide</Button></Link>
               <Popover open={isSettingsPopoverOpen} onOpenChange={handleSettingsPopoverOpenChange}>
                 <PopoverTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" disabled={pageOverallLoading}><Settings className="h-4 w-4" /><span className="sr-only">Column Settings</span></Button></PopoverTrigger>
                 <PopoverContent className="w-auto p-4 min-w-[280px]">

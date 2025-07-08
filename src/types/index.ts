@@ -1,4 +1,4 @@
-// Cache-busting comment for version: QUEST-GUIDE-FORCE-REFRESH-V1
+// Cache-busting comment to force rebuild of dependents: V2
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 
 export interface User {

@@ -1,4 +1,3 @@
-
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -169,7 +168,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: FAVOR-TRACKER-LAYOUT-FIX-V1');
+  console.log('Favor Tracker page code version: 2024-07-26-B');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
@@ -768,7 +767,6 @@ export default function FavorTrackerPage() {
                 </Button>
             </div>
             <CardDescription>Level {character.level}</CardDescription>
-          </CardHeader>
            <CardContent className="pt-2">
             <div className="pt-4 border-t">
                 <div className="flex justify-around items-center text-sm">
@@ -857,7 +855,7 @@ export default function FavorTrackerPage() {
             </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/reaper-rewards/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Button></Link>
-              <Link href={`/quest-guide/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><BookOpen className="mr-2 h-4 w-4" />Quest Guide</Button></Link>
+              <Link href={`/leveling-guide/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><BookOpen className="mr-2 h-4 w-4" />Leveling Guide</Button></Link>
               <Popover open={isSettingsPopoverOpen} onOpenChange={handleSettingsPopoverOpenChange}>
                 <PopoverTrigger asChild><Button variant="outline" size="icon" className="h-9 w-9" disabled={pageOverallLoading}><Settings className="h-4 w-4" /><span className="sr-only">Column Settings</span></Button></PopoverTrigger>
                 <PopoverContent className="w-auto p-4 min-w-[360px] sm:min-w-[480px] md:min-w-[600px]">
