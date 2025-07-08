@@ -89,8 +89,8 @@ export function QuestMapViewer({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="w-screen h-screen max-w-full max-h-full flex flex-col p-0 sm:p-0 border-0 rounded-none">
         <DialogHeader className="p-4 pb-2 border-b flex-shrink-0">
-          <DialogTitle className="font-headline text-center">{questName} - Map Viewer</DialogTitle>
-          <DialogDescription className="text-center">
+          <DialogTitle className="font-headline">{questName} - Map Viewer</DialogTitle>
+          <DialogDescription>
              Use the thumbnails below to select maps for viewing. You can view up to two maps side-by-side.
           </DialogDescription>
           {mapUrls.length > 2 && (

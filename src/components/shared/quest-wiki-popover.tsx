@@ -33,8 +33,8 @@ export function QuestWikiPopover({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="w-screen h-screen max-w-full max-h-full flex flex-col p-0 sm:p-0 border-0 rounded-none">
         <DialogHeader className="p-4 pb-2 border-b flex-shrink-0">
-          <DialogTitle className="font-headline text-center">{questName}</DialogTitle>
-          <DialogDescription className="flex items-center justify-center text-xs">
+          <DialogTitle className="font-headline">{questName}</DialogTitle>
+          <DialogDescription className="flex items-center justify-start text-xs">
             <AlertTriangle className="h-4 w-4 mr-2 text-amber-500 shrink-0" />
             <span>Note: Some sites block being displayed in an overlay. If the content is blank, please use the "Open in New Tab" button.</span>
           </DialogDescription>
