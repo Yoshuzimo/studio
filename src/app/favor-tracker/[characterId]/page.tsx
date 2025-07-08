@@ -168,7 +168,7 @@ type QuestWithSortValue = Quest & {
 };
 
 export default function FavorTrackerPage() {
-  console.log('Favor Tracker page code version: FAVOR-TRACKER-SYNTAX-FIX-V1');
+  console.log('Favor Tracker page code version: FAVOR-TRACKER-SYNTAX-FIX-V2');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
