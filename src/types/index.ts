@@ -1,4 +1,5 @@
-// Cache-busting comment to force rebuild of dependents: V2
+
+// Cache-busting comment to force rebuild of dependents: V3
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 
 export interface User {
@@ -25,13 +26,56 @@ export interface PublicUserProfileFirebaseData {
   updatedAt: FieldValue;
 }
 
+// --- Character Preferences Interfaces ---
+
+interface PageSortConfig {
+  key: string;
+  direction: 'ascending' | 'descending';
+}
+
+interface FavorTrackerPreferences {
+  columnVisibility?: Record<string, boolean>;
+  durationAdjustments?: Record<string, number>;
+  showCompletedQuestsWithZeroRemainingFavor?: boolean;
+  onCormyr?: boolean;
+  showRaids?: boolean;
+  clickAction?: 'none' | 'wiki' | 'map';
+  sortConfig?: PageSortConfig | null;
+}
+
+interface LevelingGuidePreferences {
+  columnVisibility?: Record<string, boolean>;
+  clickAction?: 'none' | 'wiki' | 'map';
+  durationAdjustments?: Record<string, number>;
+  onCormyr?: boolean;
+  showRaids?: boolean;
+  sortConfig?: PageSortConfig | null;
+}
+
+interface ReaperRewardsPreferences {
+  columnVisibility?: Record<string, boolean>;
+  onCormyr?: boolean;
+  showRaids?: boolean;
+  clickAction?: 'none' | 'wiki' | 'map';
+  sortConfig?: PageSortConfig | null;
+}
+
+
 export interface Character {
   id:string;
   userId: string;
   name: string;
   level: number;
   iconUrl: string | null;
+  preferences?: {
+    favorTracker?: FavorTrackerPreferences;
+    levelingGuide?: LevelingGuidePreferences;
+    reaperRewards?: ReaperRewardsPreferences;
+  }
 }
+
+// --- End Character Preferences ---
+
 
 export interface AdventurePack {
   id: string;

@@ -130,7 +130,7 @@ const allTableHeaders: { key: SortableColumnKey | string; label: string; icon?: 
 const getDefaultColumnVisibility = (): Record<SortableColumnKey | string, boolean> => {
     const initial: Record<SortableColumnKey | string, boolean> = {} as any;
      allTableHeaders.forEach(header => {
-        if (['adventurePackName', 'questGiver', 'location', 'duration', 'areaRemainingFavor', 'remainingPossibleFavor', 'maxPotentialFavorSingleQuest'].includes(header.key)) {
+        if (['questGiver', 'duration', 'areaRemainingFavor', 'remainingPossibleFavor', 'maxPotentialFavorSingleQuest'].includes(header.key)) {
             initial[header.key] = false;
         }
         else {
@@ -139,6 +139,8 @@ const getDefaultColumnVisibility = (): Record<SortableColumnKey | string, boolea
     });
     initial['areaAdjustedRemainingFavorScore'] = true;
     initial['remainingPossibleFavor'] = false;
+    initial['location'] = true;
+    initial['adventurePackName'] = true;
     return initial;
  };
 const CSV_QUEST_NAME_HEADER_LINE_INDEX = 1;
@@ -216,74 +218,78 @@ export default function FavorTrackerPage() {
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
 
   const savePreferences = useCallback((updatedPrefs: Partial<CharacterFavorTrackerPreferences>) => {
-     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
+     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-        localStorage.setItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`, JSON.stringify({
-        ...(JSON.parse(localStorage.getItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`) || '{}')),
-        ...updatedPrefs,
-        }));
-    } catch (error) { console.error("Failed to save preferences:", error); toast({ title: "Error Saving Preferences", variant: "destructive" }); }
-  }, [characterId, isDataLoaded, currentUser, toast]);
+        const fullPrefs = {
+          ...(character.preferences?.favorTracker || {}),
+          ...updatedPrefs,
+        };
+        // Save to local storage for immediate UI feedback
+        localStorage.setItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`, JSON.stringify(fullPrefs));
+        
+        // Save to server
+        const newCharacterData = { ...character, preferences: { ...(character.preferences || {}), favorTracker: fullPrefs }};
+        updateCharacter(newCharacterData); // This function will handle debouncing/batching if necessary
 
- useEffect(() => {
-    if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser) {
+    } catch (error) { console.error("Failed to save preferences:", error); toast({ title: "Error Saving Preferences", variant: "destructive" }); }
+  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, toast]);
+
+  // Effect to load preferences from local storage or server
+  useEffect(() => {
+    if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
       try {
-        const storedPrefs = localStorage.getItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`);
-        if (storedPrefs) {
-          const prefs = JSON.parse(storedPrefs) as CharacterFavorTrackerPreferences;
-          if (prefs.durationAdjustments) {
+        const localPrefsString = localStorage.getItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`);
+        const serverPrefs = character.preferences?.favorTracker;
+        const prefsToUse = localPrefsString ? JSON.parse(localPrefsString) : serverPrefs;
+
+        if (prefsToUse) {
+          if (prefsToUse.durationAdjustments) {
             const mergedAdjustments = { ...durationAdjustmentDefaults };
-            for (const cat of DURATION_CATEGORIES) { if (prefs.durationAdjustments[cat] !== undefined && typeof prefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefs.durationAdjustments[cat]; }
+            for (const cat of DURATION_CATEGORIES) { if (prefsToUse.durationAdjustments[cat] !== undefined && typeof prefsToUse.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefsToUse.durationAdjustments[cat]; }
             setDurationAdjustments(mergedAdjustments);
           }
-          if (typeof prefs.showCompletedQuestsWithZeroRemainingFavor === 'boolean') setShowCompletedQuestsWithZeroRemainingFavor(prefs.showCompletedQuestsWithZeroRemainingFavor);
-          else if (typeof (prefs as any).showCompleted === 'boolean') setShowCompletedQuestsWithZeroRemainingFavor((prefs as any).showCompleted);
-
-          if (typeof prefs.onCormyr === 'boolean') setOnCormyr(prefs.onCormyr);
-          if (typeof prefs.showRaids === 'boolean') setShowRaids(prefs.showRaids);
-
-          if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) {
-            setClickAction(prefs.clickAction);
-          }
-
-          if (prefs.sortConfig) {
-            setSortConfig(prefs.sortConfig);
-          }
-
+          if (typeof prefsToUse.showCompletedQuestsWithZeroRemainingFavor === 'boolean') setShowCompletedQuestsWithZeroRemainingFavor(prefsToUse.showCompletedQuestsWithZeroRemainingFavor);
+          if (typeof prefsToUse.onCormyr === 'boolean') setOnCormyr(prefsToUse.onCormyr);
+          if (typeof prefsToUse.showRaids === 'boolean') setShowRaids(prefsToUse.showRaids);
+          if (prefsToUse.clickAction && ['none', 'wiki', 'map'].includes(prefsToUse.clickAction)) setClickAction(prefsToUse.clickAction);
+          if (prefsToUse.sortConfig) setSortConfig(prefsToUse.sortConfig);
+          
           const defaultVis = getDefaultColumnVisibility();
           const mergedVisibility: Record<SortableColumnKey | string, boolean> = {} as any;
-          allTableHeaders.forEach(header => { mergedVisibility[header.key] = popoverColumnVisibility[header.key] ?? prefs.columnVisibility?.[header.key] ?? defaultVis[header.key]; });
+          allTableHeaders.forEach(header => { mergedVisibility[header.key] = prefsToUse.columnVisibility?.[header.key] ?? defaultVis[header.key]; });
           setColumnVisibility(mergedVisibility);
         } else {
-          savePreferences({ 
-              columnVisibility: getDefaultColumnVisibility(), 
-              durationAdjustments: durationAdjustmentDefaults, 
-              showCompletedQuestsWithZeroRemainingFavor: false, 
-              onCormyr: false, 
-              showRaids: false, 
-              clickAction: 'none',
-              sortConfig: { key: 'name', direction: 'ascending' }
-            });
+            // No local or server prefs, use defaults
+            setColumnVisibility(getDefaultColumnVisibility());
+            setDurationAdjustments(durationAdjustmentDefaults);
+            setShowCompletedQuestsWithZeroRemainingFavor(false);
+            setOnCormyr(false);
+            setShowRaids(false);
+            setClickAction('none');
+            setSortConfig({ key: 'name', direction: 'ascending' });
         }
-      } catch (error) { console.error("Error loading preferences:", error); }
+      } catch (error) { 
+          console.error("Error loading preferences:", error); 
+          // Reset to defaults on error
+          setColumnVisibility(getDefaultColumnVisibility());
+      }
     }
-  }, [characterId, isDataLoaded, currentUser, savePreferences]);
+  }, [characterId, isDataLoaded, currentUser, character]);
 
-
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ durationAdjustments }); }, [durationAdjustments, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showCompletedQuestsWithZeroRemainingFavor }); }, [showCompletedQuestsWithZeroRemainingFavor, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => {
-    if (isDataLoaded && characterId && currentUser && sortConfig !== null) {
-      savePreferences({ sortConfig });
-    }
-  }, [sortConfig, savePreferences, isDataLoaded, characterId, currentUser]);
-
-
+  // Effects to save individual preference changes
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ durationAdjustments }); }, [durationAdjustments, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ showCompletedQuestsWithZeroRemainingFavor }); }, [showCompletedQuestsWithZeroRemainingFavor, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, character]);
+  
   const handlePopoverColumnVisibilityChange = (key: SortableColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
-  const handleApplyColumnSettings = () => { setColumnVisibility(popoverColumnVisibility); savePreferences({ columnVisibility: popoverColumnVisibility }); setIsSettingsPopoverOpen(false); };
+  const handleApplyColumnSettings = () => { 
+    setColumnVisibility(popoverColumnVisibility); 
+    savePreferences({ columnVisibility: popoverColumnVisibility });
+    setIsSettingsPopoverOpen(false); 
+  };
   const handleCancelColumnSettings = () => setIsSettingsPopoverOpen(false);
   const handleResetColumnSettingsToDefault = () => { setPopoverColumnVisibility(getDefaultColumnVisibility()); };
   const handleSettingsPopoverOpenChange = (open: boolean) => { if (open) setPopoverColumnVisibility(columnVisibility); setIsSettingsPopoverOpen(open); };

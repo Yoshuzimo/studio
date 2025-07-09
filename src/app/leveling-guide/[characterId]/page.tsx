@@ -183,17 +183,27 @@ export default function LevelingGuidePage() {
   }, [authIsLoading, currentUser, router]);
 
   const savePreferences = useCallback((updatedPrefs: Partial<LevelingGuidePreferences>) => {
-    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
-    try { localStorage.setItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`, JSON.stringify({ ...(JSON.parse(localStorage.getItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`) || '{}')), ...updatedPrefs })); }
-    catch (error) { console.error("Failed to save quest guide preferences:", error); toast({ title: "Error Saving View Settings", variant: "destructive" }); }
-  }, [characterId, isDataLoaded, currentUser, toast]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
+    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-        const storedGuidePrefs = localStorage.getItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`);
-         if (storedGuidePrefs) {
-            const prefs = JSON.parse(storedGuidePrefs) as LevelingGuidePreferences;
+        const fullPrefs = {
+          ...(character.preferences?.levelingGuide || {}),
+          ...updatedPrefs,
+        };
+        localStorage.setItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`, JSON.stringify(fullPrefs));
+        const newCharacterData = { ...character, preferences: { ...(character.preferences || {}), levelingGuide: fullPrefs }};
+        updateCharacter(newCharacterData);
+    } catch (error) { console.error("Failed to save leveling guide preferences:", error); toast({ title: "Error Saving Preferences", variant: "destructive" }); }
+  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, toast]);
+
+  // Load preferences
+  useEffect(() => {
+    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
+    try {
+        const localPrefsString = localStorage.getItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`);
+        const serverPrefs = character.preferences?.levelingGuide;
+        const prefs = localPrefsString ? JSON.parse(localPrefsString) : serverPrefs;
+
+         if (prefs) {
             if (prefs.durationAdjustments) {
               const mergedAdjustments = { ...durationAdjustmentDefaults };
               for (const cat of DURATION_CATEGORIES) { if (prefs.durationAdjustments[cat] !== undefined && typeof prefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefs.durationAdjustments[cat]; }
@@ -209,24 +219,22 @@ export default function LevelingGuidePage() {
             allTableHeaders.forEach(header => { mergedVisibility[header.key as SortableLevelingGuideColumnKey] = prefs.columnVisibility?.[header.key as SortableLevelingGuideColumnKey] ?? defaultVis[header.key as SortableLevelingGuideColumnKey]; });
             setColumnVisibility(mergedVisibility);
         } else {
-            savePreferences({
-                columnVisibility: getDefaultColumnVisibility(),
-                clickAction: 'none',
-                durationAdjustments: durationAdjustmentDefaults,
-                onCormyr: false,
-                showRaids: false,
-                sortConfig: { key: 'experienceScore', direction: 'descending' }
-            });
+            setColumnVisibility(getDefaultColumnVisibility());
+            setDurationAdjustments(durationAdjustmentDefaults);
+            setOnCormyr(false);
+            setShowRaids(false);
+            setClickAction('none');
+            setSortConfig({ key: 'experienceScore', direction: 'descending' });
         }
     } catch (error) { console.error("Error loading quest guide preferences:", error); }
-  }, [characterId, isDataLoaded, currentUser, savePreferences]);
+  }, [characterId, isDataLoaded, currentUser, character]);
 
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ durationAdjustments }); }, [durationAdjustments, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser && sortConfig) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ durationAdjustments }); }, [durationAdjustments, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character && sortConfig) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, character]);
 
 
   const handlePopoverColumnVisibilityChange = (key: SortableLevelingGuideColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));

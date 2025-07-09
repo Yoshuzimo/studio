@@ -152,24 +152,29 @@ export default function ReaperRewardsPage() {
   }, [authIsLoading, currentUser, router]);
 
   const savePreferences = useCallback((updatedPrefs: Partial<ReaperRewardsPreferences>) => {
-    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
+    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-      localStorage.setItem(`ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`, JSON.stringify({
-        ...(JSON.parse(localStorage.getItem(`ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`) || '{}')),
+      const fullPrefs = {
+        ...(character.preferences?.reaperRewards || {}),
         ...updatedPrefs,
-      }));
+      };
+      localStorage.setItem(`ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`, JSON.stringify(fullPrefs));
+      const newCharacterData = { ...character, preferences: { ...(character.preferences || {}), reaperRewards: fullPrefs }};
+      updateCharacter(newCharacterData);
     } catch (error) {
       console.error("Failed to save preferences:", error);
       toast({ title: "Error Saving Preferences", variant: "destructive" });
     }
-  }, [characterId, isDataLoaded, currentUser, toast]);
+  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, toast]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser) {
+    if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
       try {
-        const storedPrefs = localStorage.getItem(`ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`);
-        if (storedPrefs) {
-          const prefs = JSON.parse(storedPrefs) as ReaperRewardsPreferences;
+        const localPrefsString = localStorage.getItem(`ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`);
+        const serverPrefs = character.preferences?.reaperRewards;
+        const prefs = localPrefsString ? JSON.parse(localPrefsString) : serverPrefs;
+
+        if (prefs) {
           if (typeof prefs.onCormyr === 'boolean') setOnCormyr(prefs.onCormyr);
           if (typeof prefs.showRaids === 'boolean') setShowRaids(prefs.showRaids);
           if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) { setClickAction(prefs.clickAction); }
@@ -183,20 +188,23 @@ export default function ReaperRewardsPage() {
           setColumnVisibility(mergedVisibility);
         } else {
           setColumnVisibility(getDefaultColumnVisibility());
-          savePreferences({ columnVisibility: getDefaultColumnVisibility(), onCormyr: false, showRaids: false, clickAction: 'none', sortConfig: {key: 'level', direction: 'ascending'} });
+          setOnCormyr(false);
+          setShowRaids(false);
+          setClickAction('none');
+          setSortConfig({key: 'level', direction: 'ascending'});
         }
       } catch (error) {
         console.error("Error loading preferences:", error);
         setColumnVisibility(getDefaultColumnVisibility());
       }
     }
-  }, [characterId, isDataLoaded, currentUser, savePreferences]);
+  }, [characterId, isDataLoaded, currentUser, character]);
 
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser && sortConfig) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, character]);
+  useEffect(() => { if (isDataLoaded && character && sortConfig) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, character]);
 
   const handlePopoverColumnVisibilityChange = (key: string, checked: boolean) => {
     setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
