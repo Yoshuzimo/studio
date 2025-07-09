@@ -4,7 +4,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; 
+import { usePathname } from 'next/navigation'; 
 import {
   SidebarProvider,
   Sidebar,
@@ -17,17 +17,29 @@ import {
   SidebarFooter,
   SidebarInset,
 } from '@/components/ui/sidebar';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuPortal,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/toaster';
-import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, Mail, LogOut, MailCheck, Loader2, UserCog, Book } from 'lucide-react';
+import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, Mail, LogOut, MailCheck, Loader2, UserCog, Book, ListOrdered, BarChartHorizontalBig, Skull } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
 import * as React from 'react'; 
 import { useAuth } from '@/context/auth-context'; 
+import { useAppData } from '@/context/app-data-context';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { cn } from '@/lib/utils';
 
 const navItemsBase = [
-  { href: '/', label: 'Characters', icon: Users, protected: true },
   { href: '/adventure-packs', label: 'Adventure Packs', icon: Package, protected: true },
   { href: '/messages', label: 'Messages', icon: Mail, protected: true },
   { href: '/account/change-email', label: 'Change Email', icon: UserCog, protected: true },
@@ -62,7 +74,7 @@ function ThemeToggle() {
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { currentUser, userData, logout, isLoading: authIsLoading, sendVerificationEmail } = useAuth(); 
-  const router = useRouter();
+  const { characters } = useAppData();
   const [isSendingVerification, setIsSendingVerification] = React.useState(false);
 
   const getVisibleNavItems = () => {
@@ -74,6 +86,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
   
   const visibleNavItems = getVisibleNavItems();
+  const sortedCharacters = React.useMemo(() => [...characters].sort((a, b) => a.name.localeCompare(b.name)), [characters]);
+
 
   if (authIsLoading) {
      return (
@@ -119,13 +133,52 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <SidebarContent className="p-2">
           <SidebarMenu>
+            <SidebarMenuItem>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                            variant="ghost"
+                            className="w-full justify-start"
+                            isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
+                            tooltip="Characters"
+                        >
+                            <Users className="h-5 w-5" />
+                            <span>Characters</span>
+                        </SidebarMenuButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="right" align="start" sideOffset={12} className="w-56">
+                        <DropdownMenuItem asChild>
+                            <Link href="/"><Users className="mr-2 h-4 w-4" />All Characters</Link>
+                        </DropdownMenuItem>
+                         {sortedCharacters.length > 0 && <DropdownMenuGroup>
+                            {sortedCharacters.map((char) => (
+                                <DropdownMenuSub key={char.id}>
+                                    <DropdownMenuSubTrigger>
+                                        <Avatar className="mr-2 h-5 w-5">
+                                            <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
+                                            <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
+                                        </Avatar>
+                                        <span>{char.name}</span>
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuPortal>
+                                        <DropdownMenuSubContent>
+                                            <DropdownMenuItem asChild><Link href={`/favor-tracker/${char.id}`}><ListOrdered className="mr-2 h-4 w-4" />Favor Tracker</Link></DropdownMenuItem>
+                                            <DropdownMenuItem asChild><Link href={`/leveling-guide/${char.id}`}><BarChartHorizontalBig className="mr-2 h-4 w-4" />Leveling Guide</Link></DropdownMenuItem>
+                                            <DropdownMenuItem asChild><Link href={`/reaper-rewards/${char.id}`}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Link></DropdownMenuItem>
+                                        </DropdownMenuSubContent>
+                                    </DropdownMenuPortal>
+                                </DropdownMenuSub>
+                            ))}
+                        </DropdownMenuGroup>}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </SidebarMenuItem>
             {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href}>
                   <SidebarMenuButton
                     isActive={
                         pathname === item.href || 
-                        (item.href === "/" && (pathname.startsWith("/favor-tracker") || pathname.startsWith("/quest-guide") || pathname.startsWith("/reaper-rewards") || pathname.startsWith("/leveling-guide"))) ||
                         (item.href === "/account/change-email" && isAccountPage)
                     }
                     tooltip={{ children: item.label, className: "group-data-[collapsible=icon]:visible" }}
@@ -160,7 +213,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1">
                 <h1 className="font-headline text-lg font-semibold">
-                {visibleNavItems.find(item => item.href === "/account/change-email" && isAccountPage ? true : pathname === item.href || pathname.startsWith(item.href + '/'))?.label || 'DDO Toolkit'}
+                {visibleNavItems.find(item => item.href === "/account/change-email" && isAccountPage ? true : pathname === item.href || pathname.startsWith(item.href + '/'))?.label || 'Characters'}
                 </h1>
             </div>
             <div className="flex items-center gap-2">

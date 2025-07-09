@@ -578,13 +578,20 @@ const SidebarMenuButton = React.forwardRef<
       }
     }
 
+    // This is a special case where we want to disable the tooltip if the parent is a dropdown trigger
+    // and the sidebar is not collapsed.
+    const isInsideDropdown =
+      (ref as React.RefObject<HTMLButtonElement>)?.current?.closest(
+        "[data-slot=dropdown-trigger]"
+      ) ?? false
+
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
         <TooltipContent
           side="right"
           align="center"
-          hidden={state !== "collapsed" || isMobile}
+          hidden={isInsideDropdown || state !== "collapsed" || isMobile}
           {...tooltip}
         />
       </Tooltip>
