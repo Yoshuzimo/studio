@@ -72,20 +72,34 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [isSendingVerification, setIsSendingVerification] = React.useState(false);
   
   const [openAccordion, setOpenAccordion] = React.useState<string | undefined>(undefined);
-  let hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const subMenuTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  const handleMouseEnter = (value: string) => {
+  const handleMenuEnter = (value: string) => {
     if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = null;
     }
     setOpenAccordion(value);
   };
-  const handleMouseLeave = () => {
+  const handleMenuLeave = () => {
     hoverTimeoutRef.current = setTimeout(() => {
       setOpenAccordion(undefined);
-    }, 200); // A small delay to prevent closing when moving between items
+    }, 200); 
   };
+  
+  const handleSubMenuEnter = (value: string) => {
+    if (subMenuTimeoutRef.current) clearTimeout(subMenuTimeoutRef.current);
+    setOpenAccordion(value);
+  }
+
+  const handleSubMenuLeave = () => {
+     subMenuTimeoutRef.current = setTimeout(() => {
+        if(openAccordion && !openAccordion.startsWith("char-")) {
+            setOpenAccordion("characters");
+        }
+    }, 200);
+  }
 
   const getVisibleNavItems = () => {
     let items = [...navItemsBase];
@@ -143,62 +157,59 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent className="p-2">
             <SidebarMenu>
                  <Accordion type="single" collapsible value={openAccordion} onValueChange={setOpenAccordion} className="w-full space-y-1">
-                    <SidebarMenuItem
-                        onMouseEnter={() => handleMouseEnter('characters')}
-                        onMouseLeave={handleMouseLeave}
-                    >
-                        <AccordionItem value="characters" className="border-b-0">
-                            <AccordionTrigger className="p-0 hover:no-underline [&>svg]:hidden">
-                               <SidebarMenuButton
-                                  variant="ghost"
-                                  className="w-full justify-between"
-                                  isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
-                                  tooltip="Characters"
-                                  asChild
-                                >
-                                  <Link href="/" className="flex items-center gap-2 w-full">
-                                    <Users className="h-5 w-5" />
-                                    <span>Characters</span>
-                                    <div className="grow" /> {/* Spacer */}
-                                    <div className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                  </Link>
-                                </SidebarMenuButton>
-                            </AccordionTrigger>
-                            <AccordionContent className="py-1 pl-4 group-data-[collapsible=icon]:hidden">
-                                 <Accordion type="single" collapsible className="w-full space-y-1" value={openAccordion}>
-                                     {sortedCharacters.map(char => (
-                                         <SidebarMenuItem
-                                            key={char.id}
-                                            onMouseEnter={() => handleMouseEnter(char.id)}
-                                            onMouseLeave={handleMouseLeave}
-                                          >
-                                            <AccordionItem value={char.id} className="border-b-0">
-                                                <AccordionTrigger className="p-0 hover:no-underline [&>svg]:hidden">
-                                                    <SidebarMenuButton variant="ghost" className="w-full justify-between h-8">
-                                                        <div className="flex items-center gap-2">
-                                                            <Avatar className="h-5 w-5">
-                                                                <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
-                                                                <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
-                                                            </Avatar>
-                                                            <span className="text-sm">{char.name}</span>
-                                                        </div>
-                                                        <div className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                                    </SidebarMenuButton>
-                                                </AccordionTrigger>
-                                                <AccordionContent className="py-1 pl-6">
-                                                     <div className="flex flex-col space-y-1">
-                                                        <Link href={`/favor-tracker/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><ListOrdered className="mr-2 h-4 w-4"/>Favor Tracker</SidebarMenuButton></Link>
-                                                        <Link href={`/leveling-guide/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><BarChartHorizontalBig className="mr-2 h-4 w-4"/>Leveling Guide</SidebarMenuButton></Link>
-                                                        <Link href={`/reaper-rewards/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><Skull className="mr-2 h-4 w-4"/>Reaper Rewards</SidebarMenuButton></Link>
-                                                     </div>
-                                                </AccordionContent>
-                                            </AccordionItem>
-                                         </SidebarMenuItem>
-                                     ))}
-                                </Accordion>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </SidebarMenuItem>
+                    <div onMouseEnter={() => handleMenuEnter('characters')} onMouseLeave={handleMenuLeave}>
+                        <SidebarMenuItem>
+                            <AccordionItem value="characters" className="border-b-0">
+                                <AccordionTrigger className="p-0 hover:no-underline [&>svg]:hidden">
+                                   <Link href="/" className="w-full">
+                                      <SidebarMenuButton
+                                        variant="ghost"
+                                        className="w-full justify-between"
+                                        isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
+                                        tooltip="Characters"
+                                      >
+                                        <div className="flex items-center gap-2 w-full">
+                                          <Users className="h-5 w-5" />
+                                          <span>Characters</span>
+                                        </div>
+                                      </SidebarMenuButton>
+                                    </Link>
+                                </AccordionTrigger>
+                                <AccordionContent className="py-1 pl-4 group-data-[collapsible=icon]:hidden">
+                                     <Accordion type="single" collapsible className="w-full space-y-1" value={openAccordion}>
+                                         {sortedCharacters.map(char => (
+                                             <div key={char.id} onMouseEnter={() => handleSubMenuEnter(`char-${char.id}`)} onMouseLeave={handleSubMenuLeave}>
+                                                <SidebarMenuItem>
+                                                    <AccordionItem value={`char-${char.id}`} className="border-b-0">
+                                                        <AccordionTrigger className="p-0 hover:no-underline [&>svg]:hidden">
+                                                            <Link href={`/favor-tracker/${char.id}`} className="w-full">
+                                                                <SidebarMenuButton variant="ghost" className="w-full justify-between h-8">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Avatar className="h-5 w-5">
+                                                                            <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
+                                                                            <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
+                                                                        </Avatar>
+                                                                        <span className="text-sm">{char.name}</span>
+                                                                    </div>
+                                                                </SidebarMenuButton>
+                                                            </Link>
+                                                        </AccordionTrigger>
+                                                        <AccordionContent className="py-1 pl-6">
+                                                             <div className="flex flex-col space-y-1">
+                                                                <Link href={`/favor-tracker/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><ListOrdered className="mr-2 h-4 w-4"/>Favor Tracker</SidebarMenuButton></Link>
+                                                                <Link href={`/leveling-guide/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><BarChartHorizontalBig className="mr-2 h-4 w-4"/>Leveling Guide</SidebarMenuButton></Link>
+                                                                <Link href={`/reaper-rewards/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><Skull className="mr-2 h-4 w-4"/>Reaper Rewards</SidebarMenuButton></Link>
+                                                             </div>
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                 </SidebarMenuItem>
+                                             </div>
+                                         ))}
+                                    </Accordion>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </SidebarMenuItem>
+                    </div>
                 </Accordion>
                  {visibleNavItems.map((item) => (
                       <SidebarMenuItem key={item.label}>
