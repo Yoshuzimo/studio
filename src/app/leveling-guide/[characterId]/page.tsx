@@ -40,18 +40,18 @@ const getPrimaryLocation = (location?: string | null): string | null => {
 
 const getSortableName = (name: string): string => name.toLowerCase().replace(/^the\s+/i, '');
 
-const allTableHeaders: { key: SortableLevelingGuideColumnKey | string; label: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
-    { key: 'name', label: 'Quest Name', className: "w-[250px] whitespace-nowrap", isSortable: true },
-    { key: 'level', label: 'LVL', className: "text-center w-[80px]", isSortable: true },
-    { key: 'adventurePackName', label: 'Adventure Pack', icon: Package, className: "w-[200px] whitespace-nowrap", isSortable: true },
-    { key: 'location', label: 'Location', icon: MapPin, className: "w-[180px] whitespace-nowrap", isSortable: true },
-    { key: 'questGiver', label: 'Quest Giver', icon: UserSquare, className: "w-[180px] whitespace-nowrap", isSortable: true },
-    { key: 'adjustedCasualExp', label: 'C/S', icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
-    { key: 'adjustedNormalExp', label: 'N', icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
-    { key: 'adjustedHardExp', label: 'H', icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
-    { key: 'adjustedEliteExp', label: 'E', icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
-    { key: 'maxExp', label: 'Max EXP', icon: BarChartHorizontalBig, className: "text-center w-[120px]", isSortable: true },
-    { key: 'experienceScore', label: 'Score', icon: Activity, className: "text-center w-[120px]", isSortable: true },
+const allTableHeaders: { key: SortableLevelingGuideColumnKey | string; label: string; tooltip: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
+    { key: 'name', label: 'Quest Name', tooltip: "The name of the quest.", className: "w-[250px] whitespace-nowrap", isSortable: true },
+    { key: 'level', label: 'LVL', tooltip: "The base level of the quest.", className: "text-center w-[80px]", isSortable: true },
+    { key: 'adventurePackName', label: 'Adventure Pack', tooltip: "The Adventure Pack this quest belongs to.", icon: Package, className: "w-[200px] whitespace-nowrap", isSortable: true },
+    { key: 'location', label: 'Location', tooltip: "The in-game location where this quest is found.", icon: MapPin, className: "w-[180px] whitespace-nowrap", isSortable: true },
+    { key: 'questGiver', label: 'Quest Giver', tooltip: "The NPC who gives the quest.", icon: UserSquare, className: "w-[180px] whitespace-nowrap", isSortable: true },
+    { key: 'adjustedCasualExp', label: 'C/S', tooltip: "Calculated EXP for Casual/Solo difficulty, including over-level penalties.", icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
+    { key: 'adjustedNormalExp', label: 'N', tooltip: "Calculated EXP for Normal difficulty, including over-level penalties.", icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
+    { key: 'adjustedHardExp', label: 'H', tooltip: "Calculated EXP for Hard difficulty, including over-level penalties.", icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
+    { key: 'adjustedEliteExp', label: 'E', tooltip: "Calculated EXP for Elite difficulty, including over-level penalties.", icon: BarChartHorizontalBig, className: "text-center w-[100px]", isSortable: false, isDifficulty: true },
+    { key: 'maxExp', label: 'Max EXP', tooltip: "The highest possible experience from any single difficulty for your character's level.", icon: BarChartHorizontalBig, className: "text-center w-[120px]", isSortable: true },
+    { key: 'experienceScore', label: 'Score', tooltip: "Max EXP adjusted by quest duration. A higher score suggests a more efficient quest for EXP gain.", icon: Activity, className: "text-center w-[120px]", isSortable: true },
 ];
 const difficultyColumnKeys: (keyof Quest | 'adjustedCasualExp' | 'adjustedNormalExp' | 'adjustedHardExp' | 'adjustedEliteExp')[] = ['adjustedCasualExp', 'adjustedNormalExp', 'adjustedHardExp', 'adjustedEliteExp'];
 
@@ -552,16 +552,25 @@ export default function LevelingGuidePage() {
                     <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
-                        <Button
-                            variant="ghost"
-                            onClick={() => header.isSortable && requestSort(header.key as SortableLevelingGuideColumnKey)}
-                            className="p-0 h-auto hover:bg-transparent"
-                            disabled={pageOverallLoading || !header.isSortable}
-                        >
-                            {header.icon && <header.icon className="mr-1.5 h-4 w-4" />}
-                            {header.label}
-                            {header.isSortable && getSortIndicator(header.key as SortableLevelingGuideColumnKey)}
-                        </Button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => header.isSortable && requestSort(header.key as SortableLevelingGuideColumnKey)}
+                                    className="p-0 h-auto hover:bg-transparent"
+                                    disabled={pageOverallLoading || !header.isSortable}
+                                >
+                                    {header.icon && <header.icon className="mr-1.5 h-4 w-4" />}
+                                    {header.label}
+                                    {header.isSortable && getSortIndicator(header.key as SortableLevelingGuideColumnKey)}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{header.tooltip}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </TableHead>
                     ))}
                     </TableRow>

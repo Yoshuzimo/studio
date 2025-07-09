@@ -71,18 +71,19 @@ function getDurationCategory(durationInput?: string | null): DurationCategory | 
   return "Very Long";
 }
 
-const tableHeaders: { key: SortableReaperColumnKey | string; label: string; icon?: React.ElementType, className?: string, isSortable?: boolean }[] = [
-    { key: 'name', label: 'Quest Name', className: "w-[250px] whitespace-nowrap", isSortable: true },
-    { key: 'level', label: 'LVL', className: "text-center w-[80px]", isSortable: true },
-    { key: 'adventurePackName', label: 'Adventure Pack', icon: Package, className: "w-[200px] whitespace-nowrap", isSortable: true },
-    { key: 'location', label: 'Location', icon: MapPin, className: "w-[180px] whitespace-nowrap", isSortable: true },
-    { key: 'questGiver', label: 'Quest Giver', icon: UserSquare, className: "w-[180px] whitespace-nowrap", isSortable: true },
-    { key: 'maxRXP', label: 'Max RXP', icon: Skull, className: "text-center w-[120px]", isSortable: true },
+const tableHeaders: { key: SortableReaperColumnKey | string; label: string; tooltip: string; icon?: React.ElementType, className?: string, isSortable?: boolean }[] = [
+    { key: 'name', label: 'Quest Name', tooltip: "The name of the quest.", className: "w-[250px] whitespace-nowrap", isSortable: true },
+    { key: 'level', label: 'LVL', tooltip: "The base level of the quest.", className: "text-center w-[80px]", isSortable: true },
+    { key: 'adventurePackName', label: 'Adventure Pack', tooltip: "The Adventure Pack this quest belongs to.", icon: Package, className: "w-[200px] whitespace-nowrap", isSortable: true },
+    { key: 'location', label: 'Location', tooltip: "The in-game location where this quest is found.", icon: MapPin, className: "w-[180px] whitespace-nowrap", isSortable: true },
+    { key: 'questGiver', label: 'Quest Giver', tooltip: "The NPC who gives the quest.", icon: UserSquare, className: "w-[180px] whitespace-nowrap", isSortable: true },
+    { key: 'maxRXP', label: 'Max RXP', tooltip: "The maximum Reaper Experience (RXP) obtainable from this quest (at 10 skulls), adjusted for quest length.", icon: Skull, className: "text-center w-[120px]", isSortable: true },
 ];
 
 const skullColumns = Array.from({ length: 10 }, (_, i) => ({
   key: `skull-${i + 1}`,
-  label: `${i + 1} Skull`,
+  label: `${i + 1}`,
+  tooltip: `Estimated Reaper Experience (RXP) for completing this quest on ${i + 1} skull(s).`,
   className: "text-center w-[100px]",
   isSortable: true,
 }));
@@ -511,11 +512,20 @@ export default function ReaperRewardsPage() {
                   <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map(header => (
                       <TableHead key={header.key} className={cn(header.className)}>
-                        <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableReaperColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>
-                          {header.icon && <header.icon className="mr-1.5 h-4 w-4" />}
-                          {header.label}
-                          {header.isSortable && getSortIndicator(header.key as SortableReaperColumnKey)}
-                        </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableReaperColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>
+                                {header.icon ? <header.icon className="mr-1.5 h-4 w-4" /> : header.key.startsWith('skull-') ? <Skull className="mr-1.5 h-4 w-4" /> : null}
+                                {header.label}
+                                {header.isSortable && getSortIndicator(header.key as SortableReaperColumnKey)}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{header.tooltip}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableHead>
                     ))}
                   </TableRow>

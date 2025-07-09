@@ -112,25 +112,25 @@ function getDurationCategory(durationInput?: string | null): DurationCategory | 
   if (minutes <= 10) return "Very Short"; if (minutes <= 20) return "Short"; if (minutes <= 30) return "Medium"; if (minutes <= 45) return "Long"; return "Very Long";
 }
 
-const allTableHeaders: { key: SortableColumnKey | string; label: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
-    { key: 'name', label: 'Quest Name', className: "w-[200px] whitespace-nowrap", isSortable: true },
-    { key: 'level', label: 'LVL', className: "text-center", isSortable: true },
-    { key: 'adventurePackName', label: 'Adventure Pack', icon: Package, className: "whitespace-nowrap", isSortable: true },
-    { key: 'location', label: 'Location', icon: MapPin, className: "whitespace-nowrap", isSortable: true },
-    { key: 'duration', label: 'Length', icon: Timer, className: "whitespace-nowrap text-center", isSortable: true },
-    { key: 'questGiver', label: 'Quest Giver', icon: UserSquare, className: "whitespace-nowrap", isSortable: true },
-    { key: 'maxPotentialFavorSingleQuest', label: 'Max Favor', icon: Maximize, className: "text-center whitespace-nowrap", isSortable: true },
-    { key: 'remainingPossibleFavor', label: 'Favor', icon: Award, className: "text-center whitespace-nowrap", isSortable: true },
-    { key: 'adjustedRemainingFavorScore', label: 'Score', icon: TrendingUp, className: "text-center whitespace-nowrap", isSortable: true },
-    { key: 'areaRemainingFavor', label: 'Area Favor', icon: Layers, className: "text-center whitespace-nowrap", isSortable: true },
-    { key: 'areaAdjustedRemainingFavorScore', label: 'Area Score', icon: Layers, className: "text-center whitespace-nowrap", isSortable: true },
-    ...difficultyLevels.map(diff => ({ key: diff.key, label: diff.label, isDifficulty: true, isSortable: false, className: "text-center whitespace-nowrap" }))
+const allTableHeaders: { key: SortableColumnKey | string; label: string; tooltip: string; icon?: React.ElementType, className?: string, isSortable?: boolean, isDifficulty?: boolean }[] = [
+    { key: 'name', label: 'Quest Name', tooltip: "The name of the quest.", className: "w-[200px] whitespace-nowrap", isSortable: true },
+    { key: 'level', label: 'LVL', tooltip: "The base level of the quest.", className: "text-center", isSortable: true },
+    { key: 'adventurePackName', label: 'Adventure Pack', tooltip: "The Adventure Pack this quest belongs to.", icon: Package, className: "whitespace-nowrap", isSortable: true },
+    { key: 'location', label: 'Location', tooltip: "The in-game location where this quest is found.", icon: MapPin, className: "whitespace-nowrap", isSortable: true },
+    { key: 'duration', label: 'Length', tooltip: "The developer-assigned duration category for the quest. Affects 'Score'.", icon: Timer, className: "whitespace-nowrap text-center", isSortable: true },
+    { key: 'questGiver', label: 'Quest Giver', tooltip: "The NPC who gives the quest.", icon: UserSquare, className: "whitespace-nowrap", isSortable: true },
+    { key: 'maxPotentialFavorSingleQuest', label: 'Max Favor', tooltip: "The maximum possible favor this quest can award, assuming all difficulties are available.", icon: Maximize, className: "text-center whitespace-nowrap", isSortable: true },
+    { key: 'remainingPossibleFavor', label: 'Favor', tooltip: "Remaining possible favor you can earn from this quest.", icon: Award, className: "text-center whitespace-nowrap", isSortable: true },
+    { key: 'adjustedRemainingFavorScore', label: 'Score', tooltip: "Remaining favor adjusted by quest duration. A higher score suggests a more efficient quest for favor gain.", icon: TrendingUp, className: "text-center whitespace-nowrap", isSortable: true },
+    { key: 'areaRemainingFavor', label: 'Area Favor', tooltip: "Total remaining favor from all visible quests in the same primary location.", icon: Layers, className: "text-center whitespace-nowrap", isSortable: true },
+    { key: 'areaAdjustedRemainingFavorScore', label: 'Area Score', tooltip: "Total score from all visible quests in the same primary location.", icon: Layers, className: "text-center whitespace-nowrap", isSortable: true },
+    ...difficultyLevels.map(diff => ({ key: diff.key, label: diff.label, tooltip: `Completion status for ${diff.label} difficulty.`, isDifficulty: true, isSortable: false, className: "text-center whitespace-nowrap" }))
 ];
 
 const getDefaultColumnVisibility = (): Record<SortableColumnKey | string, boolean> => {
     const initial: Record<SortableColumnKey | string, boolean> = {} as any;
      allTableHeaders.forEach(header => {
-        if (['questGiver', 'duration', 'areaRemainingFavor', 'remainingPossibleFavor', 'maxPotentialFavorSingleQuest'].includes(header.key)) {
+        if (['questGiver', 'duration', 'remainingPossibleFavor', 'maxPotentialFavorSingleQuest'].includes(header.key)) {
             initial[header.key] = false;
         }
         else {
@@ -975,9 +975,18 @@ export default function FavorTrackerPage() {
                     <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => (
                         <TableHead key={header.key} className={cn(header.className)}>
-                        <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>
-                            {header.icon && <header.icon className="mr-1.5 h-4 w-4" />} {header.label} {header.isSortable && getSortIndicator(header.key as SortableColumnKey)}
-                        </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" onClick={() => header.isSortable && requestSort(header.key as SortableColumnKey)} className="p-0 h-auto hover:bg-transparent" disabled={pageOverallLoading || !header.isSortable}>
+                                    {header.icon && <header.icon className="mr-1.5 h-4 w-4" />} {header.label} {header.isSortable && getSortIndicator(header.key as SortableColumnKey)}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{header.tooltip}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         </TableHead>
                     ))}
                 </TableRow> </TableHeader>
