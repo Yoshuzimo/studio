@@ -86,6 +86,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
     setOpenAccordion(value);
   };
+  
   const handleMenuLeave = () => {
     hoverTimeoutRef.current = setTimeout(() => {
       setOpenAccordion(undefined);
@@ -93,10 +94,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
   
   const handleSubMenuEnter = (value: string) => {
-    if (subMenuTimeoutRef.current) clearTimeout(subMenuTimeoutRef.current);
-     if (hoverTimeoutRef.current) {
+    if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = null;
+    }
+    if (subMenuTimeoutRef.current) {
+      clearTimeout(subMenuTimeoutRef.current);
+      subMenuTimeoutRef.current = null;
     }
     setOpenAccordion(value);
   }
