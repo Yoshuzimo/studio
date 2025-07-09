@@ -2,7 +2,7 @@
 // src/app/leveling-guide/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest } from '@/types';
@@ -148,11 +148,10 @@ const calculateAdjustedExp = (quest: Quest, char: Character) => {
 };
 
 export default function LevelingGuidePage() {
-  console.log('Leveling Guide page code version: LEVELING-GUIDE-V1');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
-  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
+  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter, refetchCharacter } = useAppData();
   const { toast } = useToast();
 
   const [character, setCharacter] = useState<Character | null>(null);
@@ -182,41 +181,85 @@ export default function LevelingGuidePage() {
     }
   }, [authIsLoading, currentUser, router]);
 
-  const savePreferences = useCallback((updatedPrefs: Partial<LevelingGuidePreferences>) => {
+  const savePreferences = useCallback((newPrefs: Partial<LevelingGuidePreferences>, important: boolean = false) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-        const fullPrefs = {
-          ...(character.preferences?.levelingGuide || {}),
-          ...updatedPrefs,
-        };
-        localStorage.setItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`, JSON.stringify(fullPrefs));
-        const newCharacterData = { ...character, preferences: { ...(character.preferences || {}), levelingGuide: fullPrefs }};
-        updateCharacter(newCharacterData);
-    } catch (error) { console.error("Failed to save leveling guide preferences:", error); toast({ title: "Error Saving Preferences", variant: "destructive" }); }
-  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, toast]);
+      const localKey = `ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`;
+      const existingPrefsString = localStorage.getItem(localKey);
+      const existingPrefs = existingPrefsString ? JSON.parse(existingPrefsString) : {};
+      const fullPrefs = { ...existingPrefs, ...newPrefs };
+      localStorage.setItem(localKey, JSON.stringify(fullPrefs));
+
+      const updatedCharacter: Character = {
+        ...character,
+        preferences: {
+          ...(character.preferences || {}),
+          levelingGuide: {
+            ...(character.preferences?.levelingGuide || {}),
+            ...newPrefs,
+          },
+        },
+      };
+
+      setCharacter(updatedCharacter);
+      updateCharacter(updatedCharacter);
+      
+      if (important) {
+        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
+        const lastRefresh = parseInt(localStorage.getItem(lastRefreshKey) || '0', 10);
+        const oneDay = 24 * 60 * 60 * 1000;
+
+        if (Date.now() - lastRefresh > oneDay) {
+          refetchCharacter(characterId).then(freshCharacter => {
+            if (freshCharacter) {
+              const serverPrefs = freshCharacter.preferences?.levelingGuide || {};
+              localStorage.setItem(localKey, JSON.stringify(serverPrefs));
+              localStorage.setItem(lastRefreshKey, Date.now().toString());
+              window.location.reload(); 
+            }
+          });
+        }
+      }
+    } catch (error) { console.error("Failed to save leveling guide preferences:", error); }
+  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, refetchCharacter]);
 
   // Load preferences
   useEffect(() => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-        const localPrefsString = localStorage.getItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`);
-        const serverPrefs = character.preferences?.levelingGuide;
-        const prefs = localPrefsString ? JSON.parse(localPrefsString) : serverPrefs;
+        const localKey = `ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`;
+        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
+        let localPrefsString = localStorage.getItem(localKey);
 
-         if (prefs) {
+        const loadFromCharacterObject = (charObj: Character) => {
+          const serverPrefs = charObj.preferences?.levelingGuide;
+          if (serverPrefs) {
+            localStorage.setItem(localKey, JSON.stringify(serverPrefs));
+            localStorage.setItem(lastRefreshKey, Date.now().toString());
+            localPrefsString = JSON.stringify(serverPrefs);
+          }
+        };
+
+        if (!localPrefsString) {
+          loadFromCharacterObject(character);
+        }
+
+        const prefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.levelingGuide;
+
+        if (prefs) {
+            const mergedAdjustments = { ...durationAdjustmentDefaults };
             if (prefs.durationAdjustments) {
-              const mergedAdjustments = { ...durationAdjustmentDefaults };
               for (const cat of DURATION_CATEGORIES) { if (prefs.durationAdjustments[cat] !== undefined && typeof prefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefs.durationAdjustments[cat]; }
-              setDurationAdjustments(mergedAdjustments);
             }
-            if (typeof prefs.onCormyr === 'boolean') setOnCormyr(prefs.onCormyr);
-            if (typeof prefs.showRaids === 'boolean') setShowRaids(prefs.showRaids);
-            if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) { setClickAction(prefs.clickAction); }
-            if (prefs.sortConfig) setSortConfig(prefs.sortConfig);
+            setDurationAdjustments(mergedAdjustments);
+            
+            setOnCormyr(prefs.onCormyr ?? false);
+            setShowRaids(prefs.showRaids ?? false);
+            setClickAction(prefs.clickAction ?? 'none');
+            setSortConfig(prefs.sortConfig ?? { key: 'experienceScore', direction: 'descending' });
             
             const defaultVis = getDefaultColumnVisibility();
-            const mergedVisibility: Record<SortableLevelingGuideColumnKey | string, boolean> = {} as any;
-            allTableHeaders.forEach(header => { mergedVisibility[header.key as SortableLevelingGuideColumnKey] = prefs.columnVisibility?.[header.key as SortableLevelingGuideColumnKey] ?? defaultVis[header.key as SortableLevelingGuideColumnKey]; });
+            const mergedVisibility = { ...defaultVis, ...(prefs.columnVisibility || {}) };
             setColumnVisibility(mergedVisibility);
         } else {
             setColumnVisibility(getDefaultColumnVisibility());
@@ -229,22 +272,25 @@ export default function LevelingGuidePage() {
     } catch (error) { console.error("Error loading quest guide preferences:", error); }
   }, [characterId, isDataLoaded, currentUser, character]);
 
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ durationAdjustments }); }, [durationAdjustments, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character && sortConfig) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, character]);
-
+  const handleDurationChange = (newAdjustments: Record<DurationCategory, number>) => {
+    setDurationAdjustments(newAdjustments);
+    savePreferences({ durationAdjustments: newAdjustments }, true);
+  }
 
   const handlePopoverColumnVisibilityChange = (key: SortableLevelingGuideColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
-  const handleApplyColumnSettings = () => { setColumnVisibility(popoverColumnVisibility); setIsSettingsPopoverOpen(false); };
+  const handleApplyColumnSettings = () => { setColumnVisibility(popoverColumnVisibility); savePreferences({ columnVisibility: popoverColumnVisibility }); setIsSettingsPopoverOpen(false); };
   const handleCancelColumnSettings = () => setIsSettingsPopoverOpen(false);
   const handleSettingsPopoverOpenChange = (open: boolean) => { if (open) setPopoverColumnVisibility(columnVisibility); setIsSettingsPopoverOpen(open); };
 
   const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string) => {
     if (!id || !editingCharacter) return;
-    await updateCharacter({ ...editingCharacter, name: data.name, level: data.level, iconUrl });
+    const charToUpdate = characters.find(c => c.id === id);
+    if (!charToUpdate) return;
+
+    await updateCharacter({ ...charToUpdate, name: data.name, level: data.level, iconUrl });
+    const freshChar = await refetchCharacter(id);
+    if (freshChar) setCharacter(freshChar);
+
     setIsEditModalOpen(false);
     setEditingCharacter(null);
   };
@@ -365,7 +411,9 @@ export default function LevelingGuidePage() {
       setSortConfig({ key: 'experienceScore', direction: 'descending' });
       return;
     }
-    setSortConfig({ key, direction });
+    const newSortConfig = { key, direction };
+    setSortConfig(newSortConfig);
+    savePreferences({ sortConfig: newSortConfig });
   };
 
   const getSortIndicator = (columnKey: SortableLevelingGuideColumnKey) => {
@@ -402,11 +450,11 @@ export default function LevelingGuidePage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="on-cormyr-reaper" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} />
-                    <Label htmlFor="on-cormyr-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
+                    <Checkbox id="on-cormyr-guide" checked={onCormyr} onCheckedChange={(checked) => {setOnCormyr(!!checked); savePreferences({ onCormyr: !!checked });}} disabled={pageOverallLoading} />
+                    <Label htmlFor="on-cormyr-guide" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="show-raids-guide" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
+                    <Checkbox id="show-raids-guide" checked={showRaids} onCheckedChange={(checked) => {setShowRaids(!!checked); savePreferences({ showRaids: !!checked });}} disabled={pageOverallLoading} />
                     <Label htmlFor="show-raids-guide" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Include Raids</Label>
                   </div>
                    {userData?.isAdmin && (
@@ -419,7 +467,7 @@ export default function LevelingGuidePage() {
               </div>
               <div className="pt-2 border-t border-border mt-4">
                 <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
-                <RadioGroup value={clickAction} onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')} className="flex items-center space-x-4" disabled={pageOverallLoading}>
+                <RadioGroup value={clickAction} onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}} className="flex items-center space-x-4" disabled={pageOverallLoading}>
                   <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-guide" /><Label htmlFor="action-none-guide" className="font-normal cursor-pointer">None</Label></div>
                   <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-guide" /><Label htmlFor="action-wiki-guide" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
                   <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-guide" /><Label htmlFor="action-map-guide" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
@@ -469,7 +517,7 @@ export default function LevelingGuidePage() {
                                 <div key={category} className="space-y-1">
                                     <Label htmlFor={`guide-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} className="text-xs">{category}</Label>
                                     <Input type="number" id={`guide-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} value={durationAdjustments[category]}
-                                        onChange={(e) => { const val = parseFloat(e.target.value); if(!isNaN(val)) setDurationAdjustments(p => ({...p, [category]: val})); else if (e.target.value === "") setDurationAdjustments(p => ({...p, [category]:0})); }}
+                                        onChange={(e) => { const val = parseFloat(e.target.value); const newAdjs = {...durationAdjustments, [category]: isNaN(val) ? 0 : val}; handleDurationChange(newAdjs); }}
                                         step="0.1" className="h-8 text-sm" disabled={pageOverallLoading} placeholder="e.g. 1.0"/>
                                 </div>
                             ))}

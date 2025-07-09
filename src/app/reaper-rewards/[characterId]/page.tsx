@@ -116,11 +116,10 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 export default function ReaperRewardsPage() {
-  console.log('Reaper Rewards page code version: 2024-07-26-B');
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
-  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
+  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter, refetchCharacter } = useAppData();
   const { toast } = useToast();
 
   const [character, setCharacter] = useState<Character | null>(null);
@@ -151,40 +150,63 @@ export default function ReaperRewardsPage() {
     }
   }, [authIsLoading, currentUser, router]);
 
-  const savePreferences = useCallback((updatedPrefs: Partial<ReaperRewardsPreferences>) => {
+  const savePreferences = useCallback((newPrefs: Partial<ReaperRewardsPreferences>) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-      const fullPrefs = {
-        ...(character.preferences?.reaperRewards || {}),
-        ...updatedPrefs,
+      const localKey = `ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`;
+      const existingPrefsString = localStorage.getItem(localKey);
+      const existingPrefs = existingPrefsString ? JSON.parse(existingPrefsString) : {};
+      const fullPrefs = { ...existingPrefs, ...newPrefs };
+      localStorage.setItem(localKey, JSON.stringify(fullPrefs));
+
+      const updatedCharacter: Character = {
+        ...character,
+        preferences: {
+          ...(character.preferences || {}),
+          reaperRewards: {
+            ...(character.preferences?.reaperRewards || {}),
+            ...newPrefs,
+          },
+        },
       };
-      localStorage.setItem(`ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`, JSON.stringify(fullPrefs));
-      const newCharacterData = { ...character, preferences: { ...(character.preferences || {}), reaperRewards: fullPrefs }};
-      updateCharacter(newCharacterData);
+
+      setCharacter(updatedCharacter);
+      updateCharacter(updatedCharacter);
     } catch (error) {
       console.error("Failed to save preferences:", error);
-      toast({ title: "Error Saving Preferences", variant: "destructive" });
     }
-  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, toast]);
+  }, [characterId, isDataLoaded, currentUser, character, updateCharacter]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
       try {
-        const localPrefsString = localStorage.getItem(`ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`);
-        const serverPrefs = character.preferences?.reaperRewards;
-        const prefs = localPrefsString ? JSON.parse(localPrefsString) : serverPrefs;
+        const localKey = `ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`;
+        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
+        let localPrefsString = localStorage.getItem(localKey);
+        
+        const loadFromCharacterObject = (charObj: Character) => {
+          const serverPrefs = charObj.preferences?.reaperRewards;
+          if (serverPrefs) {
+            localStorage.setItem(localKey, JSON.stringify(serverPrefs));
+            localStorage.setItem(lastRefreshKey, Date.now().toString());
+            localPrefsString = JSON.stringify(serverPrefs);
+          }
+        };
 
+        if (!localPrefsString) {
+          loadFromCharacterObject(character);
+        }
+
+        const prefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.reaperRewards;
+        
         if (prefs) {
-          if (typeof prefs.onCormyr === 'boolean') setOnCormyr(prefs.onCormyr);
-          if (typeof prefs.showRaids === 'boolean') setShowRaids(prefs.showRaids);
-          if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) { setClickAction(prefs.clickAction); }
-          if (prefs.sortConfig) setSortConfig(prefs.sortConfig);
+          setOnCormyr(prefs.onCormyr ?? false);
+          setShowRaids(prefs.showRaids ?? false);
+          setClickAction(prefs.clickAction ?? 'none');
+          setSortConfig(prefs.sortConfig ?? {key: 'level', direction: 'ascending'});
           
           const defaultVis = getDefaultColumnVisibility();
-          const mergedVisibility: Record<string, boolean> = {};
-          allTableHeaders.forEach(header => {
-            mergedVisibility[header.key] = prefs.columnVisibility?.[header.key] ?? defaultVis[header.key];
-          });
+          const mergedVisibility = { ...defaultVis, ...(prefs.columnVisibility || {}) };
           setColumnVisibility(mergedVisibility);
         } else {
           setColumnVisibility(getDefaultColumnVisibility());
@@ -200,17 +222,12 @@ export default function ReaperRewardsPage() {
     }
   }, [characterId, isDataLoaded, currentUser, character]);
 
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character && sortConfig) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, character]);
-
   const handlePopoverColumnVisibilityChange = (key: string, checked: boolean) => {
     setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
   };
   const handleApplyColumnSettings = () => {
     setColumnVisibility(popoverColumnVisibility);
+    savePreferences({ columnVisibility: popoverColumnVisibility });
     setIsSettingsPopoverOpen(false);
   };
   const handleCancelColumnSettings = () => setIsSettingsPopoverOpen(false);
@@ -221,7 +238,13 @@ export default function ReaperRewardsPage() {
 
   const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string) => {
     if (!id || !editingCharacter) return;
-    await updateCharacter({ ...editingCharacter, name: data.name, level: data.level, iconUrl });
+    const charToUpdate = characters.find(c => c.id === id);
+    if (!charToUpdate) return;
+    
+    await updateCharacter({ ...charToUpdate, name: data.name, level: data.level, iconUrl });
+    const freshChar = await refetchCharacter(id);
+    if(freshChar) setCharacter(freshChar);
+    
     setIsEditModalOpen(false);
     setEditingCharacter(null);
   };
@@ -370,7 +393,9 @@ export default function ReaperRewardsPage() {
       setSortConfig(null);
       return;
     }
-    setSortConfig({ key, direction });
+    const newSortConfig = { key, direction };
+    setSortConfig(newSortConfig);
+    savePreferences({ sortConfig: newSortConfig });
   };
   
   const getSortIndicator = (columnKey: SortableReaperColumnKey) => {
@@ -408,11 +433,11 @@ export default function ReaperRewardsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="on-cormyr-reaper" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} />
+                  <Checkbox id="on-cormyr-reaper" checked={onCormyr} onCheckedChange={(checked) => {setOnCormyr(!!checked); savePreferences({ onCormyr: !!checked });}} disabled={pageOverallLoading} />
                   <Label htmlFor="on-cormyr-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="show-raids-reaper" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} />
+                  <Checkbox id="show-raids-reaper" checked={showRaids} onCheckedChange={(checked) => {setShowRaids(!!checked); savePreferences({ showRaids: !!checked });}} disabled={pageOverallLoading} />
                   <Label htmlFor="show-raids-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Include Raids</Label>
                 </div>
                 {userData?.isAdmin && (
@@ -425,7 +450,7 @@ export default function ReaperRewardsPage() {
             </div>
             <div className="pt-2 border-t border-border mt-4">
               <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
-              <RadioGroup value={clickAction} onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')} className="flex items-center space-x-4" disabled={pageOverallLoading}>
+              <RadioGroup value={clickAction} onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}} className="flex items-center space-x-4" disabled={pageOverallLoading}>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-reaper" /><Label htmlFor="action-none-reaper" className="font-normal cursor-pointer">None</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-reaper" /><Label htmlFor="action-wiki-reaper" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-reaper" /><Label htmlFor="action-map-reaper" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>

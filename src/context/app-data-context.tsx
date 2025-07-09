@@ -49,6 +49,8 @@ interface AppDataContextType {
   isDataLoaded: boolean;
   isLoading: boolean;
   isUpdating: boolean;
+  
+  refetchCharacter: (characterId: string) => Promise<Character | null>;
 }
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -103,7 +105,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const initialDataLoadedForUserRef = useRef<string | null>(null);
   const lastKnownOwnedPacksRef = useRef<string | null>(null);
   const characterUpdateDebounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
-
 
   const setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>> = useCallback((valueOrFn) => {
     setOwnedPacksInternal(prevOwnedPacks => {
@@ -175,10 +176,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setQuestsState(loadedQuests);
       console.log(`[AppDataProvider] Loaded ${loadedQuests.length} quests.`);
       
-      // If a character is active, re-fetch their completions as well to keep data in sync.
       if (activeCharacterId) {
         console.log(`[AppDataProvider] Re-fetching completions for active character ${activeCharacterId} after quest list update.`);
-        // This function will handle setting isLoading to false after it completes.
         await fetchQuestCompletionsForCharacter(activeCharacterId);
       }
     } catch (error) {
@@ -186,13 +185,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Quest Load Error", description: "Could not fetch the master quest list. Some features may not work.", variant: 'destructive' });
       setQuestsState([]);
     } finally {
-      // If we didn't refetch completions (no active character), we need to handle the loading state here.
       if (!activeCharacterId) {
         setIsLoading(false);
       }
     }
   }, [toast, activeCharacterId, fetchQuestCompletionsForCharacter]);
-
 
   useEffect(() => {
     const metadataDocRef = doc(db, METADATA_COLLECTION, QUEST_DATA_METADATA_DOC);
@@ -235,7 +232,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const loadInitialData = async () => {
       console.log('[AppDataProvider] loadInitialData started for user:', currentUser?.uid);
       
-      // Fetch quests on initial load regardless of listener
       await fetchQuests();
 
       if (currentUser && initialDataLoadedForUserRef.current !== currentUser.uid) {
@@ -268,7 +264,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               name: data.name,
               level: data.level,
               iconUrl: data.iconUrl || null,
-              preferences: data.preferences || {}, // Load preferences
+              preferences: data.preferences || {},
             } as Character;
           });
           setCharactersState(loadedChars);
@@ -311,7 +307,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         lastKnownOwnedPacksRef.current = JSON.stringify([...new Set(packsToSetInState)].sort());
         if (currentUser) initialDataLoadedForUserRef.current = currentUser.uid; else initialDataLoadedForUserRef.current = null;
         setIsDataLoaded(true);
-        // setIsLoading(false); // fetchQuests handles this now
       }
     };
 
@@ -365,10 +360,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Unauthorized", variant: "destructive" });
       return;
     }
-  
-    // Always update local state immediately for responsiveness.
-    setCharactersState(prev => prev.map(c => c.id === character.id ? character : c));
-  
+    
     // Debounce the Firestore update
     if (characterUpdateDebounceTimers.current.has(character.id)) {
       clearTimeout(characterUpdateDebounceTimers.current.get(character.id));
@@ -378,12 +370,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setIsUpdating(true);
       try {
         const charRef = doc(db, 'characters', character.id);
-        await updateDoc(charRef, {
+        const updatePayload = {
           name: character.name,
           level: character.level,
           iconUrl: character.iconUrl,
-          preferences: character.preferences || {}, // Ensure preferences object exists
-        });
+          preferences: character.preferences || {},
+        };
+        await updateDoc(charRef, updatePayload);
         toast({ title: "Character Updated", description: `${character.name}'s details saved.` });
       } catch (error) {
         toast({ title: "Error Updating Character", description: (error as Error).message, variant: 'destructive' });
@@ -394,6 +387,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }, 1500); // 1.5-second debounce delay
   
     characterUpdateDebounceTimers.current.set(character.id, timer);
+  }, [currentUser, toast]);
+  
+  const refetchCharacter = useCallback(async (characterId: string): Promise<Character | null> => {
+    if (!currentUser) return null;
+    try {
+      const charRef = doc(db, 'characters', characterId);
+      const charSnap = await getDoc(charRef);
+      if (charSnap.exists() && charSnap.data().userId === currentUser.uid) {
+        const characterData = {
+          id: charSnap.id,
+          ...charSnap.data()
+        } as Character;
+        // Update local state
+        setCharactersState(prev => prev.map(c => c.id === characterId ? characterData : c));
+        return characterData;
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to refetch character:", error);
+      toast({ title: "Sync Error", description: "Could not refresh character data from server.", variant: "destructive" });
+      return null;
+    }
   }, [currentUser, toast]);
 
 
@@ -445,12 +460,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       const batch = writeBatch(db);
       
-      // Add/Update new quests
       for (const quest of newQuests) {
         batch.set(doc(questsCollectionRef, quest.id), quest, { merge: true });
       }
 
-      // Delete old quests not in the new list
       existingQuestDocs.forEach(doc => {
         if (!newQuestIds.has(doc.id)) {
           batch.delete(doc.ref);
@@ -463,7 +476,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       await setDoc(metadataDocRef, { lastUpdatedAt: serverTimestamp() }, { merge: true });
       
       toast({ title: 'Quests Updated', description: `Successfully synchronized ${newQuests.length} quests in the database.` });
-      // The onSnapshot listener will handle re-fetching quests automatically.
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       toast({ title: "Quest Update Failed", description: `An error occurred: ${errorMessage}. Check Firestore rules and console for details.`, variant: "destructive" });
@@ -527,7 +539,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setActiveCharacterQuestCompletions(prevMap => {
           const newMap = new Map(prevMap);
           const existingEntry = newMap.get(questId) || { questId };
-          newMap.set(questId, { ...existingEntry, ...updatePayload, lastUpdatedAt: undefined } as UserQuestCompletionData); // lastUpdatedAt set to undefined for local state
+          newMap.set(questId, { ...existingEntry, ...updatePayload, lastUpdatedAt: undefined } as UserQuestCompletionData);
           return newMap;
         });
       }
@@ -629,7 +641,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ownedPacks, setOwnedPacks,
       isDataLoaded,
       isLoading,
-      isUpdating
+      isUpdating,
+      refetchCharacter,
     }}>
       {children}
     </AppDataContext.Provider>

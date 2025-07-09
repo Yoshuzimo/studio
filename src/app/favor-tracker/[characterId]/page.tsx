@@ -1,5 +1,5 @@
 
-// Favor-Tracker-V1
+// Favor-Tracker-V2
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
@@ -183,7 +183,8 @@ export default function FavorTrackerPage() {
     fetchQuestCompletionsForCharacter,
     activeCharacterId,
     isDataLoaded, isLoading: appDataIsLoading,
-    updateCharacter
+    updateCharacter,
+    refetchCharacter,
   } = useAppData();
   const { toast } = useToast();
 
@@ -217,49 +218,91 @@ export default function FavorTrackerPage() {
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
 
-  const savePreferences = useCallback((updatedPrefs: Partial<CharacterFavorTrackerPreferences>) => {
-     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
+  const savePreferences = useCallback((newPrefs: Partial<CharacterFavorTrackerPreferences>, important: boolean = false) => {
+    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-        const fullPrefs = {
-          ...(character.preferences?.favorTracker || {}),
-          ...updatedPrefs,
-        };
-        // Save to local storage for immediate UI feedback
-        localStorage.setItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`, JSON.stringify(fullPrefs));
-        
-        // Save to server
-        const newCharacterData = { ...character, preferences: { ...(character.preferences || {}), favorTracker: fullPrefs }};
-        updateCharacter(newCharacterData); // This function will handle debouncing/batching if necessary
+      const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
+      const existingPrefsString = localStorage.getItem(localKey);
+      const existingPrefs = existingPrefsString ? JSON.parse(existingPrefsString) : {};
+      const fullPrefs = { ...existingPrefs, ...newPrefs };
+      localStorage.setItem(localKey, JSON.stringify(fullPrefs));
 
-    } catch (error) { console.error("Failed to save preferences:", error); toast({ title: "Error Saving Preferences", variant: "destructive" }); }
-  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, toast]);
+      const updatedCharacter: Character = {
+        ...character,
+        preferences: {
+          ...(character.preferences || {}),
+          favorTracker: {
+            ...(character.preferences?.favorTracker || {}),
+            ...newPrefs,
+          },
+        },
+      };
+      
+      setCharacter(updatedCharacter); // Immediately update local character state
+      updateCharacter(updatedCharacter); // Debounced update to Firestore
 
-  // Effect to load preferences from local storage or server
+      if (important) {
+        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
+        const lastRefresh = parseInt(localStorage.getItem(lastRefreshKey) || '0', 10);
+        const oneDay = 24 * 60 * 60 * 1000;
+
+        if (Date.now() - lastRefresh > oneDay) {
+          console.log("Important preference changed. Re-fetching character data after 24hr cooldown.");
+          refetchCharacter(characterId).then(freshCharacter => {
+            if (freshCharacter) {
+              const serverPrefs = freshCharacter.preferences?.favorTracker || {};
+              localStorage.setItem(localKey, JSON.stringify(serverPrefs));
+              localStorage.setItem(lastRefreshKey, Date.now().toString());
+              // Force re-read of newly fetched prefs
+              window.location.reload(); 
+            }
+          });
+        }
+      }
+    } catch (error) { console.error("Failed to save preferences:", error); }
+  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, refetchCharacter]);
+
+  // Load preferences from local storage or server
   useEffect(() => {
     if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
       try {
-        const localPrefsString = localStorage.getItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`);
-        const serverPrefs = character.preferences?.favorTracker;
-        const prefsToUse = localPrefsString ? JSON.parse(localPrefsString) : serverPrefs;
+        const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
+        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
+        let localPrefsString = localStorage.getItem(localKey);
+
+        const loadFromCharacterObject = (charObj: Character) => {
+          const serverPrefs = charObj.preferences?.favorTracker;
+          if (serverPrefs) {
+            localStorage.setItem(localKey, JSON.stringify(serverPrefs));
+            localStorage.setItem(lastRefreshKey, Date.now().toString());
+            localPrefsString = JSON.stringify(serverPrefs);
+            console.log("Loaded preferences from server character object into local storage.");
+          }
+        };
+
+        if (!localPrefsString) {
+          loadFromCharacterObject(character);
+        }
+        
+        const prefsToUse = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.favorTracker;
 
         if (prefsToUse) {
-          if (prefsToUse.durationAdjustments) {
             const mergedAdjustments = { ...durationAdjustmentDefaults };
-            for (const cat of DURATION_CATEGORIES) { if (prefsToUse.durationAdjustments[cat] !== undefined && typeof prefsToUse.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefsToUse.durationAdjustments[cat]; }
+            if (prefsToUse.durationAdjustments) {
+              for (const cat of DURATION_CATEGORIES) { if (prefsToUse.durationAdjustments[cat] !== undefined && typeof prefsToUse.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefsToUse.durationAdjustments[cat]; }
+            }
             setDurationAdjustments(mergedAdjustments);
-          }
-          if (typeof prefsToUse.showCompletedQuestsWithZeroRemainingFavor === 'boolean') setShowCompletedQuestsWithZeroRemainingFavor(prefsToUse.showCompletedQuestsWithZeroRemainingFavor);
-          if (typeof prefsToUse.onCormyr === 'boolean') setOnCormyr(prefsToUse.onCormyr);
-          if (typeof prefsToUse.showRaids === 'boolean') setShowRaids(prefsToUse.showRaids);
-          if (prefsToUse.clickAction && ['none', 'wiki', 'map'].includes(prefsToUse.clickAction)) setClickAction(prefsToUse.clickAction);
-          if (prefsToUse.sortConfig) setSortConfig(prefsToUse.sortConfig);
-          
-          const defaultVis = getDefaultColumnVisibility();
-          const mergedVisibility: Record<SortableColumnKey | string, boolean> = {} as any;
-          allTableHeaders.forEach(header => { mergedVisibility[header.key] = prefsToUse.columnVisibility?.[header.key] ?? defaultVis[header.key]; });
-          setColumnVisibility(mergedVisibility);
+
+            setShowCompletedQuestsWithZeroRemainingFavor(prefsToUse.showCompletedQuestsWithZeroRemainingFavor ?? false);
+            setOnCormyr(prefsToUse.onCormyr ?? false);
+            setShowRaids(prefsToUse.showRaids ?? false);
+            setClickAction(prefsToUse.clickAction ?? 'none');
+            setSortConfig(prefsToUse.sortConfig ?? { key: 'name', direction: 'ascending' });
+            
+            const defaultVis = getDefaultColumnVisibility();
+            const mergedVisibility = { ...defaultVis, ...(prefsToUse.columnVisibility || {}) };
+            setColumnVisibility(mergedVisibility);
         } else {
-            // No local or server prefs, use defaults
             setColumnVisibility(getDefaultColumnVisibility());
             setDurationAdjustments(durationAdjustmentDefaults);
             setShowCompletedQuestsWithZeroRemainingFavor(false);
@@ -270,20 +313,16 @@ export default function FavorTrackerPage() {
         }
       } catch (error) { 
           console.error("Error loading preferences:", error); 
-          // Reset to defaults on error
           setColumnVisibility(getDefaultColumnVisibility());
       }
     }
   }, [characterId, isDataLoaded, currentUser, character]);
 
-  // Effects to save individual preference changes
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ durationAdjustments }); }, [durationAdjustments, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ showCompletedQuestsWithZeroRemainingFavor }); }, [showCompletedQuestsWithZeroRemainingFavor, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, character]);
-  useEffect(() => { if (isDataLoaded && character) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, character]);
-  
+  const handleDurationChange = (newAdjustments: Record<DurationCategory, number>) => {
+    setDurationAdjustments(newAdjustments);
+    savePreferences({ durationAdjustments: newAdjustments }, true); // Important change
+  }
+
   const handlePopoverColumnVisibilityChange = (key: SortableColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
   const handleApplyColumnSettings = () => { 
     setColumnVisibility(popoverColumnVisibility); 
@@ -296,7 +335,14 @@ export default function FavorTrackerPage() {
 
   const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string) => {
     if (!id || !editingCharacter) return;
-    await updateCharacter({ ...editingCharacter, name: data.name, level: data.level, iconUrl });
+    const charToUpdate = characters.find(c => c.id === id);
+    if (!charToUpdate) return;
+    
+    await updateCharacter({ ...charToUpdate, name: data.name, level: data.level, iconUrl });
+    // Refetch to get latest merged server data
+    const freshChar = await refetchCharacter(id);
+    if (freshChar) setCharacter(freshChar);
+    
     setIsEditModalOpen(false);
     setEditingCharacter(null);
   };
@@ -726,6 +772,7 @@ export default function FavorTrackerPage() {
 
     const newSortConfig = { key, direction: newDirection };
     setSortConfig(newSortConfig);
+    savePreferences({ sortConfig: newSortConfig });
   };
 
   const getSortIndicator = (columnKey: SortableColumnKey) => {
@@ -798,15 +845,15 @@ export default function FavorTrackerPage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                     <div className="flex items-center space-x-2">
-                        <Checkbox id="show-completed" checked={showCompletedQuestsWithZeroRemainingFavor} onCheckedChange={(checked) => setShowCompletedQuestsWithZeroRemainingFavor(!!checked)} disabled={pageOverallLoading} aria-label="Toggle visibility of fully completed quests"/>
+                        <Checkbox id="show-completed" checked={showCompletedQuestsWithZeroRemainingFavor} onCheckedChange={(checked) => {setShowCompletedQuestsWithZeroRemainingFavor(!!checked); savePreferences({ showCompletedQuestsWithZeroRemainingFavor: !!checked });}} disabled={pageOverallLoading} aria-label="Toggle visibility of fully completed quests"/>
                         <Label htmlFor="show-completed" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Completed</Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                        <Checkbox id="on-cormyr" checked={onCormyr} onCheckedChange={(checked) => setOnCormyr(!!checked)} disabled={pageOverallLoading} aria-label="Toggle hiding of 'The Curse of the Five Fangs' quest"/>
+                        <Checkbox id="on-cormyr" checked={onCormyr} onCheckedChange={(checked) => {setOnCormyr(!!checked); savePreferences({ onCormyr: !!checked });}} disabled={pageOverallLoading} aria-label="Toggle hiding of 'The Curse of the Five Fangs' quest"/>
                         <Label htmlFor="on-cormyr" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>On Cormyr</Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                        <Checkbox id="show-raids" checked={showRaids} onCheckedChange={(checked) => setShowRaids(!!checked)} disabled={pageOverallLoading} aria-label="Toggle visibility of raids"/>
+                        <Checkbox id="show-raids" checked={showRaids} onCheckedChange={(checked) => {setShowRaids(!!checked); savePreferences({ showRaids: !!checked });}} disabled={pageOverallLoading} aria-label="Toggle visibility of raids"/>
                         <Label htmlFor="show-raids" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>Show Raids</Label>
                     </div>
                     {userData?.isAdmin && (
@@ -832,7 +879,7 @@ export default function FavorTrackerPage() {
                 <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
                 <RadioGroup
                   value={clickAction}
-                  onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')}
+                  onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}}
                   className="flex items-center space-x-4"
                   disabled={pageOverallLoading}
                 >
@@ -895,7 +942,7 @@ export default function FavorTrackerPage() {
                                 <div key={category} className="space-y-1">
                                     <Label htmlFor={`favor-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} className="text-xs">{category}</Label>
                                     <Input type="number" id={`favor-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} value={durationAdjustments[category]}
-                                        onChange={(e) => { const val = parseFloat(e.target.value); if(!isNaN(val)) setDurationAdjustments(p => ({...p, [category]: val})); else if (e.target.value === "") setDurationAdjustments(p => ({...p, [category]:0})); }}
+                                        onChange={(e) => { const val = parseFloat(e.target.value); const newAdjs = {...durationAdjustments, [category]: isNaN(val) ? 0 : val}; handleDurationChange(newAdjs); }}
                                         step="0.1" className="h-8 text-sm" disabled={pageOverallLoading} placeholder="e.g. 1.0"/>
                                 </div>
                             ))}
