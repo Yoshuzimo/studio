@@ -53,7 +53,8 @@ const allTableHeaders: { key: SortableLevelingGuideColumnKey | string; label: st
     { key: 'maxExp', label: 'Max EXP', icon: BarChartHorizontalBig, className: "text-center w-[120px]", isSortable: true },
     { key: 'experienceScore', label: 'Score', icon: Activity, className: "text-center w-[120px]", isSortable: true },
 ];
-const difficultyColumnKeys: SortableLevelingGuideColumnKey[] = ['adjustedCasualExp', 'adjustedNormalExp', 'adjustedHardExp', 'adjustedEliteExp'];
+const difficultyColumnKeys: (keyof Quest | 'adjustedCasualExp' | 'adjustedNormalExp' | 'adjustedHardExp' | 'adjustedEliteExp')[] = ['adjustedCasualExp', 'adjustedNormalExp', 'adjustedHardExp', 'adjustedEliteExp'];
+
 const getDefaultColumnVisibility = (): Record<SortableLevelingGuideColumnKey, boolean> => {
     const initial: Record<SortableLevelingGuideColumnKey, boolean> = {} as any;
      allTableHeaders.forEach(header => {
@@ -113,6 +114,42 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
   return withoutThe.replace(/[^a-z0-9]/g, '');
 };
 
+const getRelevantQuestDetails = (quest: Quest, char: Character) => {
+    const useEpic = quest.epicBaseLevel != null && char.level >= quest.epicBaseLevel;
+    return { tier: useEpic ? 'Epic' : 'Heroic', baseLevel: useEpic ? quest.epicBaseLevel! : quest.level, casualExp: useEpic ? quest.epicCasualExp : quest.casualExp, normalExp: useEpic ? quest.epicNormalExp : quest.normalExp, hardExp: useEpic ? quest.epicHardExp : quest.hardExp, eliteExp: useEpic ? quest.epicEliteExp : quest.eliteExp, casualNotAvailable: useEpic ? quest.epicCasualNotAvailable : quest.casualNotAvailable, normalNotAvailable: useEpic ? quest.epicNormalNotAvailable : quest.normalNotAvailable, hardNotAvailable: useEpic ? quest.epicHardNotAvailable : quest.hardNotAvailable, eliteNotAvailable: useEpic ? quest.epicEliteNotAvailable : quest.eliteNotAvailable, };
+};
+
+const getHeroicPenaltyPercent = (charLevel: number, questEffectiveLevel: number): number => {
+    if (charLevel >= 20) return 0; const levelDifference = charLevel - questEffectiveLevel;
+    if (levelDifference <= 1) return 0;
+    switch (levelDifference) { case 2: return 10; case 3: return 25; case 4: return 50; case 5: return 75; default: return 100; }
+};
+
+const calculateAdjustedExp = (quest: Quest, char: Character) => {
+    const details = getRelevantQuestDetails(quest, char);
+    const calc = (exp: number | null | undefined, notAvailable: boolean | null | undefined, effectiveLevel: number) => {
+        if (!exp || notAvailable) return null;
+        if (details.tier === 'Epic') {
+            if (char.level < details.baseLevel) return null;
+            const penalty = char.level - (effectiveLevel);
+            if (penalty > 6) return null;
+            return exp;
+        }
+        if (char.level < effectiveLevel) return null;
+        if (char.level >= 20) return exp;
+        const penaltyPercent = getHeroicPenaltyPercent(char.level, effectiveLevel);
+        if (penaltyPercent >= 100) return null;
+        return Math.round(exp * (1 - penaltyPercent / 100));
+    };
+
+    return {
+        adjustedCasualExp: calc(details.casualExp, details.casualNotAvailable, details.baseLevel - 1),
+        adjustedNormalExp: calc(details.normalExp, details.normalNotAvailable, details.baseLevel),
+        adjustedHardExp: calc(details.hardExp, details.hardNotAvailable, details.baseLevel + 1),
+        adjustedEliteExp: calc(details.eliteExp, details.eliteNotAvailable, details.baseLevel + 2),
+    };
+};
+
 export default function LevelingGuidePage() {
   console.log('Leveling Guide page code version: LEVELING-GUIDE-V1');
   const params = useParams();
@@ -151,7 +188,7 @@ export default function LevelingGuidePage() {
   const saveLevelingGuidePreference = useCallback((updatedPrefs: Partial<LevelingGuidePreferences>) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
     try { localStorage.setItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`, JSON.stringify({ ...(JSON.parse(localStorage.getItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`) || '{}')), ...updatedPrefs })); }
-    catch (error) { console.error("Failed to save leveling guide preferences:", error); toast({ title: "Error Saving View Settings", variant: "destructive" }); }
+    catch (error) { console.error("Failed to save quest guide preferences:", error); toast({ title: "Error Saving View Settings", variant: "destructive" }); }
   }, [characterId, isDataLoaded, currentUser, toast]);
 
   useEffect(() => {
@@ -170,7 +207,7 @@ export default function LevelingGuidePage() {
         }
     } catch (error) { console.error("Error loading favor tracker preferences:", error); }
     try {
-        const storedGuidePrefs = localStorage.getItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`);
+        const storedGuidePrefs = localStorage.getItem(`ddoToolkit_questGuidePrefs_${currentUser.uid}_${characterId}`);
          if (storedGuidePrefs) {
             const prefs = JSON.parse(storedGuidePrefs) as LevelingGuidePreferences;
             if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) { setClickAction(prefs.clickAction); }
@@ -179,7 +216,7 @@ export default function LevelingGuidePage() {
             allTableHeaders.forEach(header => { mergedVisibility[header.key as SortableLevelingGuideColumnKey] = prefs.columnVisibility?.[header.key as SortableLevelingGuideColumnKey] ?? defaultVis[header.key as SortableLevelingGuideColumnKey]; });
             setColumnVisibility(mergedVisibility);
         }
-    } catch (error) { console.error("Error loading leveling guide preferences:", error); }
+    } catch (error) { console.error("Error loading quest guide preferences:", error); }
   }, [characterId, isDataLoaded, currentUser]);
 
   useEffect(() => { if (isDataLoaded && characterId && currentUser) saveLevelingGuidePreference({ columnVisibility }); }, [columnVisibility, saveLevelingGuidePreference, isDataLoaded, characterId, currentUser]);
@@ -232,42 +269,6 @@ export default function LevelingGuidePage() {
   
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
-
-    const getRelevantQuestDetails = (quest: Quest, char: Character) => {
-      const useEpic = quest.epicBaseLevel != null && char.level >= quest.epicBaseLevel;
-      return { tier: useEpic ? 'Epic' : 'Heroic', baseLevel: useEpic ? quest.epicBaseLevel! : quest.level, casualExp: useEpic ? quest.epicCasualExp : quest.casualExp, normalExp: useEpic ? quest.epicNormalExp : quest.normalExp, hardExp: useEpic ? quest.epicHardExp : quest.hardExp, eliteExp: useEpic ? quest.epicEliteExp : quest.eliteExp, casualNotAvailable: useEpic ? quest.epicCasualNotAvailable : quest.casualNotAvailable, normalNotAvailable: useEpic ? quest.epicNormalNotAvailable : quest.normalNotAvailable, hardNotAvailable: useEpic ? quest.epicHardNotAvailable : quest.hardNotAvailable, eliteNotAvailable: useEpic ? quest.epicEliteNotAvailable : quest.eliteNotAvailable, };
-    };
-
-    const getHeroicPenaltyPercent = (charLevel: number, questEffectiveLevel: number): number => {
-      if (charLevel >= 20) return 0; const levelDifference = charLevel - questEffectiveLevel;
-      if (levelDifference <= 1) return 0;
-      switch (levelDifference) { case 2: return 10; case 3: return 25; case 4: return 50; case 5: return 75; default: return 100; }
-    };
-
-    const calculateAdjustedExp = (quest: Quest, char: Character) => {
-      const details = getRelevantQuestDetails(quest, char);
-      const calc = (exp: number | null | undefined, notAvailable: boolean | null | undefined, effectiveLevel: number) => {
-          if (!exp || notAvailable) return null;
-          if (details.tier === 'Epic') {
-              if (char.level < details.baseLevel) return null;
-              const penalty = char.level - (effectiveLevel);
-              if (penalty > 6) return null;
-              return exp;
-          }
-          if (char.level < effectiveLevel) return null;
-          if (char.level >= 20) return exp;
-          const penaltyPercent = getHeroicPenaltyPercent(char.level, effectiveLevel);
-          if (penaltyPercent >= 100) return null;
-          return Math.round(exp * (1 - penaltyPercent / 100));
-      };
-
-      return {
-          adjustedCasualExp: calc(details.casualExp, details.casualNotAvailable, details.baseLevel - 1),
-          adjustedNormalExp: calc(details.normalExp, details.normalNotAvailable, details.baseLevel),
-          adjustedHardExp: calc(details.hardExp, details.hardNotAvailable, details.baseLevel + 1),
-          adjustedEliteExp: calc(details.eliteExp, details.eliteNotAvailable, details.baseLevel + 2),
-      };
-    };
 
     const allProcessedQuests = quests.map(quest => {
         const adjustedExps = calculateAdjustedExp(quest, character);
@@ -370,8 +371,8 @@ export default function LevelingGuidePage() {
   }
 
   const { sortedQuests } = sortedAndFilteredData;
-  const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(h => !h.isDifficulty);
-  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
+  const popoverVisibleNonDifficultyHeaders = allTableHeaders.filter(h => !difficultyColumnKeys.includes(h.key as any));
+  const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key as SortableLevelingGuideColumnKey]);
 
   return (
     <div className="py-8 space-y-8">
@@ -452,8 +453,8 @@ export default function LevelingGuidePage() {
                     <h4 className="font-medium leading-none pt-2">EXP Columns</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                       {difficultyColumnKeys.map(key => (
-                          <div key={key} className="flex items-center space-x-2">
-                          <Checkbox id={`vis-guide-${key}`} checked={!!popoverColumnVisibility[key]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key as SortableLevelingGuideColumnKey, !!checked)} />
+                          <div key={key as string} className="flex items-center space-x-2">
+                          <Checkbox id={`vis-guide-${key}`} checked={!!popoverColumnVisibility[key as SortableLevelingGuideColumnKey]} onCheckedChange={(checked) => handlePopoverColumnVisibilityChange(key as SortableLevelingGuideColumnKey, !!checked)} />
                           <Label htmlFor={`vis-guide-${key}`} className="font-normal whitespace-nowrap">{allTableHeaders.find(h=>h.key===key)?.label}</Label>
                           </div>
                       ))}
