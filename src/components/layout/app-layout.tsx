@@ -72,16 +72,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [isSendingVerification, setIsSendingVerification] = React.useState(false);
   
   const [openAccordion, setOpenAccordion] = React.useState<string | undefined>(undefined);
-  let hoverTimeout: NodeJS.Timeout;
+  let hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const handleMouseEnter = (value: string) => {
-    clearTimeout(hoverTimeout);
+    if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+    }
     setOpenAccordion(value);
   };
   const handleMouseLeave = () => {
-    hoverTimeout = setTimeout(() => {
+    hoverTimeoutRef.current = setTimeout(() => {
       setOpenAccordion(undefined);
-    }, 300); // Small delay to prevent closing when moving between items
+    }, 200); // A small delay to prevent closing when moving between items
   };
 
   const getVisibleNavItems = () => {
@@ -145,7 +148,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                         onMouseLeave={handleMouseLeave}
                     >
                         <AccordionItem value="characters" className="border-b-0">
-                            <AccordionTrigger className="p-0 hover:no-underline [&>svg]:hidden">
+                            <AccordionTrigger asChild className="p-0 hover:no-underline [&>svg]:hidden">
                                 <Link href="/" className="w-full">
                                     <SidebarMenuButton
                                     variant="ghost"
@@ -170,7 +173,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                                             onMouseLeave={handleMouseLeave}
                                           >
                                             <AccordionItem value={char.id} className="border-b-0">
-                                                <AccordionTrigger className="p-0 hover:no-underline [&>svg]:hidden">
+                                                <AccordionTrigger asChild className="p-0 hover:no-underline [&>svg]:hidden">
                                                      <Link href={`/favor-tracker/${char.id}`} className="w-full">
                                                         <SidebarMenuButton variant="ghost" className="w-full justify-between h-8">
                                                             <div className="flex items-center gap-2">
