@@ -8,7 +8,7 @@ import type { Character, AdventurePack, Quest, UserQuestCompletionData } from '@
 import { db, auth } from '@/lib/firebase';
 import {
   collection, getDocs, doc, writeBatch, setDoc, deleteDoc, query,
-  getDoc, where, type Timestamp as FirestoreTimestampType, serverTimestamp, type FieldValue, onSnapshot,
+  getDoc, where, type Timestamp as FirestoreTimestampType, serverTimestamp, type FieldValue, onSnapshot, updateDoc,
 } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from './auth-context';
@@ -361,39 +361,40 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   const updateCharacter = useCallback(async (character: Character): Promise<void> => {
-    if (!currentUser || character.userId !== currentUser.uid) { 
-        toast({ title: "Unauthorized", variant: "destructive" }); 
-        return; 
+    if (!currentUser || character.userId !== currentUser.uid) {
+      toast({ title: "Unauthorized", variant: "destructive" });
+      return;
     }
-    
-    // Optimistically update local state for immediate UI feedback
-    // Only do this if the character data is actually different, to prevent loops
-    const existingChar = characters.find(c => c.id === character.id);
-    if (JSON.stringify(existingChar) !== JSON.stringify(character)) {
-        setCharactersState(prev => prev.map(c => c.id === character.id ? character : c));
-    }
-
+  
+    // Always update local state immediately for responsiveness.
+    setCharactersState(prev => prev.map(c => c.id === character.id ? character : c));
+  
     // Debounce the Firestore update
     if (characterUpdateDebounceTimers.current.has(character.id)) {
-        clearTimeout(characterUpdateDebounceTimers.current.get(character.id));
+      clearTimeout(characterUpdateDebounceTimers.current.get(character.id));
     }
-    
+  
     const timer = setTimeout(async () => {
-        setIsUpdating(true);
-        try {
-            await setDoc(doc(db, 'characters', character.id), character, { merge: true });
-            toast({ title: "Character Updated", description: `${character.name}'s details saved to server.`});
-        } catch (error) { 
-            toast({ title: "Error Updating Character", description: (error as Error).message, variant: 'destructive' }); 
-        } finally {
-            setIsUpdating(false);
-            characterUpdateDebounceTimers.current.delete(character.id);
-        }
+      setIsUpdating(true);
+      try {
+        const charRef = doc(db, 'characters', character.id);
+        await updateDoc(charRef, {
+          name: character.name,
+          level: character.level,
+          iconUrl: character.iconUrl,
+          preferences: character.preferences || {}, // Ensure preferences object exists
+        });
+        toast({ title: "Character Updated", description: `${character.name}'s details saved.` });
+      } catch (error) {
+        toast({ title: "Error Updating Character", description: (error as Error).message, variant: 'destructive' });
+      } finally {
+        setIsUpdating(false);
+        characterUpdateDebounceTimers.current.delete(character.id);
+      }
     }, 1500); // 1.5-second debounce delay
-
+  
     characterUpdateDebounceTimers.current.set(character.id, timer);
-
-}, [currentUser, toast, characters]);
+  }, [currentUser, toast]);
 
 
   const deleteCharacter = async (characterId: string): Promise<void> => {
