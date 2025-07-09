@@ -102,6 +102,7 @@ interface ReaperRewardsPreferences {
   onCormyr: boolean;
   showRaids: boolean;
   clickAction: 'none' | 'wiki' | 'map';
+  sortConfig?: SortConfig | null;
 }
 
 const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
@@ -172,6 +173,7 @@ export default function ReaperRewardsPage() {
           if (typeof prefs.onCormyr === 'boolean') setOnCormyr(prefs.onCormyr);
           if (typeof prefs.showRaids === 'boolean') setShowRaids(prefs.showRaids);
           if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) { setClickAction(prefs.clickAction); }
+          if (prefs.sortConfig) setSortConfig(prefs.sortConfig);
           
           const defaultVis = getDefaultColumnVisibility();
           const mergedVisibility: Record<string, boolean> = {};
@@ -181,7 +183,7 @@ export default function ReaperRewardsPage() {
           setColumnVisibility(mergedVisibility);
         } else {
           setColumnVisibility(getDefaultColumnVisibility());
-          savePreferences({ columnVisibility: getDefaultColumnVisibility(), onCormyr: false, showRaids: false, clickAction: 'none' });
+          savePreferences({ columnVisibility: getDefaultColumnVisibility(), onCormyr: false, showRaids: false, clickAction: 'none', sortConfig: {key: 'level', direction: 'ascending'} });
         }
       } catch (error) {
         console.error("Error loading preferences:", error);
@@ -194,6 +196,7 @@ export default function ReaperRewardsPage() {
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, characterId, currentUser]);
   useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser && sortConfig) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, characterId, currentUser]);
 
   const handlePopoverColumnVisibilityChange = (key: string, checked: boolean) => {
     setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));

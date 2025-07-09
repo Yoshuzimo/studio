@@ -1012,5 +1012,3 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
-
-    

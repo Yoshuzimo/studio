@@ -55,7 +55,7 @@ const allTableHeaders: { key: SortableLevelingGuideColumnKey | string; label: st
 ];
 const difficultyColumnKeys: (keyof Quest | 'adjustedCasualExp' | 'adjustedNormalExp' | 'adjustedHardExp' | 'adjustedEliteExp')[] = ['adjustedCasualExp', 'adjustedNormalExp', 'adjustedHardExp', 'adjustedEliteExp'];
 
-const getDefaultColumnVisibility = (): Record<SortableLevelingGuideColumnKey, boolean> => {
+const getDefaultColumnVisibility = (): Record<SortableLevelingGuideColumnKey | string, boolean> => {
     const initial: Record<SortableLevelingGuideColumnKey, boolean> = {} as any;
      allTableHeaders.forEach(header => {
         if (['adventurePackName', 'questGiver'].includes(header.key)) {
@@ -68,16 +68,13 @@ const getDefaultColumnVisibility = (): Record<SortableLevelingGuideColumnKey, bo
  };
 
 interface LevelingGuidePreferences {
-  columnVisibility: Record<SortableLevelingGuideColumnKey, boolean>;
+  columnVisibility: Record<SortableLevelingGuideColumnKey | string, boolean>;
   clickAction: 'none' | 'wiki' | 'map';
-}
-
-interface FavorTrackerPreferences {
   durationAdjustments: Record<DurationCategory, number>;
   onCormyr: boolean;
   showRaids: boolean;
+  sortConfig?: SortConfig | null;
 }
-
 
 function parseDurationToMinutes(durationString?: string | null): number | null {
   if (!durationString || durationString.trim() === "") return null;
@@ -165,8 +162,8 @@ export default function LevelingGuidePage() {
   const [onCormyr, setOnCormyr] = useState(false);
   const [showRaids, setShowRaids] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
-  const [columnVisibility, setColumnVisibility] = useState<Record<SortableLevelingGuideColumnKey, boolean>>(getDefaultColumnVisibility());
-  const [popoverColumnVisibility, setPopoverColumnVisibility] = useState<Record<SortableLevelingGuideColumnKey, boolean>>({});
+  const [columnVisibility, setColumnVisibility] = useState<Record<SortableLevelingGuideColumnKey | string, boolean>>(getDefaultColumnVisibility());
+  const [popoverColumnVisibility, setPopoverColumnVisibility] = useState<Record<SortableLevelingGuideColumnKey | string, boolean>>({});
   const [isSettingsPopoverOpen, setIsSettingsPopoverOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
@@ -185,7 +182,7 @@ export default function LevelingGuidePage() {
     }
   }, [authIsLoading, currentUser, router]);
 
-  const saveLevelingGuidePreference = useCallback((updatedPrefs: Partial<LevelingGuidePreferences>) => {
+  const savePreferences = useCallback((updatedPrefs: Partial<LevelingGuidePreferences>) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
     try { localStorage.setItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`, JSON.stringify({ ...(JSON.parse(localStorage.getItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`) || '{}')), ...updatedPrefs })); }
     catch (error) { console.error("Failed to save quest guide preferences:", error); toast({ title: "Error Saving View Settings", variant: "destructive" }); }
@@ -194,9 +191,9 @@ export default function LevelingGuidePage() {
   useEffect(() => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser) return;
     try {
-        const storedFavorPrefs = localStorage.getItem(`ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`);
-        if (storedFavorPrefs) {
-            const prefs = JSON.parse(storedFavorPrefs) as FavorTrackerPreferences;
+        const storedGuidePrefs = localStorage.getItem(`ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`);
+         if (storedGuidePrefs) {
+            const prefs = JSON.parse(storedGuidePrefs) as LevelingGuidePreferences;
             if (prefs.durationAdjustments) {
               const mergedAdjustments = { ...durationAdjustmentDefaults };
               for (const cat of DURATION_CATEGORIES) { if (prefs.durationAdjustments[cat] !== undefined && typeof prefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefs.durationAdjustments[cat]; }
@@ -204,25 +201,35 @@ export default function LevelingGuidePage() {
             }
             if (typeof prefs.onCormyr === 'boolean') setOnCormyr(prefs.onCormyr);
             if (typeof prefs.showRaids === 'boolean') setShowRaids(prefs.showRaids);
-        }
-    } catch (error) { console.error("Error loading favor tracker preferences:", error); }
-    try {
-        const storedGuidePrefs = localStorage.getItem(`ddoToolkit_questGuidePrefs_${currentUser.uid}_${characterId}`);
-         if (storedGuidePrefs) {
-            const prefs = JSON.parse(storedGuidePrefs) as LevelingGuidePreferences;
             if (prefs.clickAction && ['none', 'wiki', 'map'].includes(prefs.clickAction)) { setClickAction(prefs.clickAction); }
+            if (prefs.sortConfig) setSortConfig(prefs.sortConfig);
+            
             const defaultVis = getDefaultColumnVisibility();
-            const mergedVisibility: Record<SortableLevelingGuideColumnKey, boolean> = {} as any;
+            const mergedVisibility: Record<SortableLevelingGuideColumnKey | string, boolean> = {} as any;
             allTableHeaders.forEach(header => { mergedVisibility[header.key as SortableLevelingGuideColumnKey] = prefs.columnVisibility?.[header.key as SortableLevelingGuideColumnKey] ?? defaultVis[header.key as SortableLevelingGuideColumnKey]; });
             setColumnVisibility(mergedVisibility);
+        } else {
+            savePreferences({
+                columnVisibility: getDefaultColumnVisibility(),
+                clickAction: 'none',
+                durationAdjustments: durationAdjustmentDefaults,
+                onCormyr: false,
+                showRaids: false,
+                sortConfig: { key: 'experienceScore', direction: 'descending' }
+            });
         }
     } catch (error) { console.error("Error loading quest guide preferences:", error); }
-  }, [characterId, isDataLoaded, currentUser]);
+  }, [characterId, isDataLoaded, currentUser, savePreferences]);
 
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveLevelingGuidePreference({ columnVisibility }); }, [columnVisibility, saveLevelingGuidePreference, isDataLoaded, characterId, currentUser]);
-  useEffect(() => { if (isDataLoaded && characterId && currentUser) saveLevelingGuidePreference({ clickAction }); }, [clickAction, saveLevelingGuidePreference, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ columnVisibility }); }, [columnVisibility, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ clickAction }); }, [clickAction, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ durationAdjustments }); }, [durationAdjustments, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ onCormyr }); }, [onCormyr, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser) savePreferences({ showRaids }); }, [showRaids, savePreferences, isDataLoaded, characterId, currentUser]);
+  useEffect(() => { if (isDataLoaded && characterId && currentUser && sortConfig) savePreferences({ sortConfig }); }, [sortConfig, savePreferences, isDataLoaded, characterId, currentUser]);
 
-  const handlePopoverColumnVisibilityChange = (key: SortableLevelingGuideColumnKey, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
+
+  const handlePopoverColumnVisibilityChange = (key: SortableLevelingGuideColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
   const handleApplyColumnSettings = () => { setColumnVisibility(popoverColumnVisibility); setIsSettingsPopoverOpen(false); };
   const handleCancelColumnSettings = () => setIsSettingsPopoverOpen(false);
   const handleSettingsPopoverOpenChange = (open: boolean) => { if (open) setPopoverColumnVisibility(columnVisibility); setIsSettingsPopoverOpen(open); };
@@ -567,5 +574,3 @@ export default function LevelingGuidePage() {
     </div>
   );
 }
-
-    
