@@ -4,7 +4,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation'; 
+import { usePathname } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -18,23 +18,18 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuGroup,
-    DropdownMenuItem,
-    DropdownMenuPortal,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/toaster';
 import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, Mail, LogOut, MailCheck, Loader2, UserCog, Book, ListOrdered, BarChartHorizontalBig, Skull } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
-import * as React from 'react'; 
-import { useAuth } from '@/context/auth-context'; 
+import * as React from 'react';
+import { useAuth } from '@/context/auth-context';
 import { useAppData } from '@/context/app-data-context';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
@@ -70,12 +65,24 @@ function ThemeToggle() {
   );
 }
 
-
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { currentUser, userData, logout, isLoading: authIsLoading, sendVerificationEmail } = useAuth(); 
+  const { currentUser, userData, logout, isLoading: authIsLoading, sendVerificationEmail } = useAuth();
   const { characters } = useAppData();
   const [isSendingVerification, setIsSendingVerification] = React.useState(false);
+  
+  const [openAccordion, setOpenAccordion] = React.useState<string | undefined>(undefined);
+  let hoverTimeout: NodeJS.Timeout;
+
+  const handleMouseEnter = (value: string) => {
+    clearTimeout(hoverTimeout);
+    setOpenAccordion(value);
+  };
+  const handleMouseLeave = () => {
+    hoverTimeout = setTimeout(() => {
+      setOpenAccordion(undefined);
+    }, 300); // Small delay to prevent closing when moving between items
+  };
 
   const getVisibleNavItems = () => {
     let items = [...navItemsBase];
@@ -84,28 +91,27 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
     return items.sort((a,b) => (a.href === '/admin' ? 1 : b.href === '/admin' ? -1 : 0));
   };
-  
+
   const visibleNavItems = getVisibleNavItems();
   const sortedCharacters = React.useMemo(() => [...characters].sort((a, b) => a.name.localeCompare(b.name)), [characters]);
 
-
   if (authIsLoading) {
-     return (
-        <div className="flex justify-center items-center h-screen bg-background">
-             {children} 
-        </div>
-     );
+    return (
+      <div className="flex justify-center items-center h-screen bg-background">
+        {children}
+      </div>
+    );
   }
 
   const isPublicPage = ['/login', '/signup'].includes(pathname);
   if (isPublicPage) {
-    return <>{children}</>; 
+    return <>{children}</>;
   }
 
   const handleLogout = async () => {
     await logout();
   };
-  
+
   const userDisplayName = userData?.displayName || currentUser?.email?.split('@')[0] || 'User';
   const userAvatarFallback = userDisplayName ? userDisplayName.charAt(0).toUpperCase() : 'U';
 
@@ -132,65 +138,85 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </SidebarHeader>
 
         <SidebarContent className="p-2">
-          <SidebarMenu>
-            <SidebarMenuItem>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <SidebarMenuButton
-                            variant="ghost"
-                            className="w-full justify-start"
-                            isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
-                            tooltip="Characters"
-                        >
-                            <Users className="h-5 w-5" />
-                            <span>Characters</span>
-                        </SidebarMenuButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="right" align="start" sideOffset={12} className="w-56">
-                        <DropdownMenuItem asChild>
-                            <Link href="/"><Users className="mr-2 h-4 w-4" />All Characters</Link>
-                        </DropdownMenuItem>
-                         {sortedCharacters.length > 0 && <DropdownMenuGroup>
-                            {sortedCharacters.map((char) => (
-                                <DropdownMenuSub key={char.id}>
-                                    <DropdownMenuSubTrigger>
-                                        <Avatar className="mr-2 h-5 w-5">
-                                            <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
-                                            <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
-                                        </Avatar>
-                                        <span>{char.name}</span>
-                                    </DropdownMenuSubTrigger>
-                                    <DropdownMenuPortal>
-                                        <DropdownMenuSubContent>
-                                            <DropdownMenuItem asChild><Link href={`/favor-tracker/${char.id}`}><ListOrdered className="mr-2 h-4 w-4" />Favor Tracker</Link></DropdownMenuItem>
-                                            <DropdownMenuItem asChild><Link href={`/leveling-guide/${char.id}`}><BarChartHorizontalBig className="mr-2 h-4 w-4" />Leveling Guide</Link></DropdownMenuItem>
-                                            <DropdownMenuItem asChild><Link href={`/reaper-rewards/${char.id}`}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Link></DropdownMenuItem>
-                                        </DropdownMenuSubContent>
-                                    </DropdownMenuPortal>
-                                </DropdownMenuSub>
-                            ))}
-                        </DropdownMenuGroup>}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </SidebarMenuItem>
-            {visibleNavItems.map((item) => (
-              <SidebarMenuItem key={item.label}>
-                <Link href={item.href}>
-                  <SidebarMenuButton
-                    isActive={
-                        pathname === item.href || 
-                        (item.href === "/account/change-email" && isAccountPage)
-                    }
-                    tooltip={{ children: item.label, className: "group-data-[collapsible=icon]:visible" }}
-                    className="justify-start"
-                  >
-                    <item.icon className="h-5 w-5" />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
+            <SidebarMenu>
+                 <Accordion type="single" collapsible value={openAccordion} onValueChange={setOpenAccordion} className="w-full space-y-1">
+                    <SidebarMenuItem
+                        onMouseEnter={() => handleMouseEnter('characters')}
+                        onMouseLeave={handleMouseLeave}
+                    >
+                        <AccordionItem value="characters" className="border-b-0">
+                             <AccordionTrigger
+                                asChild
+                                className="p-0 hover:no-underline"
+                              >
+                               <Link href="/" className="w-full">
+                                <SidebarMenuButton
+                                  variant="ghost"
+                                  className="w-full justify-start"
+                                  isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
+                                  tooltip="Characters"
+                                >
+                                    <Users className="h-5 w-5" />
+                                    <span>Characters</span>
+                                </SidebarMenuButton>
+                               </Link>
+                             </AccordionTrigger>
+                            <AccordionContent className="py-1 pl-4 group-data-[collapsible=icon]:hidden">
+                                 <Accordion type="single" collapsible className="w-full space-y-1" value={openAccordion}>
+                                     {sortedCharacters.map(char => (
+                                         <SidebarMenuItem
+                                            key={char.id}
+                                            onMouseEnter={() => handleMouseEnter(char.id)}
+                                            onMouseLeave={handleMouseLeave}
+                                          >
+                                            <AccordionItem value={char.id} className="border-b-0">
+                                                <AccordionTrigger
+                                                    asChild
+                                                    className="p-0 hover:no-underline"
+                                                >
+                                                    <Link href={`/favor-tracker/${char.id}`} className="w-full">
+                                                        <SidebarMenuButton variant="ghost" className="w-full justify-start h-8">
+                                                            <Avatar className="mr-2 h-5 w-5">
+                                                                <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
+                                                                <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
+                                                            </Avatar>
+                                                            <span className="text-sm">{char.name}</span>
+                                                        </SidebarMenuButton>
+                                                    </Link>
+                                                </AccordionTrigger>
+                                                <AccordionContent className="py-1 pl-6">
+                                                     <div className="flex flex-col space-y-1">
+                                                        <Link href={`/favor-tracker/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><ListOrdered className="mr-2 h-4 w-4"/>Favor Tracker</SidebarMenuButton></Link>
+                                                        <Link href={`/leveling-guide/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><BarChartHorizontalBig className="mr-2 h-4 w-4"/>Leveling Guide</SidebarMenuButton></Link>
+                                                        <Link href={`/reaper-rewards/${char.id}`}><SidebarMenuButton variant="ghost" size="sm" className="w-full justify-start h-7"><Skull className="mr-2 h-4 w-4"/>Reaper Rewards</SidebarMenuButton></Link>
+                                                     </div>
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                         </SidebarMenuItem>
+                                     ))}
+                                </Accordion>
+                            </AccordionContent>
+                        </AccordionItem>
+                    </SidebarMenuItem>
+                </Accordion>
+                 {visibleNavItems.map((item) => (
+                      <SidebarMenuItem key={item.label}>
+                        <Link href={item.href}>
+                          <SidebarMenuButton
+                            isActive={
+                                pathname === item.href ||
+                                (item.href === "/account/change-email" && isAccountPage)
+                            }
+                            tooltip={{ children: item.label, className: "group-data-[collapsible=icon]:visible" }}
+                            className="justify-start"
+                          >
+                            <item.icon className="h-5 w-5" />
+                            <span>{item.label}</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                    ))}
+            </SidebarMenu>
         </SidebarContent>
 
         <SidebarFooter className="p-4 flex flex-col items-center gap-2 group-data-[collapsible=icon]:items-center">
@@ -217,7 +243,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </h1>
             </div>
             <div className="flex items-center gap-2">
-                <ThemeToggle /> 
+                <ThemeToggle />
             </div>
         </header>
 
