@@ -1,3 +1,4 @@
+
 // Favor-Tracker-V1
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -880,6 +881,20 @@ export default function FavorTrackerPage() {
                             </div>
                         ))}
                       </div>
+                    <Separator />
+                     <div className="pt-2">
+                        <Label className="text-sm font-medium block mb-2">Duration Adjustments (<Timer className="inline h-4 w-4 mr-1"/> Score Multiplier)</Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                            {(Object.keys(durationAdjustments) as DurationCategory[]).map(category => (
+                                <div key={category} className="space-y-1">
+                                    <Label htmlFor={`favor-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} className="text-xs">{category}</Label>
+                                    <Input type="number" id={`favor-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} value={durationAdjustments[category]}
+                                        onChange={(e) => { const val = parseFloat(e.target.value); if(!isNaN(val)) setDurationAdjustments(p => ({...p, [category]: val})); else if (e.target.value === "") setDurationAdjustments(p => ({...p, [category]:0})); }}
+                                        step="0.1" className="h-8 text-sm" disabled={pageOverallLoading} placeholder="e.g. 1.0"/>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                     <DialogFooter className="pt-2 flex justify-between sm:justify-end">
                         <Button variant="outline" onClick={handleResetColumnSettingsToDefault} disabled={pageOverallLoading}>Reset to Default</Button>
                         <div className="flex space-x-2">
@@ -929,6 +944,7 @@ export default function FavorTrackerPage() {
                               {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
+                              {columnVisibility['duration'] && <TableCell className="whitespace-nowrap text-center">{quest.duration || 'N/A'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
                               {columnVisibility['maxPotentialFavorSingleQuest'] && <TableCell className="text-center">{(quest as any).maxPotentialFavorSingleQuest ?? '-'}</TableCell>}
                               {columnVisibility['remainingPossibleFavor'] && <TableCell className="text-center">{(quest as any).remainingPossibleFavor ?? '-'}</TableCell>}
@@ -996,3 +1012,5 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
+
+    

@@ -402,19 +402,6 @@ export default function LevelingGuidePage() {
                     )}
                 </div>
               </div>
-              <div className="pt-2 border-t border-border">
-                  <Label className="text-sm font-medium block mb-2 mt-2">Duration Adjustments (<Timer className="inline h-4 w-4 mr-1"/> Score Multiplier)</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                      {(Object.keys(durationAdjustments) as DurationCategory[]).map(category => (
-                          <div key={category} className="space-y-1">
-                              <Label htmlFor={`guide-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} className="text-xs">{category}</Label>
-                              <Input type="number" id={`guide-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} value={durationAdjustments[category]}
-                                  onChange={(e) => { const val = parseFloat(e.target.value); if(!isNaN(val)) setDurationAdjustments(p => ({...p, [category]: val})); else if (e.target.value === "") setDurationAdjustments(p => ({...p, [category]:0})); }}
-                                  step="0.1" className="h-8 text-sm" disabled={pageOverallLoading} placeholder="e.g. 1.0"/>
-                          </div>
-                      ))}
-                  </div>
-              </div>
               <div className="pt-2 border-t border-border mt-4">
                 <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
                 <RadioGroup value={clickAction} onValueChange={(value) => setClickAction(value as 'none' | 'wiki' | 'map')} className="flex items-center space-x-4" disabled={pageOverallLoading}>
@@ -458,6 +445,20 @@ export default function LevelingGuidePage() {
                           <Label htmlFor={`vis-guide-${key}`} className="font-normal whitespace-nowrap">{allTableHeaders.find(h=>h.key===key)?.label}</Label>
                           </div>
                       ))}
+                    </div>
+                    <Separator />
+                     <div className="pt-2">
+                        <Label className="text-sm font-medium block mb-2">Duration Adjustments (<Timer className="inline h-4 w-4 mr-1"/> Score Multiplier)</Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                            {(Object.keys(durationAdjustments) as DurationCategory[]).map(category => (
+                                <div key={category} className="space-y-1">
+                                    <Label htmlFor={`guide-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} className="text-xs">{category}</Label>
+                                    <Input type="number" id={`guide-adj-${category.toLowerCase().replace(/\s+/g, '-')}`} value={durationAdjustments[category]}
+                                        onChange={(e) => { const val = parseFloat(e.target.value); if(!isNaN(val)) setDurationAdjustments(p => ({...p, [category]: val})); else if (e.target.value === "") setDurationAdjustments(p => ({...p, [category]:0})); }}
+                                        step="0.1" className="h-8 text-sm" disabled={pageOverallLoading} placeholder="e.g. 1.0"/>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                     <DialogFooter className="pt-2">
                         <Button variant="ghost" onClick={handleCancelColumnSettings}>Cancel</Button>
@@ -566,3 +567,5 @@ export default function LevelingGuidePage() {
     </div>
   );
 }
+
+    
