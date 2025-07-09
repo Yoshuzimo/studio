@@ -80,25 +80,33 @@ export function AppLayout({ children }: { children: ReactNode }) {
         clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = null;
     }
+    if (subMenuTimeoutRef.current) {
+        clearTimeout(subMenuTimeoutRef.current);
+        subMenuTimeoutRef.current = null;
+    }
     setOpenAccordion(value);
   };
   const handleMenuLeave = () => {
     hoverTimeoutRef.current = setTimeout(() => {
       setOpenAccordion(undefined);
-    }, 200); 
+    }, 3000); 
   };
   
   const handleSubMenuEnter = (value: string) => {
     if (subMenuTimeoutRef.current) clearTimeout(subMenuTimeoutRef.current);
+     if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+    }
     setOpenAccordion(value);
   }
 
   const handleSubMenuLeave = () => {
      subMenuTimeoutRef.current = setTimeout(() => {
-        if(openAccordion && !openAccordion.startsWith("char-")) {
+        if(openAccordion && openAccordion.startsWith("char-")) {
             setOpenAccordion("characters");
         }
-    }, 200);
+    }, 3000);
   }
 
   const getVisibleNavItems = () => {
