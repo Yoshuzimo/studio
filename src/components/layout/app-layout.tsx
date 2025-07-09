@@ -37,6 +37,8 @@ import { useAuth } from '@/context/auth-context';
 import { useAppData } from '@/context/app-data-context';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+
 
 const navItemsBase = [
   { href: '/adventure-packs', label: 'Adventure Packs', icon: Package, protected: true },
@@ -74,6 +76,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { currentUser, userData, logout, isLoading: authIsLoading, sendVerificationEmail } = useAuth();
   const { characters } = useAppData();
   const [isSendingVerification, setIsSendingVerification] = React.useState(false);
+
+  const [isCharacterMenuOpen, setIsCharacterMenuOpen] = React.useState(false);
 
   const getVisibleNavItems = () => {
     let items = [...navItemsBase];
@@ -131,25 +135,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent className="p-2">
             <SidebarMenu>
                  <SidebarMenuItem>
-                    <DropdownMenu>
+                    <DropdownMenu open={isCharacterMenuOpen} onOpenChange={setIsCharacterMenuOpen}>
                       <DropdownMenuTrigger asChild>
-                         <Link href="/" passHref>
-                           <SidebarMenuButton
-                             asChild={false} // Important: keep this as false so it's a button
-                             variant="ghost"
-                             className="w-full justify-between"
-                             isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
-                             tooltip="Characters"
-                           >
-                              <div className="flex items-center gap-2 w-full">
-                               <Users className="h-5 w-5" />
-                               <span>Characters</span>
-                             </div>
-                           </SidebarMenuButton>
-                         </Link>
+                        <div onMouseEnter={() => setIsCharacterMenuOpen(true)} onMouseLeave={() => setIsCharacterMenuOpen(false)}>
+                           <Link href="/" passHref>
+                             <SidebarMenuButton
+                               asChild={false}
+                               variant="ghost"
+                               className="w-full justify-start"
+                               isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
+                               tooltip="Characters"
+                             >
+                                <Users className="h-5 w-5" />
+                                <span>Characters</span>
+                             </SidebarMenuButton>
+                           </Link>
+                        </div>
                       </DropdownMenuTrigger>
                       <DropdownMenuPortal>
-                        <DropdownMenuContent side="right" align="start" sideOffset={8}>
+                        <DropdownMenuContent side="right" align="start" sideOffset={8} onMouseEnter={() => setIsCharacterMenuOpen(true)} onMouseLeave={() => setIsCharacterMenuOpen(false)}>
                            {sortedCharacters.map((char) => (
                              <DropdownMenuSub key={char.id}>
                                <DropdownMenuSubTrigger>
