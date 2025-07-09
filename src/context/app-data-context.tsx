@@ -367,7 +367,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
     
     // Optimistically update local state for immediate UI feedback
-    setCharactersState(prev => prev.map(c => c.id === character.id ? character : c));
+    // Only do this if the character data is actually different, to prevent loops
+    const existingChar = characters.find(c => c.id === character.id);
+    if (JSON.stringify(existingChar) !== JSON.stringify(character)) {
+        setCharactersState(prev => prev.map(c => c.id === character.id ? character : c));
+    }
 
     // Debounce the Firestore update
     if (characterUpdateDebounceTimers.current.has(character.id)) {
@@ -389,7 +393,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     characterUpdateDebounceTimers.current.set(character.id, timer);
 
-}, [currentUser, toast]);
+}, [currentUser, toast, characters]);
 
 
   const deleteCharacter = async (characterId: string): Promise<void> => {
