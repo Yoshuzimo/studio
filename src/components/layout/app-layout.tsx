@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/toaster';
-import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, Mail, LogOut, MailCheck, Loader2, UserCog } from 'lucide-react'; // Added UserCog
+import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, Mail, LogOut, MailCheck, Loader2, UserCog, Book } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
 import * as React from 'react'; 
@@ -30,8 +30,9 @@ const navItemsBase = [
   { href: '/', label: 'Characters', icon: Users, protected: true },
   { href: '/adventure-packs', label: 'Adventure Packs', icon: Package, protected: true },
   { href: '/messages', label: 'Messages', icon: Mail, protected: true },
-  { href: '/account/change-email', label: 'Change Email', icon: UserCog, protected: true }, // Added
+  { href: '/account/change-email', label: 'Change Email', icon: UserCog, protected: true },
   { href: '/useful-links', label: 'Useful Links', icon: LinkIcon, protected: true },
+  { href: '/guide', label: 'Guide', icon: Book, protected: true },
   { href: '/suggestions', label: 'Suggestions', icon: Lightbulb, protected: true },
 ];
 
@@ -69,7 +70,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     if (currentUser && userData?.isAdmin) {
       items.push(adminNavItem);
     }
-    return items;
+    return items.sort((a,b) => (a.href === '/admin' ? 1 : b.href === '/admin' ? -1 : 0));
   };
   
   const visibleNavItems = getVisibleNavItems();
@@ -83,10 +84,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   const isPublicPage = ['/login', '/signup'].includes(pathname);
-  // Removed check that would return null, RouteGuard now handles this
-  // if (!currentUser && !isPublicPage && !authIsLoading) {
-  //   return null; 
-  // }
   if (isPublicPage) {
     return <>{children}</>; 
   }
@@ -103,13 +100,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
     try {
       await sendVerificationEmail();
     } catch (error) {
-      // Error is also handled within sendVerificationEmail
     } finally {
       setIsSendingVerification(false);
     }
   };
 
-  // Determine if the current path starts with /account to keep "Change Email" active
   const isAccountPage = pathname.startsWith('/account');
 
   return (
@@ -130,8 +125,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   <SidebarMenuButton
                     isActive={
                         pathname === item.href || 
-                        (item.href === "/" && (pathname.startsWith("/favor-tracker") || pathname.startsWith("/quest-guide"))) ||
-                        (item.href === "/account/change-email" && isAccountPage) // Keep "Change Email" active for /account/*
+                        (item.href === "/" && (pathname.startsWith("/favor-tracker") || pathname.startsWith("/quest-guide") || pathname.startsWith("/reaper-rewards") || pathname.startsWith("/leveling-guide"))) ||
+                        (item.href === "/account/change-email" && isAccountPage)
                     }
                     tooltip={{ children: item.label, className: "group-data-[collapsible=icon]:visible" }}
                     className="justify-start"
@@ -165,7 +160,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1">
                 <h1 className="font-headline text-lg font-semibold">
-                {visibleNavItems.find(item => item.href === "/account/change-email" && isAccountPage ? true : pathname.startsWith(item.href))?.label || 'DDO Toolkit'}
+                {visibleNavItems.find(item => item.href === "/account/change-email" && isAccountPage ? true : pathname === item.href || pathname.startsWith(item.href + '/'))?.label || 'DDO Toolkit'}
                 </h1>
             </div>
             <div className="flex items-center gap-2">

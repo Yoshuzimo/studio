@@ -223,7 +223,7 @@ export default function AdventurePacksPage() {
         <AlertDescription className="text-accent/80">
           Select the adventure packs you own, or upload a CSV to mark them in bulk. 
           Your CSV should have headers on Line 1 (e.g., '{CSV_HEADER_PACK_NAME}', '{CSV_HEADER_IS_OWNED}'). Lines 2 and 3 will be skipped. Data starts on Line 4.
-          Changes are saved automatically to your account.
+          Changes are saved automatically to your account. If you are not sure if you own a pack or expansion, open the store in game and look for it. If it shows up, you don't own it.
         </AlertDescription>
       </Alert>
       
