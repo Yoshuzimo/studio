@@ -148,21 +148,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
                         onMouseLeave={handleMouseLeave}
                     >
                         <AccordionItem value="characters" className="border-b-0">
-                            <AccordionTrigger asChild className="p-0 hover:no-underline [&>svg]:hidden">
-                                <Link href="/" className="w-full">
-                                    <SidebarMenuButton
-                                    variant="ghost"
-                                    className="w-full justify-between"
-                                    isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
-                                    tooltip="Characters"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <Users className="h-5 w-5" />
-                                            <span>Characters</span>
-                                        </div>
-                                        <div className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                    </SidebarMenuButton>
-                                </Link>
+                            <AccordionTrigger className="p-0 hover:no-underline [&>svg]:hidden">
+                               <SidebarMenuButton
+                                  variant="ghost"
+                                  className="w-full justify-between"
+                                  isActive={pathname === '/' || pathname.startsWith('/favor-tracker') || pathname.startsWith('/leveling-guide') || pathname.startsWith('/reaper-rewards')}
+                                  tooltip="Characters"
+                                  asChild
+                                >
+                                  <Link href="/" className="flex items-center gap-2 w-full">
+                                    <Users className="h-5 w-5" />
+                                    <span>Characters</span>
+                                    <div className="grow" /> {/* Spacer */}
+                                    <div className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                  </Link>
+                                </SidebarMenuButton>
                             </AccordionTrigger>
                             <AccordionContent className="py-1 pl-4 group-data-[collapsible=icon]:hidden">
                                  <Accordion type="single" collapsible className="w-full space-y-1" value={openAccordion}>
@@ -173,19 +173,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
                                             onMouseLeave={handleMouseLeave}
                                           >
                                             <AccordionItem value={char.id} className="border-b-0">
-                                                <AccordionTrigger asChild className="p-0 hover:no-underline [&>svg]:hidden">
-                                                     <Link href={`/favor-tracker/${char.id}`} className="w-full">
-                                                        <SidebarMenuButton variant="ghost" className="w-full justify-between h-8">
-                                                            <div className="flex items-center gap-2">
-                                                                <Avatar className="h-5 w-5">
-                                                                    <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
-                                                                    <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
-                                                                </Avatar>
-                                                                <span className="text-sm">{char.name}</span>
-                                                            </div>
-                                                            <div className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                                        </SidebarMenuButton>
-                                                    </Link>
+                                                <AccordionTrigger className="p-0 hover:no-underline [&>svg]:hidden">
+                                                    <SidebarMenuButton variant="ghost" className="w-full justify-between h-8">
+                                                        <div className="flex items-center gap-2">
+                                                            <Avatar className="h-5 w-5">
+                                                                <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
+                                                                <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
+                                                            </Avatar>
+                                                            <span className="text-sm">{char.name}</span>
+                                                        </div>
+                                                        <div className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                                    </SidebarMenuButton>
                                                 </AccordionTrigger>
                                                 <AccordionContent className="py-1 pl-6">
                                                      <div className="flex flex-col space-y-1">
