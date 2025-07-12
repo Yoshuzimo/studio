@@ -711,7 +711,7 @@ export default function FavorTrackerPage() {
       }
 
       if (comparison !== 0) {
-        return sortConfig.direction === 'ascending' ? comparison : -comparison;
+        return sortConfig.direction === 'ascending' ? -comparison : comparison;
       }
 
       if (sortConfig.key === 'areaRemainingFavor' || sortConfig.key === 'areaAdjustedRemainingFavorScore') {
@@ -758,16 +758,17 @@ export default function FavorTrackerPage() {
 
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
+    
+    const specialSortKeys: SortableColumnKey[] = [
+        'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore'
+    ];
 
-    if (sortConfig && sortConfig.key === key) {
+    if (specialSortKeys.includes(key)) {
+        newDirection = 'descending';
+    } else if (sortConfig && sortConfig.key === key) {
         newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
-    } else {
-        const specialSortKeys: SortableColumnKey[] = [
-            'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
-        ];
-        if (specialSortKeys.includes(key)) {
-            newDirection = 'descending';
-        }
+    } else if (key === 'maxPotentialFavorSingleQuest') {
+         newDirection = 'descending';
     }
 
     const newSortConfig = { key, direction: newDirection };
