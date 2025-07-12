@@ -672,6 +672,49 @@ export default function FavorTrackerPage() {
     completionDep, durationAdjustments, isDataLoaded, isDebugMode
   ]);
   
+  const sortQuests = useCallback((questsToSort: QuestWithSortValue[], currentSortConfig: SortConfig, areaAggregates: { favorMap: Map<string, number>, scoreMap: Map<string, number> }) => {
+    const getSortValue = (quest: QuestWithSortValue, sortKey: SortableColumnKey) => {
+        if (sortKey === 'areaRemainingFavor' || sortKey === 'areaAdjustedRemainingFavorScore') {
+          const primaryLocation = getPrimaryLocation(quest.location);
+          const mapToUse = sortKey === 'areaRemainingFavor' ? areaAggregates.favorMap : areaAggregates.scoreMap;
+          return primaryLocation ? mapToUse.get(primaryLocation) ?? 0 : 0;
+        }
+        if (sortKey === 'name') return getSortableName(quest.name);
+        if (sortKey === 'location') return quest.location || '';
+        return (quest as any)[sortKey];
+      };
+    
+      const sortedSnapshot = [...questsToSort].sort((a, b) => {
+        const aValue = getSortValue(a, currentSortConfig.key);
+        const bValue = getSortValue(b, currentSortConfig.key);
+    
+        let aComparable = aValue === null || aValue === undefined ? (currentSortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
+        let bComparable = bValue === null || bValue === undefined ? (currentSortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
+    
+        let comparison = 0;
+        if (typeof aComparable === 'string' && typeof bComparable === 'string') {
+          comparison = aComparable.localeCompare(bComparable);
+        } else {
+          if (aComparable < bComparable) comparison = -1;
+          if (aComparable > bComparable) comparison = 1;
+        }
+    
+        if (comparison !== 0) {
+          return currentSortConfig.direction === 'ascending' ? comparison : -comparison;
+        }
+    
+        if (currentSortConfig.key === 'areaRemainingFavor' || currentSortConfig.key === 'areaAdjustedRemainingFavorScore') {
+          const aLocation = a.location || '';
+          const bLocation = b.location || '';
+          const locationComparison = aLocation.localeCompare(bLocation);
+          if (locationComparison !== 0) return locationComparison;
+        }
+    
+        return getSortableName(a.name).localeCompare(getSortableName(b.name));
+      });
+      return sortedSnapshot;
+  }, []);
+
   const requestSort = (key: SortableColumnKey) => {
     const highToLowOnlyKeys: SortableColumnKey[] = [
       'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
@@ -687,57 +730,21 @@ export default function FavorTrackerPage() {
     const newSortConfig = { key, direction: newDirection };
     setSortConfig(newSortConfig);
     savePreferences({ sortConfig: newSortConfig });
+    
+    // Create the snapshot sort
+    const newlySortedQuests = sortQuests(unfilteredData.filteredQuests, newSortConfig, unfilteredData.areaAggregates);
+    setSortedAndFilteredQuests(newlySortedQuests);
   };
   
   // Effect to apply initial sort or when filters change
   useEffect(() => {
     if (unfilteredData.filteredQuests.length > 0 && isDataLoaded) {
-      const { filteredQuests, areaAggregates } = unfilteredData;
-      const getSortValue = (quest: QuestWithSortValue, sortKey: SortableColumnKey) => {
-        if (sortKey === 'areaRemainingFavor' || sortKey === 'areaAdjustedRemainingFavorScore') {
-          const primaryLocation = getPrimaryLocation(quest.location);
-          const mapToUse = sortKey === 'areaRemainingFavor' ? areaAggregates.favorMap : areaAggregates.scoreMap;
-          return primaryLocation ? mapToUse.get(primaryLocation) ?? 0 : 0;
-        }
-        if (sortKey === 'name') return getSortableName(quest.name);
-        if (sortKey === 'location') return quest.location || '';
-        return (quest as any)[sortKey];
-      };
-    
-      const sortedSnapshot = [...filteredQuests].sort((a, b) => {
-        const aValue = getSortValue(a, sortConfig.key);
-        const bValue = getSortValue(b, sortConfig.key);
-    
-        let aComparable = aValue === null || aValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
-        let bComparable = bValue === null || bValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
-    
-        let comparison = 0;
-        if (typeof aComparable === 'string' && typeof bComparable === 'string') {
-          comparison = aComparable.localeCompare(bComparable);
-        } else {
-          if (aComparable < bComparable) comparison = -1;
-          if (aComparable > bComparable) comparison = 1;
-        }
-    
-        if (comparison !== 0) {
-          return sortConfig.direction === 'ascending' ? comparison : -comparison;
-        }
-    
-        if (sortConfig.key === 'areaRemainingFavor' || sortConfig.key === 'areaAdjustedRemainingFavorScore') {
-          const aLocation = a.location || '';
-          const bLocation = b.location || '';
-          const locationComparison = aLocation.localeCompare(bLocation);
-          if (locationComparison !== 0) return locationComparison;
-        }
-    
-        return getSortableName(a.name).localeCompare(getSortableName(b.name));
-      });
-    
-      setSortedAndFilteredQuests(sortedSnapshot);
+      const initiallySorted = sortQuests(unfilteredData.filteredQuests, sortConfig, unfilteredData.areaAggregates);
+      setSortedAndFilteredQuests(initiallySorted);
     } else {
-        setSortedAndFilteredQuests([]);
+      setSortedAndFilteredQuests([]);
     }
-  }, [JSON.stringify(unfilteredData.filteredQuests.map(q => q.id)), sortConfig, unfilteredData, isDataLoaded]);
+  }, [unfilteredData.filteredQuests, unfilteredData.areaAggregates, isDataLoaded, sortConfig, sortQuests]);
 
   
   const pageStats = useMemo(() => {
@@ -1067,5 +1074,3 @@ export default function FavorTrackerPage() {
     </div>
   );
 }
-
-    
