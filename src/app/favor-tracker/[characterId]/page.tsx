@@ -591,6 +591,7 @@ export default function FavorTrackerPage() {
     if (!character || !isDataLoaded || !quests) {
       return {
         allProcessedQuests: [],
+        filteredQuests: [],
         areaAggregates: { favorMap: new Map<string, number>(), scoreMap: new Map<string, number>() },
       };
     }
@@ -720,7 +721,9 @@ export default function FavorTrackerPage() {
   }, [character, unfilteredData]);
 
   useEffect(() => {
-    setSortedAndFilteredQuests(sortData(unfilteredData.filteredQuests, sortConfig));
+    if (unfilteredData.filteredQuests) {
+        setSortedAndFilteredQuests(sortData(unfilteredData.filteredQuests, sortConfig));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unfilteredData.filteredQuests, sortConfig]); // Deliberately excluding sortData to avoid re-sorting on every render
   
@@ -728,7 +731,7 @@ export default function FavorTrackerPage() {
     const allQuests = unfilteredData.allProcessedQuests;
     const visibleQuests = sortedAndFilteredQuests;
 
-    if (!allQuests.length) {
+    if (!allQuests || !visibleQuests) {
         return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
     }
 
