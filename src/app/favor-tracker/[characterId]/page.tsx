@@ -619,12 +619,12 @@ export default function FavorTrackerPage() {
     quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
     completionDep, durationAdjustments, isDataLoaded
   ]);
-  
-  const areaAggregates = useMemo(() => {
-    const favorMap = new Map<string, number>();
-    const scoreMap = new Map<string, number>();
 
-    questDataMap.forEach(quest => {
+  const { filteredQuests, areaAggregates } = useMemo(() => {
+    const questsToFilter = Array.from(questDataMap.values());
+    const visibleQuests: QuestWithSortValue[] = [];
+
+    questsToFilter.forEach(quest => {
         const isEligibleLevel = quest.level > 0 && character && quest.level <= character.level;
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
         const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
@@ -632,28 +632,37 @@ export default function FavorTrackerPage() {
         const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
         const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
         const isNotTest = !quest.name.toLowerCase().includes("test");
-        const isVisible = isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
-        
-        if (isVisible) {
-            const primaryLocation = getPrimaryLocation(quest.location);
-            if(primaryLocation) {
-                favorMap.set(primaryLocation, (favorMap.get(primaryLocation) || 0) + quest.remainingPossibleFavor);
-                scoreMap.set(primaryLocation, (scoreMap.get(primaryLocation) || 0) + quest.adjustedRemainingFavorScore);
-            }
+        const hasRemainingFavor = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
+
+        const isVisible = isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest && hasRemainingFavor;
+
+        if (isDebugMode || isVisible) {
+            visibleQuests.push(quest);
+        }
+    });
+    
+    const aggregates = {
+        favorMap: new Map<string, number>(),
+        scoreMap: new Map<string, number>(),
+    };
+
+    visibleQuests.forEach(quest => {
+        const primaryLocation = getPrimaryLocation(quest.location);
+        if(primaryLocation) {
+            aggregates.favorMap.set(primaryLocation, (aggregates.favorMap.get(primaryLocation) || 0) + quest.remainingPossibleFavor);
+            aggregates.scoreMap.set(primaryLocation, (aggregates.scoreMap.get(primaryLocation) || 0) + quest.adjustedRemainingFavorScore);
         }
     });
 
-    return { favorMap, scoreMap };
-  }, [questDataMap, character, ownedPacksFuzzySet, onCormyr, showRaids]);
-
-  const requestSort = useCallback((key: SortableColumnKey) => {
-    if (!character || !questDataMap.size) return;
+    return { filteredQuests: visibleQuests, areaAggregates: aggregates };
+  }, [questDataMap, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor, isDebugMode]);
   
+  const requestSort = useCallback((key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
     const specialSortKeys: SortableColumnKey[] = [
         'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
     ];
-  
+
     if (specialSortKeys.includes(key)) {
         newDirection = 'descending';
     } else if (sortConfig && sortConfig.key === key) {
@@ -664,7 +673,7 @@ export default function FavorTrackerPage() {
     setSortConfig(newSortConfig);
     savePreferences({ sortConfig: newSortConfig });
   
-    const listToSort = Array.from(questDataMap.values());
+    const listToSort = [...filteredQuests];
   
     listToSort.sort((a, b) => {
         let aValue: any;
@@ -713,40 +722,20 @@ export default function FavorTrackerPage() {
     });
   
     setSortedQuestIds(listToSort.map(q => q.id));
-  }, [character, questDataMap, sortConfig, areaAggregates, savePreferences]);
+  }, [filteredQuests, areaAggregates, sortConfig, savePreferences]);
   
 
   useEffect(() => {
-    if (!initialSortDone.current && !isLoadingCompletions && character && questDataMap.size > 0) {
+    if (!initialSortDone.current && !isLoadingCompletions && character && questDataMap.size > 0 && filteredQuests.length > 0) {
       requestSort(sortConfig.key);
       initialSortDone.current = true;
     }
-  }, [isLoadingCompletions, character, questDataMap, sortConfig.key, requestSort]);
+  }, [isLoadingCompletions, character, questDataMap, sortConfig.key, requestSort, filteredQuests]);
 
 
   const questsToRender = useMemo(() => {
-    if (!character) return [];
-    
-    return sortedQuestIds.filter(questId => {
-      const quest = questDataMap.get(questId);
-      if (!quest) return false;
-
-      const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
-      const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-      const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-      const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-      const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-      const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
-      const isNotTest = !quest.name.toLowerCase().includes("test");
-      const hasRemainingFavor = showCompletedQuestsWithZeroRemainingFavor || quest.remainingPossibleFavor > 0;
-
-      if (isDebugMode) {
-        return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
-      }
-
-      return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest && hasRemainingFavor;
-    });
-  }, [sortedQuestIds, questDataMap, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor, isDebugMode]);
+    return sortedQuestIds.map(id => questDataMap.get(id)).filter((q): q is QuestWithSortValue => !!q);
+  }, [sortedQuestIds, questDataMap]);
 
 
   const pageStats = useMemo(() => {
@@ -767,8 +756,7 @@ export default function FavorTrackerPage() {
         }
     });
 
-    const favorRemaining = questsToRender.reduce((total, questId) => {
-      const quest = questDataMap.get(questId);
+    const favorRemaining = questsToRender.reduce((total, quest) => {
       return total + (quest?.remainingPossibleFavor || 0);
     }, 0);
 
@@ -997,8 +985,7 @@ export default function FavorTrackerPage() {
                     })}
                 </TableRow> </TableHeader>
                 <TableBody>
-                    {questsToRender.map((questId) => {
-                      const quest = questDataMap.get(questId);
+                    {questsToRender.map((quest) => {
                       if (!quest) return null;
                       return (
                         <TooltipProvider key={quest.id} delayDuration={0}>
@@ -1007,7 +994,7 @@ export default function FavorTrackerPage() {
                               <TableRow
                                 className={cn(
                                   clickAction !== 'none' && 'cursor-pointer',
-                                  isDebugMode && questsToRender.includes(quest.id) && 'text-destructive/80 hover:text-destructive'
+                                  isDebugMode && questDataMap.get(quest.id)?.hiddenReasons?.length > 0 && 'text-destructive/80 hover:text-destructive'
                                 )}
                                 onClick={() => handleRowClick(quest)}
                               >
@@ -1035,9 +1022,9 @@ export default function FavorTrackerPage() {
                                   ))}
                               </TableRow>
                             </TooltipTrigger>
-                            {isDebugMode && !questsToRender.includes(quest.id) && (
+                            {isDebugMode && questDataMap.get(quest.id)?.hiddenReasons?.length > 0 && (
                                 <TooltipContent>
-                                    <p>Normally hidden because it's filtered out.</p>
+                                    <p>Normally hidden because: {questDataMap.get(quest.id)?.hiddenReasons?.join(', ')}</p>
                                 </TooltipContent>
                             )}
                           </Tooltip>
