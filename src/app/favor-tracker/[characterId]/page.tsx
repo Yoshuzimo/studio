@@ -377,7 +377,7 @@ export default function FavorTrackerPage() {
       router.push('/');
       setIsLoadingCompletions(false);
     }
-  }, [characterId, currentUser?.uid, isDataLoaded, authIsLoading, appDataIsLoading, fetchQuestCompletionsForCharacter, activeCharacterId, characters, router, toast, isLoadingCompletions]);
+  }, [characterId, currentUser?.uid, isDataLoaded, authIsLoading, appDataIsLoading, fetchQuestCompletionsForCharacter, activeCharacterId, characters, router, toast]);
 
   const handleCompletionChange = async (questId: string, changedDifficultyKey: DifficultyKey, isNowCompleted: boolean) => {
     if (!character) return;
@@ -728,11 +728,14 @@ export default function FavorTrackerPage() {
   
   // Effect to apply initial sort or when filters change
   useEffect(() => {
+    // This effect now runs only when the underlying data map or filters change,
+    // to ensure the initial sort is correct.
     if (unfilteredDataMap.size > 0 && isDataLoaded && !isLoadingCompletions) {
         requestSort(sortConfig.key);
     }
-  }, [unfilteredDataMap, isDataLoaded, isLoadingCompletions]); // Intentionally omitting requestSort to prevent loops
-
+    // The dependency array is crucial. We omit requestSort to prevent loops.
+    // We only re-run this logic when the base data changes, not when the sorted IDs change.
+  }, [unfilteredDataMap, isDataLoaded, isLoadingCompletions, sortConfig.key, sortConfig.direction]); // Intentionally simplified dependencies
   
   const pageStats = useMemo(() => {
     if (!unfilteredDataMap || unfilteredDataMap.size === 0) {
