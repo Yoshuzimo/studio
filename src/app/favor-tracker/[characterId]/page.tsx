@@ -1,3 +1,4 @@
+
 // Favor-Tracker-V2
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -652,23 +653,22 @@ export default function FavorTrackerPage() {
     completionDep, durationAdjustments, isDataLoaded, isDebugMode, calculateFavorMetrics, getQuestCompletion
   ]);
 
-  const requestSort = (key: SortableColumnKey) => {
+  const requestSort = useCallback((key: SortableColumnKey) => {
     const highToLowOnlyKeys: SortableColumnKey[] = [
       'remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'
     ];
-  
+
     let newDirection: 'ascending' | 'descending' = 'ascending';
     if (highToLowOnlyKeys.includes(key)) {
       newDirection = 'descending';
     } else if (sortConfig && sortConfig.key === key) {
       newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     }
-  
+
     const newSortConfig = { key, direction: newDirection };
     setSortConfig(newSortConfig);
     savePreferences({ sortConfig: newSortConfig });
 
-    // --- Perform Snapshot Sort ---
     const visibleQuests = Array.from(unfilteredDataMap.values()).filter(q => q.hiddenReasons.length === 0);
 
     const areaAggregates = {
@@ -698,8 +698,8 @@ export default function FavorTrackerPage() {
         const aValue = getSortValue(a, newSortConfig.key);
         const bValue = getSortValue(b, newSortConfig.key);
 
-        let aComparable = aValue === null || aValue === undefined ? (newSortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
-        let bComparable = bValue === null || bValue === undefined ? (newSortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
+        let aComparable: string | number = aValue === null || aValue === undefined ? (newSortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
+        let bComparable: string | number = bValue === null || bValue === undefined ? (newSortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
 
         let comparison = 0;
         if (typeof aComparable === 'string' && typeof bComparable === 'string') {
@@ -724,15 +724,14 @@ export default function FavorTrackerPage() {
     });
 
     setSortedQuestIds(sortedVisibleQuests.map(q => q.id));
-  };
+  }, [sortConfig, unfilteredDataMap, savePreferences]);
   
   // Effect to apply initial sort or when filters change
   useEffect(() => {
     if (unfilteredDataMap.size > 0 && isDataLoaded && !isLoadingCompletions) {
         requestSort(sortConfig.key);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unfilteredDataMap, isDataLoaded, isLoadingCompletions]);
+  }, [unfilteredDataMap, isDataLoaded, isLoadingCompletions]); // Intentionally omitting requestSort to prevent loops
 
   
   const pageStats = useMemo(() => {
