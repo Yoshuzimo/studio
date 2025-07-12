@@ -3,7 +3,7 @@
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
 import type { Character, Quest, UserQuestCompletionData } from '@/types';
@@ -190,6 +190,7 @@ export default function FavorTrackerPage() {
   
   // This state holds the list of IDs to render. It's the "snapshot" order.
   const [sortedQuestIds, setSortedQuestIds] = useState<string[]>([]);
+  const initialSortDoneRef = useRef(false);
 
 
   const [showCompletedQuestsWithZeroRemainingFavor, setShowCompletedQuestsWithZeroRemainingFavor] = useState(false);
@@ -365,6 +366,7 @@ export default function FavorTrackerPage() {
     if (foundChar) {
       setCharacter(foundChar);
       if (characterId !== activeCharacterId) {
+        initialSortDoneRef.current = false; // Reset initial sort flag for new character
         setIsLoadingCompletions(true);
         fetchQuestCompletionsForCharacter(characterId)
           .catch(err => console.error(`[FavorTrackerPage] Error fetching completions for ${characterId}:`, err))
@@ -726,16 +728,21 @@ export default function FavorTrackerPage() {
     setSortedQuestIds(sortedVisibleQuests.map(q => q.id));
   }, [sortConfig, unfilteredDataMap, savePreferences]);
   
-  // Effect to apply initial sort or when filters change
+  // Effect to apply initial sort
   useEffect(() => {
-    // This effect now runs only when the underlying data map or filters change,
-    // to ensure the initial sort is correct.
-    if (unfilteredDataMap.size > 0 && isDataLoaded && !isLoadingCompletions) {
-        requestSort(sortConfig.key);
+    const isReady = isDataLoaded && !isLoadingCompletions && unfilteredDataMap.size > 0 && quests.length > 0;
+    if (isReady && !initialSortDoneRef.current) {
+      requestSort(sortConfig.key);
+      initialSortDoneRef.current = true;
     }
-    // The dependency array is crucial. We omit requestSort to prevent loops.
-    // We only re-run this logic when the base data changes, not when the sorted IDs change.
-  }, [unfilteredDataMap, isDataLoaded, isLoadingCompletions, sortConfig.key, sortConfig.direction]); // Intentionally simplified dependencies
+  }, [isDataLoaded, isLoadingCompletions, unfilteredDataMap, quests, sortConfig.key, requestSort]);
+  
+  // Effect to re-sort ONLY when filters change, not on completion changes.
+  useEffect(() => {
+      if (initialSortDoneRef.current) { // Only run after initial sort is done
+        requestSort(sortConfig.key);
+      }
+  }, [onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor, durationAdjustments]);
   
   const pageStats = useMemo(() => {
     if (!unfilteredDataMap || unfilteredDataMap.size === 0) {
