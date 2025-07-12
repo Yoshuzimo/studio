@@ -107,7 +107,7 @@ function getDurationCategory(durationInput?: string | null): DurationCategory | 
   if (!durationInput || durationInput.trim() === "") return null;
   const normalizedInput = durationInput.trim();
   if (DURATION_CATEGORIES.includes(normalizedInput as DurationCategory)) return normalizedInput as DurationCategory;
-  const minutes = parseDurationToMinutes(normalizedInput);
+  const minutes = parseDurationToMinutes(durationInput);
   if (minutes === null) return null;
   if (minutes <= 10) return "Very Short"; if (minutes <= 20) return "Short"; if (minutes <= 30) return "Medium"; if (minutes <= 45) return "Long"; return "Very Long";
 }
@@ -616,8 +616,7 @@ export default function FavorTrackerPage() {
     return newQuestDataMap;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    quests, character, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor,
-    completionDep, durationAdjustments, isDataLoaded
+    quests, character, isDataLoaded, completionDep, durationAdjustments
   ]);
 
   const { filteredQuests, areaAggregates } = useMemo(() => {
@@ -672,14 +671,21 @@ export default function FavorTrackerPage() {
     const newSortConfig = { key, direction: newDirection };
     setSortConfig(newSortConfig);
     savePreferences({ sortConfig: newSortConfig });
+  }, [sortConfig, savePreferences]);
   
+
+  // This effect now correctly handles initial sort and filter changes.
+  useEffect(() => {
+    if (pageOverallLoading || !character) return;
+    
+    // Create a temporary list to sort based on current filters
     const listToSort = [...filteredQuests];
-  
+
     listToSort.sort((a, b) => {
         let aValue: any;
         let bValue: any;
   
-        switch(key) {
+        switch(sortConfig.key) {
             case 'areaRemainingFavor':
                 aValue = areaAggregates.favorMap.get(getPrimaryLocation(a.location) || '') ?? 0;
                 bValue = areaAggregates.favorMap.get(getPrimaryLocation(b.location) || '') ?? 0;
@@ -693,12 +699,12 @@ export default function FavorTrackerPage() {
                 bValue = getSortableName(b.name);
                 break;
             default:
-                aValue = a[key as keyof QuestWithSortValue];
-                bValue = b[key as keyof QuestWithSortValue];
+                aValue = a[sortConfig.key as keyof QuestWithSortValue];
+                bValue = b[sortConfig.key as keyof QuestWithSortValue];
         }
   
-        let aComparable = aValue === null || aValue === undefined ? (newDirection === 'ascending' ? Infinity : -Infinity) : aValue;
-        let bComparable = bValue === null || bValue === undefined ? (newDirection === 'ascending' ? Infinity : -Infinity) : bValue;
+        let aComparable = aValue === null || aValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
+        let bComparable = bValue === null || bValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
   
         let comparison = 0;
         if (typeof aComparable === 'string' && typeof bComparable === 'string') {
@@ -709,10 +715,10 @@ export default function FavorTrackerPage() {
         }
   
         if (comparison !== 0) {
-            return newDirection === 'ascending' ? comparison : -comparison;
+            return sortConfig.direction === 'ascending' ? comparison : -comparison;
         }
   
-        if (key === 'areaRemainingFavor' || key === 'areaAdjustedRemainingFavorScore') {
+        if (sortConfig.key === 'areaRemainingFavor' || sortConfig.key === 'areaAdjustedRemainingFavorScore') {
             const aLocation = a.location || '';
             const bLocation = b.location || '';
             const locationComparison = aLocation.localeCompare(bLocation);
@@ -722,16 +728,9 @@ export default function FavorTrackerPage() {
     });
   
     setSortedQuestIds(listToSort.map(q => q.id));
-  }, [filteredQuests, areaAggregates, sortConfig, savePreferences]);
-  
 
-  useEffect(() => {
-    if (!initialSortDone.current && !isLoadingCompletions && character && questDataMap.size > 0 && filteredQuests.length > 0) {
-      requestSort(sortConfig.key);
-      initialSortDone.current = true;
-    }
-  }, [isLoadingCompletions, character, questDataMap, sortConfig.key, requestSort, filteredQuests]);
-
+  // This hook now correctly depends on the filtered list and sort configuration.
+  }, [filteredQuests, sortConfig, areaAggregates, pageOverallLoading, character]);
 
   const questsToRender = useMemo(() => {
     return sortedQuestIds.map(id => questDataMap.get(id)).filter((q): q is QuestWithSortValue => !!q);
