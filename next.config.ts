@@ -1,4 +1,3 @@
-
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -29,22 +28,10 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-      { // Added for Firebase Storage
+      { // Added for Cloudinary
         protocol: 'https',
-        hostname: 'firebasestorage.googleapis.com',
+        hostname: 'res.cloudinary.com',
         port: '',
-        pathname: '/**',
-      },
-      { // Added for Firebase Storage Emulator
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '9199',
-        pathname: '/**',
-      },
-      { // Also allow 127.0.0.1 for Storage Emulator
-        protocol: 'http',
-        hostname: '127.0.0.1',
-        port: '9199',
         pathname: '/**',
       },
       { // Added for i.imgflip.com

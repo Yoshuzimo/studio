@@ -1,4 +1,3 @@
-
 // src/components/character/character-form.tsx
 "use client";
 
@@ -7,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import type { Character } from '@/types';
-import { Loader2, UploadCloud } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
 
 import { Button } from "@/components/ui/button";
@@ -29,10 +28,12 @@ import {
   DialogDescription,
   DialogClose,
 } from "@/components/ui/dialog";
-import { storage } from "@/lib/firebase"; // Firebase storage instance
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { runFlow } from '@genkit-ai/next/client';
+import { generateCloudinarySignature } from "@/ai/flows/generate-cloudinary-signature-flow";
+import { useAuth } from "@/context/auth-context";
+
 
 const characterFormSchema = z.object({
   name: z.string().min(2, {
@@ -48,10 +49,11 @@ interface CharacterFormProps {
   onOpenChange: (isOpen: boolean) => void;
   onSubmit: (data: CharacterFormData, id?: string, iconUrl?: string) => Promise<void>;
   initialData?: Character;
-  isSubmitting?: boolean; // This is the overall form submission state from the parent
+  isSubmitting?: boolean;
 }
 
 export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isSubmitting: isParentSubmitting = false }: CharacterFormProps) {
+  const { currentUser } = useAuth();
   const form = useForm<CharacterFormData>({
     resolver: zodResolver(characterFormSchema),
     defaultValues: initialData ? { name: initialData.name, level: initialData.level } : { name: "", level: 1 },
@@ -84,56 +86,80 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       reader.readAsDataURL(file);
     } else {
       setSelectedFile(null);
-      setPreviewUrl(initialData?.iconUrl || null); // Revert to original if file is deselected
+      setPreviewUrl(initialData?.iconUrl || null);
+    }
+  };
+
+  const uploadToCloudinary = async (file: File): Promise<string | null> => {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+      toast({ title: "Client Configuration Error", description: "Cloudinary settings are missing.", variant: "destructive" });
+      return null;
+    }
+    if (!currentUser) {
+      toast({ title: "Authentication Error", description: "You must be logged in to upload.", variant: "destructive" });
+      return null;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const timestamp = Math.round(Date.now() / 1000);
+      const idToken = await currentUser.getIdToken();
+
+      const signatureResponse = await runFlow(generateCloudinarySignature, {
+          timestamp,
+          upload_preset: uploadPreset,
+      }, { auth: idToken });
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", uploadPreset);
+      formData.append("timestamp", String(signatureResponse.timestamp));
+      formData.append("api_key", signatureResponse.api_key);
+      formData.append("signature", signatureResponse.signature);
+      
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error.message || "Cloudinary upload failed.");
+      }
+      
+      const data = await response.json();
+      setUploadProgress(100);
+      return data.secure_url;
+
+    } catch (error) {
+      console.error("Upload failed:", error);
+      toast({ title: "Icon Upload Failed", description: (error as Error).message, variant: "destructive" });
+      return null;
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleSubmit = async (data: CharacterFormData) => {
-    if (!initialData && selectedFile) {
-      // This case (new character with file) is disabled for now
-      toast({ title: "Info", description: "Please create the character first, then edit to add an icon.", variant: "default" });
-      return;
-    }
+    let finalIconUrl = initialData?.iconUrl || null;
 
-    let finalIconUrl = initialData?.iconUrl;
-
-    if (selectedFile && initialData?.id) { // Only upload if editing and file is selected
-      setIsUploading(true);
-      setUploadProgress(0);
-      const storageRef = ref(storage, `character-icons/${initialData.id}/${selectedFile.name}`);
-      const uploadTask = uploadBytesResumable(storageRef, selectedFile);
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          uploadTask.on('state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
-            },
-            (error) => {
-              console.error("Upload failed:", error);
-              toast({ title: "Icon Upload Failed", description: error.message, variant: "destructive" });
-              setIsUploading(false);
-              setUploadProgress(null);
-              reject(error);
-            },
-            async () => {
-              finalIconUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              setIsUploading(false);
-              setUploadProgress(100); // Mark as complete
-              resolve();
-            }
-          );
-        });
-      } catch (error) {
-        // Error already toasted, just ensure we don't proceed with onSubmit if upload failed
+    if (selectedFile) {
+      const uploadedUrl = await uploadToCloudinary(selectedFile);
+      if (uploadedUrl) {
+        finalIconUrl = uploadedUrl;
+      } else {
+        // Upload failed, so we shouldn't proceed with the character form submission if an icon change was intended
+        toast({ title: "Submission Halted", description: "Icon upload failed, so character details were not saved.", variant: "destructive" });
         return;
       }
     }
-    // If we are here, either upload succeeded, or no new file was selected.
-    // isParentSubmitting handles the loader on the submit button itself.
+    
     await onSubmit(data, initialData?.id, finalIconUrl);
-    // Dialog closing and form reset are handled by parent or useEffect on isOpen.
   };
   
   const effectiveIsSubmitting = isParentSubmitting || isUploading;
@@ -144,8 +170,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         <DialogHeader>
           <DialogTitle className="font-headline">{initialData ? "Edit Character" : "Create Character"}</DialogTitle>
           <DialogDescription>
-            {initialData ? "Update your character's details." : "Add a new character to your roster."}
-            {initialData && " You can also upload a character icon."}
+            {initialData ? "Update your character's details and icon." : "Add a new character to your roster."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -176,32 +201,28 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                 </FormItem>
               )}
             />
-
-            {initialData && ( // Only show for existing characters
-              <FormItem>
-                <FormLabel htmlFor="character-icon-upload">Character Icon</FormLabel>
-                <Input 
-                  id="character-icon-upload" 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleFileChange} 
-                  disabled={effectiveIsSubmitting}
-                  className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                />
-                {previewUrl && (
-                  <div className="mt-2 relative w-24 h-24 rounded-md overflow-hidden border-2 border-primary">
-                    <Image src={previewUrl} alt="Icon preview" layout="fill" objectFit="contain" sizes="96px" />
-                  </div>
-                )}
-                {isUploading && uploadProgress !== null && (
-                   <div className="mt-2">
-                     <Progress value={uploadProgress} className="w-full h-2" />
-                     <p className="text-xs text-muted-foreground text-center mt-1">{Math.round(uploadProgress)}% uploaded</p>
-                   </div>
-                )}
-              </FormItem>
-            )}
-
+            <FormItem>
+              <FormLabel htmlFor="character-icon-upload">Character Icon</FormLabel>
+              <Input 
+                id="character-icon-upload" 
+                type="file" 
+                accept="image/*" 
+                onChange={handleFileChange} 
+                disabled={effectiveIsSubmitting}
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+              />
+              {previewUrl && (
+                <div className="mt-2 relative w-24 h-24 rounded-md overflow-hidden border-2 border-primary">
+                  <Image src={previewUrl} alt="Icon preview" layout="fill" objectFit="contain" sizes="96px" />
+                </div>
+              )}
+              {isUploading && uploadProgress !== null && (
+                 <div className="mt-2">
+                   <Progress value={uploadProgress} className="w-full h-2" />
+                   <p className="text-xs text-muted-foreground text-center mt-1">{Math.round(uploadProgress)}% uploaded</p>
+                 </div>
+              )}
+            </FormItem>
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={effectiveIsSubmitting}>Cancel</Button>
