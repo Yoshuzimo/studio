@@ -1,17 +1,18 @@
 
 'use server';
 /**
- * @fileOverview Handles suggestion submissions.
+ * @fileOverview Handles suggestion submissions as a Next.js Server Action.
  *
  * - submitSuggestion - A function that processes a user's suggestion and saves it to Firestore.
  * - SubmitSuggestionInput - The input type for the submitSuggestion function.
  * - SubmitSuggestionOutput - The return type for the submitSuggestion function.
  */
 
-import {ai} from '@/ai/genkit';
 import {z} from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, type Timestamp, type FieldValue } from 'firebase/firestore';
+import { auth } from 'firebase-admin';
+import { headers } from 'next/headers';
 
 const SubmitSuggestionInputSchema = z.object({
   suggestionText: z.string().min(10, { message: "Suggestion must be at least 10 characters."}).max(5000, {message: "Suggestion must be 5000 characters or less."}).describe('The text of the user\'s suggestion.'),
@@ -36,6 +37,22 @@ type SuggestionData = {
 };
 
 export async function submitSuggestion(input: SubmitSuggestionInput): Promise<SubmitSuggestionOutput> {
+  const authorization = headers().get('Authorization');
+  if (!authorization?.startsWith('Bearer ')) {
+    throw new Error('Unauthorized');
+  }
+  const idToken = authorization.split('Bearer ')[1];
+  
+  try {
+    const decodedToken = await auth().verifyIdToken(idToken);
+    if (decodedToken.uid !== input.suggesterId) {
+        throw new Error('Mismatched user ID');
+    }
+  } catch(error) {
+    console.error("Authentication error in submitSuggestion", error);
+    throw new Error('Authentication failed');
+  }
+
   try {
     SubmitSuggestionInputSchema.parse(input);
   } catch (error) {
@@ -44,41 +61,25 @@ export async function submitSuggestion(input: SubmitSuggestionInput): Promise<Su
     }
     throw error;
   }
-  return submitSuggestionFlow(input);
-}
+  
+  try {
+    const suggestionData: SuggestionData = {
+      text: input.suggestionText,
+      createdAt: serverTimestamp(),
+      suggesterId: input.suggesterId, 
+      suggesterName: input.suggesterName,
+    };
+    const docRef = await addDoc(collection(db, 'suggestions'), suggestionData);
+    
+    console.log(`New suggestion saved to Firestore with ID: ${docRef.id}`);
 
-const submitSuggestionFlow = ai.defineFlow(
-  {
-    name: 'submitSuggestionFlow',
-    inputSchema: SubmitSuggestionInputSchema,
-    outputSchema: SubmitSuggestionOutputSchema,
-    auth: {
-      // This forces Genkit to require an authenticated user for this flow.
-      // The `withAuth()` helper on the client will pass the token.
-      forceAuth: true,
-    }
-  },
-  async (input) => {
-    try {
-      const suggestionData: SuggestionData = {
-        text: input.suggestionText,
-        createdAt: serverTimestamp(),
-        suggesterId: input.suggesterId, 
-        suggesterName: input.suggesterName,
-      };
-      const docRef = await addDoc(collection(db, 'suggestions'), suggestionData);
-      
-      console.log(`New suggestion saved to Firestore with ID: ${docRef.id}`);
-      console.log(`Suggestion text: "${input.suggestionText}" by ${suggestionData.suggesterName}`);
-
-      return {
-        message: 'Thank you! Your suggestion has been received and saved for review.',
-        suggestionId: docRef.id,
-      };
-    } catch (error) {
-      console.error("Failed to save suggestion to Firestore:", error);
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while saving your suggestion.";
-      throw new Error(`There was an issue submitting your suggestion: ${errorMessage}. Please try again later.`);
-    }
+    return {
+      message: 'Thank you! Your suggestion has been received and saved for review.',
+      suggestionId: docRef.id,
+    };
+  } catch (error) {
+    console.error("Failed to save suggestion to Firestore:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while saving your suggestion.";
+    throw new Error(`There was an issue submitting your suggestion: ${errorMessage}. Please try again later.`);
   }
-);
+}

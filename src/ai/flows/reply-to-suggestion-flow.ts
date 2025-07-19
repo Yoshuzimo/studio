@@ -1,17 +1,18 @@
 
 'use server';
 /**
- * @fileOverview Handles admin replies to suggestions.
+ * @fileOverview Handles admin replies to suggestions as a Next.js Server Action.
  *
  * - replyToSuggestion - A function that saves an admin's reply as a message in Firestore.
  * - ReplyToSuggestionInput - The input type for the replyToSuggestion function.
  * - ReplyToSuggestionOutput - The return type for the replyToSuggestion function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z} from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, type Timestamp, type FieldValue } from 'firebase/firestore';
+import { auth } from 'firebase-admin';
+import { headers } from 'next/headers';
 
 const ReplyToSuggestionInputSchema = z.object({
   suggestionId: z.string().describe('The ID of the suggestion being replied to.'),
@@ -41,8 +42,23 @@ type MessageData = {
   relatedSuggestionId?: string;
 };
 
-
 export async function replyToSuggestion(input: ReplyToSuggestionInput): Promise<ReplyToSuggestionOutput> {
+  const authorization = headers().get('Authorization');
+  if (!authorization?.startsWith('Bearer ')) {
+    throw new Error('Unauthorized');
+  }
+  const idToken = authorization.split('Bearer ')[1];
+  
+  try {
+    const decodedToken = await auth().verifyIdToken(idToken);
+    if (decodedToken.uid !== input.adminId || !decodedToken.admin) { // Check if user is admin
+        throw new Error('Mismatched user ID or insufficient permissions');
+    }
+  } catch(error) {
+    console.error("Authentication error in replyToSuggestion", error);
+    throw new Error('Authentication failed or insufficient permissions');
+  }
+
   try {
     ReplyToSuggestionInputSchema.parse(input);
   } catch (error) {
@@ -51,45 +67,30 @@ export async function replyToSuggestion(input: ReplyToSuggestionInput): Promise<
     }
     throw error;
   }
-  return replyToSuggestionFlow(input);
-}
+  
+  try {
+    const messageData: MessageData = {
+      senderId: input.adminId, 
+      senderName: input.adminName, 
+      receiverId: input.suggesterId,
+      receiverName: input.suggesterName,
+      text: input.replyText,
+      timestamp: serverTimestamp(), 
+      isRead: false,
+      relatedSuggestionId: input.suggestionId,
+    };
 
-const replyToSuggestionFlow = ai.defineFlow(
-  {
-    name: 'replyToSuggestionFlow',
-    inputSchema: ReplyToSuggestionInputSchema,
-    outputSchema: ReplyToSuggestionOutputSchema,
-    auth: {
-      // This forces Genkit to require an authenticated user for this flow.
-      // The `withAuth()` helper on the client will pass the token.
-      forceAuth: true,
-    }
-  },
-  async (input) => {
-    try {
-      const messageData: MessageData = {
-        senderId: input.adminId, 
-        senderName: input.adminName, 
-        receiverId: input.suggesterId,
-        receiverName: input.suggesterName,
-        text: input.replyText,
-        timestamp: serverTimestamp(), 
-        isRead: false,
-        relatedSuggestionId: input.suggestionId,
-      };
+    const docRef = await addDoc(collection(db, 'messages'), messageData);
+    
+    console.log(`New reply message saved to Firestore with ID: ${docRef.id} for suggestion ${input.suggestionId}`);
 
-      const docRef = await addDoc(collection(db, 'messages'), messageData);
-      
-      console.log(`New reply message saved to Firestore with ID: ${docRef.id} for suggestion ${input.suggestionId}`);
-
-      return {
-        message: `Your reply to ${input.suggesterName}'s suggestion has been sent and saved.`,
-        messageId: docRef.id,
-      };
-    } catch (error) {
-      console.error("Failed to save reply message to Firestore:", error);
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while saving the reply.";
-      throw new Error(`There was an issue sending your reply: ${errorMessage}. Please try again later.`);
-    }
+    return {
+      message: `Your reply to ${input.suggesterName}'s suggestion has been sent and saved.`,
+      messageId: docRef.id,
+    };
+  } catch (error) {
+    console.error("Failed to save reply message to Firestore:", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while saving the reply.";
+    throw new Error(`There was an issue sending your reply: ${errorMessage}. Please try again later.`);
   }
-);
+}

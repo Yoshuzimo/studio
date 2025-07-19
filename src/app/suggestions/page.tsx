@@ -2,7 +2,7 @@
 // src/app/suggestions/page.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -11,12 +11,11 @@ import { Lightbulb, Send, Loader2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { submitSuggestion, type SubmitSuggestionInput } from '@/ai/flows/submit-suggestion-flow';
 import { useAuth } from '@/context/auth-context';
-import { runFlow } from '@genkit-ai/next/client';
 
 export default function SuggestionsPage() {
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const [suggestionText, setSuggestionText] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -39,34 +38,33 @@ export default function SuggestionsPage() {
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const input: SubmitSuggestionInput = {
-        suggestionText,
-        suggesterId: currentUser.uid,
-        suggesterName: userData?.displayName || currentUser.email || "Anonymous User"
-      };
-      
-      const idToken = await currentUser.getIdToken();
-      const result = await runFlow(submitSuggestion, input, { auth: idToken });
+    startTransition(async () => {
+      try {
+        const input: SubmitSuggestionInput = {
+          suggestionText,
+          suggesterId: currentUser.uid,
+          suggesterName: userData?.displayName || currentUser.email || "Anonymous User"
+        };
+        
+        const idToken = await currentUser.getIdToken();
+        const result = await submitSuggestion(input, { headers: { Authorization: `Bearer ${idToken}` } } as any);
 
-      toast({
-        title: "Suggestion Submitted!",
-        description: result.message,
-      });
-      setSuggestionText('');
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
-      toast({
-        title: "Submission Failed",
-        description: `Could not submit your suggestion: ${errorMessage}`,
-        variant: "destructive",
-      });
-      setError(`Submission failed: ${errorMessage}`);
-      console.error("Suggestion submission error:", e);
-    } finally {
-      setIsSubmitting(false);
-    }
+        toast({
+          title: "Suggestion Submitted!",
+          description: result.message,
+        });
+        setSuggestionText('');
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
+        toast({
+          title: "Submission Failed",
+          description: `Could not submit your suggestion: ${errorMessage}`,
+          variant: "destructive",
+        });
+        setError(`Submission failed: ${errorMessage}`);
+        console.error("Suggestion submission error:", e);
+      }
+    });
   };
 
   if (authIsLoading) {
