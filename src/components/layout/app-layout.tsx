@@ -36,14 +36,11 @@ import * as React from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useAppData } from '@/context/app-data-context';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { cn } from '@/lib/utils';
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
-
+import { UserProfileDialog } from '../auth/user-profile-dialog';
 
 const navItemsBase = [
   { href: '/adventure-packs', label: 'Adventure Packs', icon: Package, protected: true },
   { href: '/messages', label: 'Messages', icon: Mail, protected: true },
-  { href: '/account/change-email', label: 'Change Email', icon: UserCog, protected: true },
   { href: '/useful-links', label: 'Useful Links', icon: LinkIcon, protected: true },
   { href: '/guide', label: 'Guide', icon: Book, protected: true },
   { href: '/suggestions', label: 'Suggestions', icon: Lightbulb, protected: true },
@@ -76,6 +73,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { currentUser, userData, logout, isLoading: authIsLoading, sendVerificationEmail } = useAuth();
   const { characters } = useAppData();
   const [isSendingVerification, setIsSendingVerification] = React.useState(false);
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = React.useState(false);
 
   const [isCharacterMenuOpen, setIsCharacterMenuOpen] = React.useState(false);
 
@@ -124,6 +122,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider defaultOpen={true}>
+       {currentUser && userData && (
+        <UserProfileDialog 
+          isOpen={isProfileDialogOpen}
+          onOpenChange={setIsProfileDialogOpen}
+          user={userData}
+        />
+      )}
       <Sidebar variant="sidebar" collapsible="icon" className="border-r">
         <SidebarHeader className="p-4 flex flex-col items-center group-data-[collapsible=icon]:items-center">
             <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
@@ -204,14 +209,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </SidebarContent>
 
         <SidebarFooter className="p-4 flex flex-col items-center gap-2 group-data-[collapsible=icon]:items-center">
-            <div className="group-data-[collapsible=icon]:hidden flex items-center gap-2">
+             <Button
+                variant="ghost"
+                className="w-full justify-start h-auto p-1 group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:aspect-square group-data-[collapsible=icon]:p-2"
+                onClick={() => setIsProfileDialogOpen(true)}
+              >
                 <Avatar className="h-8 w-8">
-                    <AvatarImage src={currentUser?.photoURL || "https://placehold.co/40x40.png"} alt="User Avatar" data-ai-hint="user avatar" />
+                    <AvatarImage src={userData?.iconUrl || undefined} alt="User Avatar" />
                     <AvatarFallback>{userAvatarFallback}</AvatarFallback>
                 </Avatar>
-                <span className="text-sm truncate max-w-[100px]">{userDisplayName}</span>
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="w-full group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:aspect-square group-data-[collapsible=icon]:p-2">
+                <div className="flex flex-col items-start ml-2 group-data-[collapsible=icon]:hidden">
+                  <span className="text-sm font-medium truncate max-w-[100px]">{userDisplayName}</span>
+                  <span className="text-xs text-muted-foreground">Edit Profile</span>
+                </div>
+              </Button>
+            <Button variant="outline" size="sm" onClick={handleLogout} className="w-full group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:aspect-square group-data-[collapsible=icon]:p-2">
                 <LogOut className="h-4 w-4 group-data-[collapsible=icon]:m-0" />
                 <span className="ml-2 group-data-[collapsible=icon]:hidden">Logout</span>
             </Button>
@@ -258,3 +270,5 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
+
+    

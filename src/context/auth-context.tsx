@@ -33,7 +33,7 @@ interface AuthContextType {
   sendPasswordReset: (email: string) => Promise<void>;
   reauthenticateWithPassword: (password: string) => Promise<void>;
   updateUserEmail: (newEmail: string) => Promise<void>;
-  updateUserDisplayName: (newDisplayName: string) => Promise<boolean>;
+  updateUserDisplayName: (newDisplayName: string, newIconUrl?: string | null) => Promise<boolean>;
   getAllUsers: () => Promise<AppUser[]>;
   updateUserAdminStatus: (targetUserId: string, isAdmin: boolean) => Promise<void>;
   updateUserOwnerStatus: (targetUserId: string, isOwner: boolean) => Promise<void>;
@@ -163,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const mainUserDocData: Omit<AppUser, 'createdAt'> & { createdAt: FieldValue } = { 
                         id: freshUser.uid, email: freshUser.email, displayName: placeholderDisplayName,
                         isAdmin: false, isOwner: false, isCreator: false, 
-                        emailVerified: freshUser.emailVerified, 
+                        emailVerified: user.emailVerified, 
                         iconUrl: null, 
                         createdAt: serverTimestamp(),
                     };
@@ -404,7 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [toast, sendVerificationEmail, setUserData]);
 
-  const updateUserDisplayName = useCallback(async (newDisplayName: string): Promise<boolean> => {
+  const updateUserDisplayName = useCallback(async (newDisplayName: string, newIconUrl?: string | null): Promise<boolean> => {
     const userToUpdate = auth.currentUser;
     console.log('[AuthContext] updateUserDisplayName: Attempting for user:', userToUpdate?.uid, 'to:', newDisplayName);
 
@@ -415,19 +415,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      if (newDisplayName.trim().length < 3 || newDisplayName.trim().length > 30) {
       toast({ title: "Invalid Display Name", description: "Must be 3-30 characters.", variant: "destructive" });
       return false;
-    }
-
-    let currentIconUrlFromDB: string | null = null;
-    const userDocRef = doc(db, 'users', userToUpdate.uid);
-    try {
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-            currentIconUrlFromDB = userDocSnap.data().iconUrl || null;
-        } else {
-            console.warn("[AuthContext] updateUserDisplayName: User document not found in Firestore for iconUrl pre-fetch. Using null.");
-        }
-    } catch (e) {
-        console.error("[AuthContext] Failed to fetch current user data for iconUrl, proceeding with null:", e);
     }
 
     try {
@@ -443,26 +430,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
       console.log('[AuthContext] updateUserDisplayName: Display name unique or belongs to current user. Proceeding with operations.');
-
-      // Operation 1: Update /users/{uid} document
-      const userDocUpdatePayload = { displayName: newDisplayName };
-      console.log('[AuthContext] updateUserDisplayName: Updating Firestore document /users/', userToUpdate.uid, 'with payload:', JSON.stringify(userDocUpdatePayload, null, 2));
-      await updateDoc(userDocRef, userDocUpdatePayload);
-      console.log('[AuthContext] updateUserDisplayName: Firestore document /users/ update SUCCEEDED.');
-
-      // Operation 2: Update /publicProfiles/{uid} document
-      const publicProfileDocRef = doc(db, 'publicProfiles', userToUpdate.uid);
-      const publicProfileUpdatePayload: PublicUserProfileFirebaseData = {
-        displayName: newDisplayName,
-        iconUrl: currentIconUrlFromDB, 
-        updatedAt: serverTimestamp()
-      };
-      console.log('[AuthContext] updateUserDisplayName: Setting/Updating Firestore document /publicProfiles/', userToUpdate.uid, 'with payload:', JSON.stringify(publicProfileUpdatePayload, null, 2));
-      await setDoc(publicProfileDocRef, publicProfileUpdatePayload, { merge: true });
-      console.log('[AuthContext] updateUserDisplayName: Firestore document /publicProfiles/ update SUCCEEDED.');
       
-      await updateProfile(userToUpdate, { displayName: newDisplayName });
+      const userDocRef = doc(db, 'users', userToUpdate.uid);
+      const publicProfileDocRef = doc(db, 'publicProfiles', userToUpdate.uid);
+
+      // Operation 1: Update Auth Profile
+      await updateProfile(userToUpdate, { displayName: newDisplayName, photoURL: newIconUrl === undefined ? userToUpdate.photoURL : newIconUrl });
       console.log('[AuthContext] updateUserDisplayName: Firebase Auth profile updated.');
+
+      // Operation 2 & 3: Update Firestore documents
+      const userDocUpdatePayload: Partial<AppUser> = { displayName: newDisplayName };
+      const publicProfileUpdatePayload: Partial<PublicUserProfileFirebaseData> = { displayName: newDisplayName, updatedAt: serverTimestamp() };
+      
+      if (newIconUrl !== undefined) {
+          userDocUpdatePayload.iconUrl = newIconUrl;
+          publicProfileUpdatePayload.iconUrl = newIconUrl;
+      }
+      
+      await updateDoc(userDocRef, userDocUpdatePayload);
+      await setDoc(publicProfileDocRef, publicProfileUpdatePayload, { merge: true });
+      console.log('[AuthContext] updateUserDisplayName: Firestore documents updated.');
       
       const updatedUserDocSnap = await getDoc(userDocRef); 
       if (updatedUserDocSnap.exists()) {
@@ -481,11 +468,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserData(updatedAppUserData);
       }
 
-      toast({ title: "Display Name Updated!", description: `Your display name is now ${newDisplayName}.` });
+      toast({ title: "Profile Updated!", description: `Your profile has been updated.` });
       return true;
     } catch (error: any) {
       console.error("[AuthContext] updateUserDisplayName: Error during overall operation:", error);
-      toast({ title: "Display Name Update Failed", description: error.message || "An unknown error occurred.", variant: "destructive" });
+      toast({ title: "Profile Update Failed", description: error.message || "An unknown error occurred.", variant: "destructive" });
       return false; 
     }
   }, [toast, setUserData]);
