@@ -1,3 +1,4 @@
+
 // src/components/character/character-form.tsx
 "use client";
 
@@ -8,6 +9,7 @@ import * as z from "zod";
 import type { Character } from '@/types';
 import { Loader2, ImagePlus } from 'lucide-react';
 import Script from 'next/script';
+import crypto from 'crypto';
 
 import { Button } from "@/components/ui/button";
 import {
