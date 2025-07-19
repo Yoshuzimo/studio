@@ -2,17 +2,17 @@
 // src/app/suggestions/page.tsx
 "use client";
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input'; // Import Input
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Lightbulb, Send, Loader2, AlertTriangle, MessageSquarePlus } from 'lucide-react';
+import { Lightbulb, Send, Loader2, AlertTriangle, MessageSquarePlus, ChevronUp, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { submitSuggestion, type SubmitSuggestionInput } from '@/ai/flows/submit-suggestion-flow';
 import { useAuth } from '@/context/auth-context';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Suggestion, SuggestionConversationItem } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -25,6 +25,7 @@ function SuggestionItem({ suggestion, onReply }: { suggestion: Suggestion; onRep
   const { currentUser } = useAuth();
   const [replyText, setReplyText] = useState('');
   const [isReplying, startTransition] = useTransition();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const handleReply = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -37,57 +38,69 @@ function SuggestionItem({ suggestion, onReply }: { suggestion: Suggestion; onRep
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <CardTitle className="font-headline">{suggestion.title}</CardTitle>
-          <div
-            className={cn(
-              "px-2 py-1 text-xs font-semibold rounded-full",
-              suggestion.status === 'open' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-            )}
-          >
-            {suggestion.status}
+      <CardHeader className="p-4 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+        <div className="flex justify-between items-start gap-4">
+          <div className="flex-grow">
+            <CardTitle className="font-headline text-lg">{suggestion.title}</CardTitle>
+            <CardDescription className="text-xs">
+              Submitted {formatDistanceToNow(suggestion.createdAt.toDate(), { addSuffix: true })}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+              <div
+                className={cn(
+                  "px-2 py-1 text-xs font-semibold rounded-full",
+                  suggestion.status === 'open' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                )}
+              >
+                {suggestion.status}
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
           </div>
         </div>
-        <CardDescription>
-          Submitted {formatDistanceToNow(suggestion.createdAt.toDate(), { addSuffix: true })}
-        </CardDescription>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-48 mb-4 border rounded-md p-2">
-          <div className="space-y-4">
-            {suggestion.conversation.map((item, index) => (
-              <div key={index} className={cn("flex flex-col", item.senderId === currentUser?.uid ? "items-end" : "items-start")}>
-                <div className={cn(
-                  "p-2 rounded-lg max-w-xs md:max-w-md",
-                  item.senderId === currentUser?.uid ? "bg-primary text-primary-foreground" : "bg-muted"
-                )}>
-                  <p className="text-xs font-semibold mb-1">{item.senderName}</p>
-                  <p className="text-sm whitespace-pre-wrap">{item.text}</p>
-                  <p className="text-xs text-right mt-1 opacity-70">
-                    {formatDistanceToNow((item.timestamp as any).toDate(), { addSuffix: true })}
-                  </p>
+      {isExpanded && (
+        <CardContent className="p-4 pt-0">
+            <Separator className="mb-4" />
+            <ScrollArea className="h-48 mb-4 border rounded-md p-2 bg-muted/20">
+            <div className="space-y-4 pr-2">
+                {suggestion.conversation.map((item, index) => (
+                <div key={index} className={cn("flex flex-col", item.senderId === currentUser?.uid ? "items-end" : "items-start")}>
+                    <div className={cn(
+                    "p-2 rounded-lg max-w-xs md:max-w-md",
+                    item.senderId === currentUser?.uid ? "bg-primary text-primary-foreground" : "bg-muted"
+                    )}>
+                    <p className="text-xs font-semibold mb-1">{item.senderName}</p>
+                    <p className="text-sm whitespace-pre-wrap">{item.text}</p>
+                    <p className="text-xs text-right mt-1 opacity-70">
+                        {formatDistanceToNow((item.timestamp as any).toDate(), { addSuffix: true })}
+                    </p>
+                    </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-        {suggestion.status === 'open' && (
-          <form onSubmit={handleReply} className="space-y-2">
-            <Textarea
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Type your reply..."
-              rows={2}
-              disabled={isReplying}
-            />
-            <Button type="submit" size="sm" disabled={isReplying || !replyText.trim()}>
-              {isReplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              Send Reply
-            </Button>
-          </form>
-        )}
-      </CardContent>
+                ))}
+            </div>
+            </ScrollArea>
+            {suggestion.status === 'open' ? (
+            <form onSubmit={handleReply} className="space-y-2">
+                <Textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Type your reply..."
+                rows={2}
+                disabled={isReplying}
+                />
+                <Button type="submit" size="sm" disabled={isReplying || !replyText.trim()}>
+                {isReplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                Send Reply
+                </Button>
+            </form>
+            ) : (
+                <p className="text-sm text-muted-foreground italic">This suggestion is closed and can no longer be replied to.</p>
+            )}
+        </CardContent>
+      )}
     </Card>
   );
 }
@@ -104,25 +117,30 @@ export default function SuggestionsPage() {
   const [mySuggestions, setMySuggestions] = useState<Suggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
 
-  const fetchSuggestions = React.useCallback(async () => {
-    if (!currentUser) return;
-    setIsLoadingSuggestions(true);
-    try {
-      const q = query(collection(db, 'suggestions'), where('suggesterId', '==', currentUser.uid), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const suggestions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Suggestion));
-      setMySuggestions(suggestions);
-    } catch (e) {
-      console.error("Failed to fetch suggestions", e);
-      toast({ title: "Error", description: "Could not fetch your suggestions.", variant: "destructive" });
-    } finally {
-      setIsLoadingSuggestions(false);
+  // Real-time suggestions listener
+  useEffect(() => {
+    if (!currentUser) {
+        setIsLoadingSuggestions(false);
+        setMySuggestions([]);
+        return;
     }
+    
+    setIsLoadingSuggestions(true);
+    const q = query(collection(db, 'suggestions'), where('suggesterId', '==', currentUser.uid), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const suggestions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Suggestion));
+        setMySuggestions(suggestions);
+        setIsLoadingSuggestions(false);
+    }, (error) => {
+        console.error("Failed to fetch suggestions:", error);
+        toast({ title: "Error", description: "Could not fetch your suggestions in real-time.", variant: "destructive" });
+        setIsLoadingSuggestions(false);
+    });
+
+    return () => unsubscribe(); // Cleanup listener
   }, [currentUser, toast]);
 
-  React.useEffect(() => {
-    fetchSuggestions();
-  }, [fetchSuggestions]);
 
   const handleAddReply = async (suggestionId: string, replyText: string) => {
     if (!currentUser || !userData) {
@@ -138,7 +156,7 @@ export default function SuggestionsPage() {
         senderName: userData.displayName || "User",
       }, { headers: { Authorization: `Bearer ${idToken}` } });
       toast({ title: "Reply Sent", description: "Your reply has been added." });
-      fetchSuggestions(); // Re-fetch to show the new reply
+      // No need to manually refetch, onSnapshot will handle it
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
       toast({ title: "Reply Failed", description: errorMessage, variant: "destructive" });
@@ -184,7 +202,7 @@ export default function SuggestionsPage() {
         });
         setTitle('');
         setSuggestionText('');
-        fetchSuggestions(); // Refresh the list
+        // No need to manually refetch, onSnapshot will handle it
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
         toast({
@@ -291,3 +309,4 @@ export default function SuggestionsPage() {
   );
 }
 
+    

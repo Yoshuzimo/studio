@@ -7,27 +7,26 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { replyToSuggestion, type ReplyToSuggestionInput } from '@/ai/flows/reply-to-suggestion-flow';
+import { addReplyToSuggestion } from '@/ai/flows/add-reply-to-suggestion-flow';
 import type { Suggestion, User as AppUser } from '@/types';
 import { useAuth } from '@/context/auth-context';
 
 interface ReplyToSuggestionFormProps {
   suggestion: Suggestion;
-  adminUser: AppUser | null;
 }
 
-export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggestionFormProps) {
+export function ReplyToSuggestionForm({ suggestion }: ReplyToSuggestionFormProps) {
   const [replyText, setReplyText] = useState('');
   const [isReplying, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { currentUser } = useAuth(); // Get the Firebase user object
+  const { currentUser, userData } = useAuth();
 
   const handleReplySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
 
-    if (!adminUser || !currentUser) { // Check for both admin data and Firebase user
+    if (!userData || !currentUser) {
       setError("Admin user not identified. Cannot send reply.");
       toast({ title: "Error", description: "Admin user not identified.", variant: "destructive" });
       return;
@@ -44,23 +43,20 @@ export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggesti
 
     startTransition(async () => {
       try {
-        const input: ReplyToSuggestionInput = {
-          suggestionId: suggestion.id,
-          replyText: replyText,
-          suggesterId: suggestion.suggesterId,
-          suggesterName: suggestion.suggesterName,
-          adminId: adminUser.id,
-          adminName: adminUser.displayName || adminUser.email || "Admin",
-        };
-
         const idToken = await currentUser.getIdToken();
-        const result = await replyToSuggestion(input, { headers: { Authorization: `Bearer ${idToken}` } } as any);
-        
+        await addReplyToSuggestion({
+            suggestionId: suggestion.id,
+            replyText: replyText,
+            senderId: currentUser.uid,
+            senderName: userData.displayName || 'Admin',
+        }, { headers: { Authorization: `Bearer ${idToken}` } });
+
         toast({
           title: "Reply Sent!",
-          description: result.message,
+          description: `Your reply to "${suggestion.title}" has been sent.`,
         });
         setReplyText('');
+        // No need to refetch, onSnapshot will update the UI
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
         toast({
@@ -74,11 +70,15 @@ export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggesti
     });
   };
 
+  if (suggestion.status === 'closed') {
+    return <p className="text-xs text-muted-foreground italic mt-2">This suggestion is closed. Re-open it to reply.</p>
+  }
+
   return (
-    <form onSubmit={handleReplySubmit} className="mt-3 space-y-2 border-t border-border pt-3">
+    <form onSubmit={handleReplySubmit} className="mt-3 space-y-2">
       <div>
         <Label htmlFor={`reply-text-${suggestion.id}`} className="block text-xs font-medium mb-1 text-muted-foreground">
-          Send a reply to {suggestion.suggesterName || 'the suggester'}:
+          Send a reply:
         </Label>
         <Textarea
           id={`reply-text-${suggestion.id}`}
@@ -90,12 +90,12 @@ export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggesti
           placeholder="Type your reply here..."
           rows={3}
           className="w-full text-sm"
-          disabled={isReplying || !adminUser}
+          disabled={isReplying || !userData}
           maxLength={5000}
         />
         {error && <p className="text-xs text-destructive mt-1">{error}</p>}
       </div>
-      <Button type="submit" disabled={isReplying || !adminUser || replyText.trim().length === 0 || replyText.trim().length > 5000} size="sm" variant="outline">
+      <Button type="submit" disabled={isReplying || !userData || replyText.trim().length === 0 || replyText.trim().length > 5000} size="sm" variant="default">
         {isReplying ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         ) : (
@@ -106,3 +106,5 @@ export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggesti
     </form>
   );
 }
+
+    

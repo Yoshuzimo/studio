@@ -5,14 +5,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppData } from '@/context/app-data-context';
 import { CsvUploader } from '@/components/admin/csv-uploader';
-import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Quest, CSVQuest, Suggestion, User as AppUser, AdventurePack, CSVAdventurePack } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { collection, doc, getDocs, query, orderBy, Timestamp as FirestoreTimestamp } from 'firebase/firestore';
+import { collection, doc, getDocs, query, orderBy, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { ReplyToSuggestionForm } from '@/components/admin/reply-to-suggestion-form';
 import { QuestForm, type QuestFormData } from '@/components/admin/quest-form';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -21,6 +21,9 @@ import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { ManageAdminsPopover } from '@/components/admin/manage-admins-popover';
 import { GeneratedCodeDialog } from '@/components/admin/generated-code-dialog';
+import { toggleSuggestionStatus } from '@/ai/flows/toggle-suggestion-status-flow';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const normalizeAdventurePackNameForStorage = (name?: string | null): string | null => {
   if (!name) return null;
@@ -89,9 +92,73 @@ function parseCsv<T extends Record<string, any>>(
   return parsedData;
 }
 
+function SuggestionItem({ suggestion, onStatusToggle }: { suggestion: Suggestion; onStatusToggle: (id: string) => void }) {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const { currentUser } = useAuth();
+  
+    return (
+        <Card className="shadow-sm">
+            <CardHeader className="p-4">
+                <div className="flex justify-between items-start gap-4">
+                    <div className="flex-grow">
+                        <CardTitle className="font-headline text-lg">{suggestion.title}</CardTitle>
+                        <CardDescription className="text-xs">
+                            From: {suggestion.suggesterName} ({formatDistanceToNow(suggestion.createdAt.toDate(), { addSuffix: true })})
+                        </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                         <div
+                            className={cn(
+                            "px-2 py-1 text-xs font-semibold rounded-full",
+                            suggestion.status === 'open' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                            )}
+                        >
+                            {suggestion.status}
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setIsExpanded(!isExpanded)}>
+                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            <span className="sr-only">{isExpanded ? 'Collapse' : 'Expand'}</span>
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+            {isExpanded && (
+                <CardContent className="p-4 pt-0">
+                    <Separator className="mb-4" />
+                    <ScrollArea className="h-40 mb-4 border rounded-md p-2 bg-muted/20">
+                        <div className="space-y-4 pr-2">
+                        {suggestion.conversation.map((item, index) => (
+                            <div key={index} className={cn("flex flex-col", item.senderId === currentUser?.uid ? "items-end" : "items-start")}>
+                                <div className={cn(
+                                "p-2 rounded-lg max-w-xs md:max-w-md",
+                                item.senderId === suggestion.suggesterId ? "bg-primary/10" : "bg-muted"
+                                )}>
+                                <p className="text-xs font-semibold mb-1">{item.senderName}</p>
+                                <p className="text-sm whitespace-pre-wrap">{item.text}</p>
+                                <p className="text-xs text-right mt-1 opacity-70">
+                                    {formatDistanceToNow((item.timestamp as any).toDate(), { addSuffix: true })}
+                                </p>
+                                </div>
+                            </div>
+                        ))}
+                        </div>
+                    </ScrollArea>
+                    <div className="flex justify-between items-start gap-4">
+                        <ReplyToSuggestionForm suggestion={suggestion} />
+                        <Button size="sm" variant="outline" onClick={() => onStatusToggle(suggestion.id)}>
+                            {suggestion.status === 'open' ? 'Close Suggestion' : 'Re-open Suggestion'}
+                        </Button>
+                    </div>
+                </CardContent>
+            )}
+        </Card>
+    );
+}
+
 export default function AdminPage() {
   const { currentUser, userData, isLoading: authIsLoading, getAllUsers } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
 
   const {
     setQuests, 
@@ -130,28 +197,32 @@ export default function AdminPage() {
     }
   }, [currentUser, userData, authIsLoading, router]);
 
-  const fetchSuggestions = useCallback(async () => {
-    setIsLoadingSuggestions(true);
-    try {
-      const suggestionsQuery = query(collection(db, 'suggestions'), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(suggestionsQuery);
-      const fetchedSuggestions: Suggestion[] = querySnapshot.docs.map(docSnap => {
-          const data = docSnap.data();
-          return {
-              id: docSnap.id,
-              text: data.text,
-              createdAt: data.createdAt as FirestoreTimestamp,
-              suggesterId: data.suggesterId,
-              suggesterName: data.suggesterName,
-          } as Suggestion;
-      });
-      setSuggestions(fetchedSuggestions);
-    } catch (error) {
-      console.error("[AdminPage] Firestore suggestions fetch error:", error);
-    } finally {
-      setIsLoadingSuggestions(false);
+   // Real-time suggestions listener
+  useEffect(() => {
+    if (!currentUser || !userData?.isAdmin) {
+        setIsLoadingSuggestions(false);
+        setSuggestions([]);
+        return;
     }
-  }, []);
+
+    setIsLoadingSuggestions(true);
+    const suggestionsQuery = query(collection(db, 'suggestions'), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(suggestionsQuery, (querySnapshot) => {
+        const fetchedSuggestions = querySnapshot.docs.map(docSnap => ({
+            id: docSnap.id,
+            ...docSnap.data()
+        } as Suggestion));
+        setSuggestions(fetchedSuggestions);
+        setIsLoadingSuggestions(false);
+    }, (error) => {
+        console.error("[AdminPage] Firestore suggestions listener error:", error);
+        toast({ title: "Error", description: "Could not listen for suggestion updates.", variant: "destructive" });
+        setIsLoadingSuggestions(false);
+    });
+
+    return () => unsubscribe(); // Cleanup listener on component unmount
+  }, [currentUser, userData, toast]);
 
   const fetchAllUsersList = useCallback(async () => {
     if (currentUser && userData?.isAdmin && !hasFetchedAllUsers) {
@@ -183,16 +254,25 @@ export default function AdminPage() {
     if (!authIsLoading && currentUser && userData?.isAdmin) {
       console.log("[AdminPage] Admin-specific data useEffect: Auth loaded, user is admin. Calling initial data fetches.");
       fetchAllUsersList();
-      fetchSuggestions();
     } else if (!authIsLoading) {
       console.log("[AdminPage] Admin-specific data useEffect: Auth loaded, but user not admin or no user. Resetting states.");
-      setIsLoadingSuggestions(false);
-      setSuggestions([]);
       setIsLoadingAllUsers(false);
       setAllUsers([]);
       setHasFetchedAllUsers(false);
     }
-  }, [currentUser, userData, authIsLoading, fetchAllUsersList, fetchSuggestions]);
+  }, [currentUser, userData, authIsLoading, fetchAllUsersList]);
+
+  const handleToggleSuggestionStatus = async (suggestionId: string) => {
+    if (!currentUser) return;
+    try {
+        const idToken = await currentUser.getIdToken();
+        const result = await toggleSuggestionStatus({ suggestionId, adminId: currentUser.uid }, { headers: { Authorization: `Bearer ${idToken}` } });
+        toast({ title: 'Status Updated', description: result.message });
+    } catch (e) {
+        const error = e as Error;
+        toast({ title: 'Update Failed', description: error.message, variant: 'destructive' });
+    }
+  };
 
   const handleFileUpload = async (dataType: 'Adventure Packs' | 'Quests', file: File) => {
     const fileText = await file.text();
@@ -432,12 +512,8 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
             <CardTitle className="font-headline flex items-center">
               <Inbox className="mr-2 h-6 w-6 text-primary" /> Suggestions Inbox
             </CardTitle>
-             <Button variant="outline" size="sm" onClick={fetchSuggestions} disabled={isLoadingSuggestions}>
-              {isLoadingSuggestions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Refresh
-            </Button>
           </div>
-          <CardDescription>User-submitted suggestions for the website, newest first. Admins can reply here.</CardDescription>
+          <CardDescription>User-submitted suggestions for the website, newest first. Click to expand and reply.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingSuggestions ? (
@@ -447,27 +523,11 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
           ) : suggestions.length === 0 ? (
             <p className="text-muted-foreground">No suggestions submitted yet.</p>
           ) : (
-            <ScrollArea className="h-auto max-h-[600px]">
-              <ul className="space-y-4">
-                {suggestions.map((suggestion, index) => (
-                  <li key={suggestion.id} className="p-4 border rounded-lg shadow-sm">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <div className="text-xs text-muted-foreground mb-1">
-                                Received: {suggestion.createdAt ? format(suggestion.createdAt.toDate(), 'MMM d, yyyy HH:mm') : 'No date'}
-                            </div>
-                            <div className="text-xs text-muted-foreground mb-2 flex items-center">
-                                <User className="mr-1 h-3 w-3"/> From: {suggestion.suggesterName || 'Unknown User'} (ID: {suggestion.suggesterId})
-                            </div>
-                        </div>
-                    </div>
-                    <p className="text-sm bg-muted/30 p-3 rounded-md mb-3">{suggestion.text}</p>
-                    <ReplyToSuggestionForm suggestion={suggestion} adminUser={userData} />
-                    {index < suggestions.length - 1 && <Separator className="my-4" />}
-                  </li>
+            <div className="space-y-2">
+                {suggestions.map((suggestion) => (
+                    <SuggestionItem key={suggestion.id} suggestion={suggestion} onStatusToggle={handleToggleSuggestionStatus} />
                 ))}
-              </ul>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -536,3 +596,5 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
     </div>
   );
 }
+
+    
