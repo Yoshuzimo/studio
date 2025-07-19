@@ -1,5 +1,6 @@
+
 // src/app/api/genkit/[...path]/route.ts
-import { handleNextRequest } from '@genkit-ai/next/server';
+import { handleNextRequest } from '@genkit-ai/next';
 
 // Import flows that are defined in other files
 import '@/ai/flows/submit-suggestion-flow';
