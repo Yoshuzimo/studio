@@ -1,19 +1,21 @@
 import * as admin from 'firebase-admin';
 
-const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-  : undefined;
-
 if (!admin.apps.length) {
-  if (serviceAccount) {
+  try {
+    const serviceAccount = JSON.parse(
+      process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string
+    );
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
-  } else {
-    // For local development, it can use application default credentials.
-    // For deployed environments, FIREBASE_CONFIG is often set.
-    console.log("Initializing Firebase Admin SDK with default credentials.");
-    admin.initializeApp();
+     console.log("Firebase Admin SDK initialized with service account.");
+  } catch (error) {
+    console.error("Firebase Admin SDK initialization error:", error);
+    // Fallback for local development or environments where default creds are expected
+    if (!admin.apps.length) {
+        console.log("Initializing Firebase Admin SDK with default credentials as fallback.");
+        admin.initializeApp();
+    }
   }
 }
 
