@@ -11,8 +11,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import type { MessageFirebaseData } from '@/types';
+import { collection, addDoc, serverTimestamp, type Timestamp, type FieldValue } from 'firebase/firestore';
 
 const ReplyToSuggestionInputSchema = z.object({
   suggestionId: z.string().describe('The ID of the suggestion being replied to.'),
@@ -29,6 +28,19 @@ const ReplyToSuggestionOutputSchema = z.object({
   messageId: z.string().describe('The ID of the saved message.'),
 });
 export type ReplyToSuggestionOutput = z.infer<typeof ReplyToSuggestionOutputSchema>;
+
+// Internal type to handle both server-side Timestamps and client-side FieldValues
+type MessageData = {
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  receiverName: string;
+  text: string;
+  timestamp: Timestamp | FieldValue;
+  isRead: boolean;
+  relatedSuggestionId?: string;
+};
+
 
 export async function replyToSuggestion(input: ReplyToSuggestionInput): Promise<ReplyToSuggestionOutput> {
   try {
@@ -50,13 +62,13 @@ const replyToSuggestionFlow = ai.defineFlow(
   },
   async (input) => {
     try {
-      const messageData: MessageFirebaseData = {
+      const messageData: MessageData = {
         senderId: input.adminId, 
         senderName: input.adminName, 
         receiverId: input.suggesterId,
         receiverName: input.suggesterName,
         text: input.replyText,
-        timestamp: serverTimestamp() as any, 
+        timestamp: serverTimestamp(), 
         isRead: false,
         relatedSuggestionId: input.suggestionId,
       };

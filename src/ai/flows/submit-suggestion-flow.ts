@@ -11,8 +11,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'zod';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import type { SuggestionFirebaseData } from '@/types';
+import { collection, addDoc, serverTimestamp, type Timestamp, type FieldValue } from 'firebase/firestore';
 
 const SubmitSuggestionInputSchema = z.object({
   suggestionText: z.string().min(10, { message: "Suggestion must be at least 10 characters."}).max(5000, {message: "Suggestion must be 5000 characters or less."}).describe('The text of the user\'s suggestion.'),
@@ -26,6 +25,15 @@ const SubmitSuggestionOutputSchema = z.object({
   suggestionId: z.string().describe('The ID of the saved suggestion.'),
 });
 export type SubmitSuggestionOutput = z.infer<typeof SubmitSuggestionOutputSchema>;
+
+
+// Internal type to handle both server-side Timestamps and client-side FieldValues
+type SuggestionData = {
+  text: string;
+  createdAt: Timestamp | FieldValue;
+  suggesterId: string;
+  suggesterName: string;
+};
 
 export async function submitSuggestion(input: SubmitSuggestionInput): Promise<SubmitSuggestionOutput> {
   try {
@@ -47,9 +55,9 @@ const submitSuggestionFlow = ai.defineFlow(
   },
   async (input) => {
     try {
-      const suggestionData: SuggestionFirebaseData = {
+      const suggestionData: SuggestionData = {
         text: input.suggestionText,
-        createdAt: serverTimestamp() as any, // Cast to any to resolve type mismatch
+        createdAt: serverTimestamp(),
         suggesterId: input.suggesterId, 
         suggesterName: input.suggesterName,
       };
