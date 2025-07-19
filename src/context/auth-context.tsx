@@ -128,7 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             const response = await fetch('/api/auth/session', {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${idToken}` }
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken }),
             });
 
             if(!response.ok) {
