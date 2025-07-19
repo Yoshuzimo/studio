@@ -37,8 +37,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Server configuration error: Cloudinary credentials missing.' }, { status: 500 });
     }
     
-    // According to Cloudinary docs, when using a public_id, the `folder` is NOT included
-    // in the signature string itself. The signature is based on the public_id and timestamp.
     const paramsToSign: Record<string, any> = {
         timestamp: timestamp,
         upload_preset: upload_preset,
@@ -53,9 +51,14 @@ export async function POST(request: Request) {
         .join('&');
 
     const stringToSign = `${sortedParams}${cloudinaryApiSecret}`;
-    console.log("[Cloudinary Signature] String to sign (secret hidden):", `${sortedParams}SECRET_REDACTED`);
 
-
+    console.log("[Signature Debug]", {
+      paramsToSign,
+      sortedParams,
+      stringToSign,
+      cloudinaryApiSecret,
+    });
+    
     const signature = crypto
       .createHash('sha1')
       .update(stringToSign)
