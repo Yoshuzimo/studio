@@ -11,9 +11,8 @@
 import {z} from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, type FieldValue } from 'firebase/firestore';
-import { auth as adminAuth } from '@/lib/firebase-admin';
-import type { SuggestionConversationItem } from '@/types';
 import { getAuth } from 'firebase-admin/auth';
+import type { SuggestionConversationItem } from '@/types';
 import { cookies } from 'next/headers';
 
 const SubmitSuggestionInputSchema = z.object({

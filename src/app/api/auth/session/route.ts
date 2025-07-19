@@ -1,4 +1,3 @@
-
 // src/app/api/auth/session/route.ts
 import { auth } from '@/lib/firebase-admin'; // Correctly import our initialized admin auth
 import { cookies } from 'next/headers';
