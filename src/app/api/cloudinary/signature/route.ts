@@ -37,15 +37,15 @@ export async function POST(request: Request) {
     }
     
     const paramsToSign: Record<string, any> = {
-        public_id: public_id,
-        timestamp: timestamp,
-        upload_preset: upload_preset,
+        public_id,
+        timestamp,
+        upload_preset,
     };
 
-    // Correctly sort the keys alphabetically before creating the signature string.
-    const sortedKeys = Object.keys(paramsToSign).sort();
-    const sortedParams = sortedKeys
-      .map(key => `${key}=${paramsToSign[key]}`)
+    // Force alphabetical sorting of keys to match Cloudinary's expectation.
+    const sortedParams = Object.entries(paramsToSign)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, val]) => `${key}=${val}`)
       .join('&');
     
     const stringToSign = `${sortedParams}${cloudinaryApiSecret}`;
