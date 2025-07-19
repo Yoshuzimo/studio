@@ -23,10 +23,9 @@ export async function POST(request: Request) {
     const { timestamp, upload_preset, public_id } = await request.json();
     console.log("[Cloudinary Signature] Received params for signing:", { timestamp, upload_preset, public_id });
 
-
-    if (!timestamp || !upload_preset) {
-        console.error("[Cloudinary Signature] Error: Missing timestamp or upload_preset.");
-        return NextResponse.json({ error: 'Missing timestamp or upload_preset' }, { status: 400 });
+    if (!timestamp || !upload_preset || !public_id) {
+        console.error("[Cloudinary Signature] Error: Missing timestamp, upload_preset, or public_id.");
+        return NextResponse.json({ error: 'Missing required parameters for signing' }, { status: 400 });
     }
 
     const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
@@ -40,16 +39,15 @@ export async function POST(request: Request) {
     const paramsToSign: Record<string, any> = {
         timestamp: timestamp,
         upload_preset: upload_preset,
+        public_id: public_id,
     };
-    if (public_id) paramsToSign.public_id = public_id;
 
-    console.log("[Cloudinary Signature] Final params object to be signed:", paramsToSign);
-
-    const sortedParams = Object.keys(paramsToSign)
-        .sort()
-        .map(key => `${key}=${paramsToSign[key]}`)
-        .join('&');
-
+    // Correctly sort the keys alphabetically before creating the signature string.
+    const sortedKeys = Object.keys(paramsToSign).sort();
+    const sortedParams = sortedKeys
+      .map(key => `${key}=${paramsToSign[key]}`)
+      .join('&');
+    
     const stringToSign = `${sortedParams}${cloudinaryApiSecret}`;
     
     console.log("[Signature Debug]", {
