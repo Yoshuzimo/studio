@@ -1,25 +1,32 @@
 // src/lib/firebase-admin.ts
 import admin from 'firebase-admin';
 
-// Check if the app is already initialized to prevent errors
-if (!admin.apps.length) {
-  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!serviceAccountKey) {
-    throw new Error('Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
-  }
+let adminApp: admin.app.App;
 
-  try {
-    const serviceAccount = JSON.parse(serviceAccountKey);
-    console.log("Initializing Firebase Admin SDK...");
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  } catch (error) {
-    console.error("Failed to parse Firebase service account key. Ensure it's a valid JSON string.", error);
-    throw new Error("Firebase Admin SDK initialization failed due to invalid credentials.");
+function getFirebaseAdmin() {
+  if (!adminApp) {
+    const serviceAccountKeyBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    if (!serviceAccountKeyBase64) {
+      throw new Error('Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+    }
+
+    try {
+      // Decode the Base64 string to get the original JSON string
+      const serviceAccountJson = Buffer.from(serviceAccountKeyBase64, 'base64').toString('utf8');
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      
+      console.log("Initializing Firebase Admin SDK from decoded key...");
+      adminApp = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } catch (error) {
+      console.error("Failed to decode or parse Firebase service account key. Ensure it's a valid Base64 encoded JSON string.", error);
+      throw new Error("Firebase Admin SDK initialization failed due to invalid credentials.");
+    }
   }
+  return adminApp;
 }
 
-export const auth = admin.auth();
-export const db = admin.firestore();
-export default admin;
+// Export functions that will call getFirebaseAdmin() on first use
+export const auth = () => getFirebaseAdmin().auth();
+export const db = () => getFirebaseAdmin().firestore();
