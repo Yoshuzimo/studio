@@ -31,7 +31,7 @@ const getCloudinaryBgUrl = (imageUrl: string) => {
   // ar_4:3: Aspect ratio (adjust as needed for card shape)
   // w_600: Width of 600px (good for cards)
   // q_auto:f_auto: Automatic quality and format
-  // e_blur:800: A slight blur for background effect
+  // e_blur:200: A slight blur for background effect
   // e_brightness:-20: Slightly darken the image for text contrast
   const transformation = "c_fill,g_auto,ar_4:3,w_600,q_auto,f_auto,e_blur:200,e_brightness:-20";
   
