@@ -1,8 +1,9 @@
 
 import {genkit} from 'genkit';
+import {googleAI} from '@genkit-ai/googleai';
 
-// The googleAI plugin has been removed as it was not being used by any active flows.
-// This removes the requirement for a GOOGLE_API_KEY.
+// Re-enabling the googleAI plugin. Genkit flows, even non-generative ones,
+// often rely on a configured plugin to properly initialize the server environment.
 export const ai = genkit({
-  plugins: [],
+  plugins: [googleAI()],
 });
