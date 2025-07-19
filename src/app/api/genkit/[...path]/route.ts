@@ -4,7 +4,6 @@ import { googleAI } from '@genkit-ai/googleai';
 import { nextHandler } from '@genkit-ai/next';
 import { defineFlow } from 'genkit/flow';
 import { z } from 'zod';
-import * as "crypto-js";
 
 // Import flows that are defined in other files
 import '@/ai/flows/submit-suggestion-flow';
