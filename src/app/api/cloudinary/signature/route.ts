@@ -1,4 +1,3 @@
-
 // src/app/api/cloudinary/signature/route.ts
 import { NextResponse } from 'next/server';
 import * as crypto from 'crypto';
@@ -21,8 +20,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });
     }
 
-    const { timestamp, upload_preset, folder, public_id } = await request.json();
-    console.log("[Cloudinary Signature] Received params for signing:", { timestamp, upload_preset, folder, public_id });
+    const { timestamp, upload_preset, public_id } = await request.json();
+    console.log("[Cloudinary Signature] Received params for signing:", { timestamp, upload_preset, public_id });
 
 
     if (!timestamp || !upload_preset) {
@@ -38,11 +37,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Server configuration error: Cloudinary credentials missing.' }, { status: 500 });
     }
     
+    // The signature should be generated from parameters that are sent by the widget.
+    // When using a public_id, the `folder` is not included in the signature string itself.
     const paramsToSign: Record<string, any> = {
         timestamp: timestamp,
         upload_preset: upload_preset,
     };
-    if (folder) paramsToSign.folder = folder;
     if (public_id) paramsToSign.public_id = public_id;
 
     console.log("[Cloudinary Signature] Final params object to be signed:", paramsToSign);

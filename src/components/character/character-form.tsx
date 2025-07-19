@@ -111,7 +111,8 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     const characterName = form.getValues("name") || "character";
     const safeFileName = characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
     const folder = "ddo_toolkit/characters";
-    const publicId = `${folder}/${safeFileName}_${initialData?.id || currentUser.uid.slice(0, 8)}`;
+    // Corrected public_id: It should be the filename, not the full path.
+    const publicId = `${safeFileName}_${initialData?.id || currentUser.uid.slice(0, 8)}`;
     
     const timestamp = Math.round(Date.now() / 1000);
     const idToken = await currentUser.getIdToken();
