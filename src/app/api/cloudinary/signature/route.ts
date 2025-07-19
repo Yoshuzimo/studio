@@ -37,8 +37,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Server configuration error: Cloudinary credentials missing.' }, { status: 500 });
     }
     
+    // Dynamically build the parameters to sign, including only those that are present.
     const paramsToSign: Record<string, any> = {
-        timestamp,
+        timestamp: String(timestamp), // Ensure timestamp is a string
         upload_preset,
     };
 
