@@ -37,8 +37,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Server configuration error: Cloudinary credentials missing.' }, { status: 500 });
     }
     
-    // The signature should be generated from parameters that are sent by the widget.
-    // When using a public_id, the `folder` is not included in the signature string itself.
+    // According to Cloudinary docs, when using a public_id, the `folder` is NOT included
+    // in the signature string itself. The signature is based on the public_id and timestamp.
     const paramsToSign: Record<string, any> = {
         timestamp: timestamp,
         upload_preset: upload_preset,
