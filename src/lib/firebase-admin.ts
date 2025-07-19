@@ -1,23 +1,35 @@
+// src/lib/firebase-admin.ts
 import * as admin from 'firebase-admin';
 
-if (!admin.apps.length) {
+// This function ensures that we initialize the Firebase Admin SDK only once.
+const initializeAdmin = () => {
+  if (admin.apps.length > 0) {
+    return admin.app();
+  }
+
+  // Check if the service account key is available in environment variables
+  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!serviceAccountKey) {
+    console.error("Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.");
+    // In a deployed environment, we might want to throw an error or handle this differently
+    // For now, we will log the error and initialization will likely fail or use default creds if available.
+  }
+
   try {
-    const serviceAccount = JSON.parse(
-      process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string
-    );
-    admin.initializeApp({
+    const serviceAccount = JSON.parse(serviceAccountKey as string);
+    console.log("Initializing Firebase Admin SDK with service account credentials.");
+    return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
-     console.log("Firebase Admin SDK initialized with service account.");
   } catch (error) {
-    console.error("Firebase Admin SDK initialization error:", error);
-    // Fallback for local development or environments where default creds are expected
-    if (!admin.apps.length) {
-        console.log("Initializing Firebase Admin SDK with default credentials as fallback.");
-        admin.initializeApp();
-    }
+    console.error("Firebase Admin SDK initialization error from service account key:", error);
+    // As a fallback for local development or other environments with Application Default Credentials
+    console.log("Attempting to initialize Firebase Admin SDK with default credentials as a fallback.");
+    return admin.initializeApp();
   }
-}
+};
 
-export const auth = admin.auth();
-export const db = admin.firestore();
+const adminApp = initializeAdmin();
+
+export const auth = adminApp.auth();
+export const db = adminApp.firestore();
