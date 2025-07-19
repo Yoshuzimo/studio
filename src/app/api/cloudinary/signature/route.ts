@@ -1,7 +1,8 @@
+
 // src/app/api/cloudinary/signature/route.ts
 import { NextResponse } from 'next/server';
 import * as crypto from 'crypto';
-import { adminAuth } from '@/lib/firebase-admin'; // Using admin SDK for verification
+import { adminAuth } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
@@ -11,7 +12,6 @@ export async function POST(request: Request) {
     }
     const idToken = authorization.split('Bearer ')[1];
     
-    // Verify the user is authenticated using the Firebase Admin SDK
     try {
         await adminAuth.verifyIdToken(idToken);
     } catch (error) {
@@ -33,8 +33,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Server configuration error: Cloudinary credentials missing.' }, { status: 500 });
     }
     
-    // The signature must include all parameters that are being sent in the upload request,
-    // sorted alphabetically by parameter name.
     const paramsToSign: Record<string, any> = {
         timestamp: timestamp,
         upload_preset: upload_preset,
@@ -50,7 +48,7 @@ export async function POST(request: Request) {
     const stringToSign = `${sortedParams}${cloudinaryApiSecret}`;
 
     const signature = crypto
-      .createHash('sha256')
+      .createHash('sha1')
       .update(stringToSign)
       .digest('hex');
     
