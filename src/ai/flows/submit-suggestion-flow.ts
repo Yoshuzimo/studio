@@ -10,11 +10,13 @@
 
 import {z} from 'zod';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, type Timestamp, type FieldValue } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, type FieldValue } from 'firebase/firestore';
 import { auth } from 'firebase-admin';
 import { headers } from 'next/headers';
+import type { SuggestionConversationItem } from '@/types';
 
 const SubmitSuggestionInputSchema = z.object({
+  title: z.string().min(5, { message: "Title must be at least 5 characters."}).max(100, {message: "Title must be 100 characters or less."}).describe('The title of the user\'s suggestion.'),
   suggestionText: z.string().min(10, { message: "Suggestion must be at least 10 characters."}).max(5000, {message: "Suggestion must be 5000 characters or less."}).describe('The text of the user\'s suggestion.'),
   suggesterId: z.string().describe('The ID of the user making the suggestion.'),
   suggesterName: z.string().describe('The name/email of the user making the suggestion.'),
@@ -27,13 +29,14 @@ const SubmitSuggestionOutputSchema = z.object({
 });
 export type SubmitSuggestionOutput = z.infer<typeof SubmitSuggestionOutputSchema>;
 
-
-// Internal type to handle both server-side Timestamps and client-side FieldValues
+// Internal type for Firestore data structure
 type SuggestionData = {
-  text: string;
-  createdAt: Timestamp | FieldValue;
+  title: string;
   suggesterId: string;
   suggesterName: string;
+  createdAt: FieldValue;
+  status: 'open' | 'closed';
+  conversation: SuggestionConversationItem[];
 };
 
 export async function submitSuggestion(input: SubmitSuggestionInput): Promise<SubmitSuggestionOutput> {
@@ -63,12 +66,22 @@ export async function submitSuggestion(input: SubmitSuggestionInput): Promise<Su
   }
   
   try {
-    const suggestionData: SuggestionData = {
+    const initialMessage: SuggestionConversationItem = {
+      senderId: input.suggesterId,
+      senderName: input.suggesterName,
       text: input.suggestionText,
-      createdAt: serverTimestamp(),
+      timestamp: serverTimestamp(),
+    };
+
+    const suggestionData: SuggestionData = {
+      title: input.title,
       suggesterId: input.suggesterId, 
       suggesterName: input.suggesterName,
+      createdAt: serverTimestamp(),
+      status: 'open',
+      conversation: [initialMessage],
     };
+
     const docRef = await addDoc(collection(db, 'suggestions'), suggestionData);
     
     console.log(`New suggestion saved to Firestore with ID: ${docRef.id}`);

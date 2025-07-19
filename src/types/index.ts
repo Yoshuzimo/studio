@@ -1,5 +1,5 @@
 
-// Cache-busting comment to force rebuild of dependents: V4
+// Cache-busting comment to force rebuild of dependents: V5
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 
 export interface User {
@@ -187,19 +187,21 @@ export interface CSVAdventurePack {
   totalFavor?: string;
 }
 
-export interface Suggestion {
-  id: string;
-  text: string;
-  createdAt: FirestoreTimestampType;
-  suggesterId: string;
-  suggesterName: string;
+export interface SuggestionConversationItem {
+    senderId: string;
+    senderName: string;
+    text: string;
+    timestamp: FirestoreTimestampType | FieldValue;
 }
 
-export interface SuggestionFirebaseData {
-  text: string;
-  createdAt: FieldValue; // For writing
+export interface Suggestion {
+  id: string;
+  title: string;
   suggesterId: string;
   suggesterName: string;
+  createdAt: FirestoreTimestampType;
+  status: 'open' | 'closed';
+  conversation: SuggestionConversationItem[];
 }
 
 export interface Message {

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/toaster';
-import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, Mail, LogOut, MailCheck, Loader2, UserCog, Book, ListOrdered, BarChartHorizontalBig, Skull } from 'lucide-react';
+import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, LogOut, MailCheck, Loader2, UserCog, Book, ListOrdered, BarChartHorizontalBig, Skull } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
 import * as React from 'react';
@@ -40,10 +40,9 @@ import { UserProfileDialog } from '../auth/user-profile-dialog';
 
 const navItemsBase = [
   { href: '/adventure-packs', label: 'Adventure Packs', icon: Package, protected: true },
-  { href: '/messages', label: 'Messages', icon: Mail, protected: true },
+  { href: '/suggestions', label: 'Suggestions', icon: Lightbulb, protected: true },
   { href: '/useful-links', label: 'Useful Links', icon: LinkIcon, protected: true },
   { href: '/guide', label: 'Guide', icon: Book, protected: true },
-  { href: '/suggestions', label: 'Suggestions', icon: Lightbulb, protected: true },
 ];
 
 const adminNavItem = { href: '/admin', label: 'Admin Panel', icon: ShieldCheck, adminOnly: true, protected: true };
@@ -270,5 +269,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
-
-    
