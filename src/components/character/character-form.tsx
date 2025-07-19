@@ -73,13 +73,9 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   const imageUploadButtonId = `image-upload-button-${uniqueId}`;
 
   useEffect(() => {
-    // This effect ensures we check for the script whenever the dialog opens.
     if (isOpen) {
       if (window.cloudinary) {
         setIsCloudinaryScriptLoaded(true);
-      } else {
-        // If script isn't loaded, trigger loading (or rely on the <Script> component)
-        // The <Script> component should handle loading it automatically.
       }
     }
   }, [isOpen]);
@@ -108,19 +104,11 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       return;
     }
 
-    const characterName = form.getValues("name") || "character";
-    const safeFileName = characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-    const folder = "ddo_toolkit/characters";
-    const publicId = `${safeFileName}_${initialData?.id || currentUser.uid.slice(0, 8)}`;
-    
-    const timestamp = Math.round(Date.now() / 1000);
-    const idToken = await currentUser.getIdToken();
-
-    // Dynamically create the payload to be signed
     // This function will be called by the widget to get the signature
     const getSignature = async (callback: (signature: string) => void, params_to_sign: any) => {
         try {
             console.log("[Cloudinary Widget] Params to be signed by server:", params_to_sign);
+            const idToken = await currentUser.getIdToken();
             const signatureResponse = await fetch('/api/cloudinary/signature', {
                 method: 'POST',
                 headers: {
@@ -148,23 +136,21 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         cloudName: cloudName,
         uploadPreset: uploadPreset,
         apiKey: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
-        folder: folder,
-        public_id: publicId,
-        uploadSignature: getSignature,
-        uploadSignatureTimestamp: timestamp,
+        folder: "ddo_toolkit/characters",
         cropping: true,
         croppingAspectRatio: 4 / 3,
         showAdvancedOptions: true,
         sources: ["local", "url", "camera"],
+        uploadSignature: getSignature,
         styles: {
             palette: {
-                window: "#283593", // Main background
+                window: "#283593",
                 windowBorder: "#3F51B5",
                 tabIcon: "#FFFFFF",
                 menuIcons: "#FFFFFF",
                 textDark: "#000000",
                 textLight: "#FFFFFF",
-                link: "#FF9800", // Accent
+                link: "#FF9800",
                 action: "#FF9800",
                 inactiveTabIcon: "#BDBDBD",
                 error: "#F44336",
