@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     });
     
     const signature = crypto
-      .createHash('sha1')
+      .createHash('sha256')
       .update(stringToSign)
       .digest('hex');
     
