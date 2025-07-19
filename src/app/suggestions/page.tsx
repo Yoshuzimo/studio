@@ -11,6 +11,7 @@ import { Lightbulb, Send, Loader2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { submitSuggestion, type SubmitSuggestionInput } from '@/ai/flows/submit-suggestion-flow';
 import { useAuth } from '@/context/auth-context'; // Added
+import { withAuth } from '@genkit-ai/next/client';
 
 export default function SuggestionsPage() {
   const { currentUser, userData, isLoading: authIsLoading } = useAuth(); // Use auth context
@@ -45,7 +46,8 @@ export default function SuggestionsPage() {
         suggesterId: currentUser.uid,
         suggesterName: userData?.displayName || currentUser.email || "Anonymous User"
       };
-      const result = await submitSuggestion(input);
+      // Wrap the flow call with the withAuth helper
+      const result = await withAuth(submitSuggestion)(input);
       toast({
         title: "Suggestion Submitted!",
         description: result.message,
@@ -149,4 +151,3 @@ export default function SuggestionsPage() {
     </div>
   );
 }
-

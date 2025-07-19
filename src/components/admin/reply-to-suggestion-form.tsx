@@ -9,6 +9,7 @@ import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { replyToSuggestion, type ReplyToSuggestionInput } from '@/ai/flows/reply-to-suggestion-flow';
 import type { Suggestion, User as AppUser } from '@/types';
+import { withAuth } from '@genkit-ai/next/client';
 
 interface ReplyToSuggestionFormProps {
   suggestion: Suggestion;
@@ -50,7 +51,8 @@ export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggesti
         adminId: adminUser.id, // Use authenticated admin's ID
         adminName: adminUser.displayName || adminUser.email || "Admin", // Use admin's name or email
       };
-      const result = await replyToSuggestion(input);
+      // Wrap the flow call with the withAuth helper
+      const result = await withAuth(replyToSuggestion)(input);
       toast({
         title: "Reply Sent!",
         description: result.message,

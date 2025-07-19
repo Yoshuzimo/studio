@@ -52,6 +52,11 @@ const submitSuggestionFlow = ai.defineFlow(
     name: 'submitSuggestionFlow',
     inputSchema: SubmitSuggestionInputSchema,
     outputSchema: SubmitSuggestionOutputSchema,
+    auth: {
+      // This forces Genkit to require an authenticated user for this flow.
+      // The `withAuth()` helper on the client will pass the token.
+      forceAuth: true,
+    }
   },
   async (input) => {
     try {
