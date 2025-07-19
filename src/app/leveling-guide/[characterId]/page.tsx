@@ -150,7 +150,7 @@ export default function LevelingGuidePage() {
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
-  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter, refetchCharacter } = useAppData();
+  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
   const { toast } = useToast();
 
   const [character, setCharacter] = useState<Character | null>(null);
@@ -180,7 +180,7 @@ export default function LevelingGuidePage() {
     }
   }, [authIsLoading, currentUser, router]);
 
-  const savePreferences = useCallback((newPrefs: Partial<LevelingGuidePreferences>, important: boolean = false) => {
+  const savePreferences = useCallback((newPrefs: Partial<LevelingGuidePreferences>) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
       const localKey = `ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`;
@@ -203,46 +203,15 @@ export default function LevelingGuidePage() {
       setCharacter(updatedCharacter);
       updateCharacter(updatedCharacter);
       
-      if (important) {
-        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
-        const lastRefresh = parseInt(localStorage.getItem(lastRefreshKey) || '0', 10);
-        const oneDay = 24 * 60 * 60 * 1000;
-
-        if (Date.now() - lastRefresh > oneDay) {
-          refetchCharacter(characterId).then(freshCharacter => {
-            if (freshCharacter) {
-              const serverPrefs = freshCharacter.preferences?.levelingGuide || {};
-              localStorage.setItem(localKey, JSON.stringify(serverPrefs));
-              localStorage.setItem(lastRefreshKey, Date.now().toString());
-              window.location.reload(); 
-            }
-          });
-        }
-      }
     } catch (error) { console.error("Failed to save leveling guide preferences:", error); }
-  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, refetchCharacter]);
+  }, [characterId, isDataLoaded, currentUser, character, updateCharacter]);
 
   // Load preferences
   useEffect(() => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
         const localKey = `ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`;
-        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
-        let localPrefsString = localStorage.getItem(localKey);
-
-        const loadFromCharacterObject = (charObj: Character) => {
-          const serverPrefs = charObj.preferences?.levelingGuide;
-          if (serverPrefs) {
-            localStorage.setItem(localKey, JSON.stringify(serverPrefs));
-            localStorage.setItem(lastRefreshKey, Date.now().toString());
-            localPrefsString = JSON.stringify(serverPrefs);
-          }
-        };
-
-        if (!localPrefsString) {
-          loadFromCharacterObject(character);
-        }
-
+        const localPrefsString = localStorage.getItem(localKey);
         const prefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.levelingGuide;
 
         if (prefs) {
@@ -273,7 +242,7 @@ export default function LevelingGuidePage() {
 
   const handleDurationChange = (newAdjustments: Record<DurationCategory, number>) => {
     setDurationAdjustments(newAdjustments);
-    savePreferences({ durationAdjustments: newAdjustments }, true);
+    savePreferences({ durationAdjustments: newAdjustments });
   }
 
   const handlePopoverColumnVisibilityChange = (key: SortableLevelingGuideColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
@@ -298,13 +267,6 @@ export default function LevelingGuidePage() {
   
     // Debounced update to Firestore via context
     await updateCharacter(updatedCharacterData);
-  
-    // Optional: Refetch after a delay to ensure sync, though optimistic update handles UI.
-    setTimeout(() => {
-        refetchCharacter(id).then(freshChar => {
-            if (freshChar) setCharacter(freshChar);
-        });
-    }, 2000); // 2s delay to allow debounced update to likely complete
   };
 
   const openEditModal = (characterToEdit: Character) => {

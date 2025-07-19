@@ -1,4 +1,3 @@
-
 // src/context/app-data-context.tsx
 "use client";
 
@@ -50,7 +49,6 @@ interface AppDataContextType {
   isLoading: boolean;
   isUpdating: boolean;
   
-  refetchCharacter: (characterId: string) => Promise<Character | null>;
 }
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -360,6 +358,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Unauthorized", variant: "destructive" });
       return;
     }
+
+    // Optimistic UI update
+    setCharactersState(prev => prev.map(c => c.id === character.id ? character : c));
     
     // Debounce the Firestore update
     if (characterUpdateDebounceTimers.current.has(character.id)) {
@@ -388,29 +389,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   
     characterUpdateDebounceTimers.current.set(character.id, timer);
   }, [currentUser, toast]);
-  
-  const refetchCharacter = useCallback(async (characterId: string): Promise<Character | null> => {
-    if (!currentUser) return null;
-    try {
-      const charRef = doc(db, 'characters', characterId);
-      const charSnap = await getDoc(charRef);
-      if (charSnap.exists() && charSnap.data().userId === currentUser.uid) {
-        const characterData = {
-          id: charSnap.id,
-          ...charSnap.data()
-        } as Character;
-        // Update local state
-        setCharactersState(prev => prev.map(c => c.id === characterId ? characterData : c));
-        return characterData;
-      }
-      return null;
-    } catch (error) {
-      console.error("Failed to refetch character:", error);
-      toast({ title: "Sync Error", description: "Could not refresh character data from server.", variant: "destructive" });
-      return null;
-    }
-  }, [currentUser, toast]);
-
 
   const deleteCharacter = async (characterId: string): Promise<void> => {
     const characterToDelete = characters.find(c => c.id === characterId);
@@ -642,7 +620,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       isDataLoaded,
       isLoading,
       isUpdating,
-      refetchCharacter,
     }}>
       {children}
     </AppDataContext.Provider>

@@ -119,7 +119,7 @@ export default function ReaperRewardsPage() {
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
-  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter, refetchCharacter } = useAppData();
+  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
   const { toast } = useToast();
 
   const [character, setCharacter] = useState<Character | null>(null);
@@ -181,22 +181,8 @@ export default function ReaperRewardsPage() {
     if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
       try {
         const localKey = `ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`;
-        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
-        let localPrefsString = localStorage.getItem(localKey);
+        const localPrefsString = localStorage.getItem(localKey);
         
-        const loadFromCharacterObject = (charObj: Character) => {
-          const serverPrefs = charObj.preferences?.reaperRewards;
-          if (serverPrefs) {
-            localStorage.setItem(localKey, JSON.stringify(serverPrefs));
-            localStorage.setItem(lastRefreshKey, Date.now().toString());
-            localPrefsString = JSON.stringify(serverPrefs);
-          }
-        };
-
-        if (!localPrefsString) {
-          loadFromCharacterObject(character);
-        }
-
         const prefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.reaperRewards;
         
         if (prefs) {
@@ -253,13 +239,6 @@ export default function ReaperRewardsPage() {
   
     // Debounced update to Firestore via context
     await updateCharacter(updatedCharacterData);
-  
-    // Optional: Refetch after a delay to ensure sync, though optimistic update handles UI.
-    setTimeout(() => {
-        refetchCharacter(id).then(freshChar => {
-            if (freshChar) setCharacter(freshChar);
-        });
-    }, 2000); // 2s delay to allow debounced update to likely complete
   };
   
   const openEditModal = (characterToEdit: Character) => {

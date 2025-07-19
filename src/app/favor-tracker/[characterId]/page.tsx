@@ -180,7 +180,6 @@ export default function FavorTrackerPage() {
     activeCharacterId,
     isDataLoaded, isLoading: appDataIsLoading,
     updateCharacter,
-    refetchCharacter,
   } = useAppData();
   const { toast } = useToast();
 
@@ -217,7 +216,7 @@ export default function FavorTrackerPage() {
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
 
-  const savePreferences = useCallback((newPrefs: Partial<CharacterFavorTrackerPreferences>, important: boolean = false) => {
+  const savePreferences = useCallback((newPrefs: Partial<CharacterFavorTrackerPreferences>) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
       const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
@@ -240,47 +239,14 @@ export default function FavorTrackerPage() {
       setCharacter(updatedCharacter); // Immediately update local character state
       updateCharacter(updatedCharacter); // Debounced update to Firestore
 
-      if (important) {
-        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
-        const lastRefresh = parseInt(localStorage.getItem(lastRefreshKey) || '0', 10);
-        const oneDay = 24 * 60 * 60 * 1000;
-
-        if (Date.now() - lastRefresh > oneDay) {
-          console.log("Important preference changed. Re-fetching character data after 24hr cooldown.");
-          refetchCharacter(characterId).then(freshCharacter => {
-            if (freshCharacter) {
-              const serverPrefs = freshCharacter.preferences?.favorTracker || {};
-              localStorage.setItem(localKey, JSON.stringify(serverPrefs));
-              localStorage.setItem(lastRefreshKey, Date.now().toString());
-              window.location.reload(); 
-            }
-          });
-        }
-      }
     } catch (error) { console.error("Failed to save preferences:", error); }
-  }, [characterId, isDataLoaded, currentUser, character, updateCharacter, refetchCharacter]);
+  }, [characterId, isDataLoaded, currentUser, character, updateCharacter]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
       try {
         const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
-        const lastRefreshKey = `ddoToolkit_lastRefresh_${currentUser.uid}_${characterId}`;
-        let localPrefsString = localStorage.getItem(localKey);
-
-        const loadFromCharacterObject = (charObj: Character) => {
-          const serverPrefs = charObj.preferences?.favorTracker;
-          if (serverPrefs) {
-            localStorage.setItem(localKey, JSON.stringify(serverPrefs));
-            localStorage.setItem(lastRefreshKey, Date.now().toString());
-            localPrefsString = JSON.stringify(serverPrefs);
-            console.log("Loaded preferences from server character object into local storage.");
-          }
-        };
-
-        if (!localPrefsString) {
-          loadFromCharacterObject(character);
-        }
-
+        const localPrefsString = localStorage.getItem(localKey);
         const prefsToUse = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.favorTracker;
 
         if (prefsToUse) {
@@ -317,7 +283,7 @@ export default function FavorTrackerPage() {
 
   const handleDurationChange = (newAdjustments: Record<DurationCategory, number>) => {
     setDurationAdjustments(newAdjustments);
-    savePreferences({ durationAdjustments: newAdjustments }, true); 
+    savePreferences({ durationAdjustments: newAdjustments }); 
   }
 
   const handlePopoverColumnVisibilityChange = (key: SortableColumnKey | string, checked: boolean) => setPopoverColumnVisibility(prev => ({ ...prev, [key]: checked }));
@@ -347,13 +313,6 @@ export default function FavorTrackerPage() {
   
     // Debounced update to Firestore via context
     await updateCharacter(updatedCharacterData);
-  
-    // Optional: Refetch after a delay to ensure sync, though optimistic update handles UI.
-    setTimeout(() => {
-        refetchCharacter(id).then(freshChar => {
-            if (freshChar) setCharacter(freshChar);
-        });
-    }, 2000); // 2s delay to allow debounced update to likely complete
   };
 
   const openEditModal = (characterToEdit: Character) => {
@@ -627,8 +586,7 @@ export default function FavorTrackerPage() {
     let newDirection: 'ascending' | 'descending' = 'ascending';
     
     // One-way descending sort for specific columns
-    const descendingOnlyKeys: SortableColumnKey[] = ['remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'];
-    if (descendingOnlyKeys.includes(key)) {
+    if (['remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'].includes(key)) {
       newDirection = 'descending';
     } else if (sortConfig && sortConfig.key === key) {
       newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
