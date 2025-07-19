@@ -10,11 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Lightbulb, Send, Loader2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { submitSuggestion, type SubmitSuggestionInput } from '@/ai/flows/submit-suggestion-flow';
-import { useAuth } from '@/context/auth-context'; // Added
-import { withAuth } from '@genkit-ai/next/client';
+import { useAuth } from '@/context/auth-context';
+import { runFlow } from '@genkit-ai/next/client';
 
 export default function SuggestionsPage() {
-  const { currentUser, userData, isLoading: authIsLoading } = useAuth(); // Use auth context
+  const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const [suggestionText, setSuggestionText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,18 +41,20 @@ export default function SuggestionsPage() {
 
     setIsSubmitting(true);
     try {
-      const input: SubmitSuggestionInput = { 
+      const input: SubmitSuggestionInput = {
         suggestionText,
         suggesterId: currentUser.uid,
         suggesterName: userData?.displayName || currentUser.email || "Anonymous User"
       };
-      // Wrap the flow call with the withAuth helper
-      const result = await withAuth(submitSuggestion)(input);
+      
+      const idToken = await currentUser.getIdToken();
+      const result = await runFlow(submitSuggestion, input, { auth: idToken });
+
       toast({
         title: "Suggestion Submitted!",
         description: result.message,
       });
-      setSuggestionText(''); 
+      setSuggestionText('');
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
       toast({
@@ -84,7 +86,7 @@ export default function SuggestionsPage() {
 
 
   return (
-    <div className="py-8 space-y-8"> {/* Removed container mx-auto */}
+    <div className="py-8 space-y-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="font-headline text-3xl font-bold flex items-center">
           <Lightbulb className="mr-3 h-8 w-8 text-primary" /> Share Your Suggestions
@@ -109,7 +111,7 @@ export default function SuggestionsPage() {
                 value={suggestionText}
                 onChange={(e) => {
                   setSuggestionText(e.target.value);
-                  if (error) setError(null); 
+                  if (error) setError(null);
                 }}
                 placeholder="Type your suggestion here..."
                 rows={6}

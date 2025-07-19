@@ -9,11 +9,12 @@ import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { replyToSuggestion, type ReplyToSuggestionInput } from '@/ai/flows/reply-to-suggestion-flow';
 import type { Suggestion, User as AppUser } from '@/types';
-import { withAuth } from '@genkit-ai/next/client';
+import { useAuth } from '@/context/auth-context';
+import { runFlow } from '@genkit-ai/next/client';
 
 interface ReplyToSuggestionFormProps {
   suggestion: Suggestion;
-  adminUser: AppUser | null; // Pass the admin user object
+  adminUser: AppUser | null;
 }
 
 export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggestionFormProps) {
@@ -21,12 +22,13 @@ export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggesti
   const [isReplying, setIsReplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { currentUser } = useAuth(); // Get the Firebase user object
 
   const handleReplySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
 
-    if (!adminUser) {
+    if (!adminUser || !currentUser) { // Check for both admin data and Firebase user
       setError("Admin user not identified. Cannot send reply.");
       toast({ title: "Error", description: "Admin user not identified.", variant: "destructive" });
       return;
@@ -48,16 +50,18 @@ export function ReplyToSuggestionForm({ suggestion, adminUser }: ReplyToSuggesti
         replyText: replyText,
         suggesterId: suggestion.suggesterId,
         suggesterName: suggestion.suggesterName,
-        adminId: adminUser.id, // Use authenticated admin's ID
-        adminName: adminUser.displayName || adminUser.email || "Admin", // Use admin's name or email
+        adminId: adminUser.id,
+        adminName: adminUser.displayName || adminUser.email || "Admin",
       };
-      // Wrap the flow call with the withAuth helper
-      const result = await withAuth(replyToSuggestion)(input);
+
+      const idToken = await currentUser.getIdToken();
+      const result = await runFlow(replyToSuggestion, input, { auth: idToken });
+      
       toast({
         title: "Reply Sent!",
         description: result.message,
       });
-      setReplyText(''); 
+      setReplyText('');
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
       toast({
