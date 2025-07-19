@@ -1,4 +1,3 @@
-
 // src/components/auth/user-profile-dialog.tsx
 "use client";
 
@@ -16,8 +15,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Loader2, User, Mail, Image as ImageIcon, KeyRound, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { runFlow } from '@genkit-ai/next/client';
-import { generateCloudinarySignature } from '@/ai/flows/generate-cloudinary-signature-flow';
 import { Progress } from '../ui/progress';
 
 const profileFormSchema = z.object({
@@ -92,14 +89,27 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
     try {
       const timestamp = Math.round(Date.now() / 1000);
       const idToken = await currentUser.getIdToken();
-      const signatureResponse = await runFlow(generateCloudinarySignature, { timestamp, upload_preset: uploadPreset }, { auth: idToken });
+      
+      const signatureResponse = await fetch('/api/cloudinary/signature', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ timestamp, upload_preset: uploadPreset })
+      });
+
+      if (!signatureResponse.ok) {
+        throw new Error('Failed to get upload signature from server.');
+      }
+      const signatureData = await signatureResponse.json();
       
       const formData = new FormData();
       formData.append("file", file);
       formData.append("upload_preset", uploadPreset);
-      formData.append("timestamp", String(signatureResponse.timestamp));
-      formData.append("api_key", signatureResponse.api_key);
-      formData.append("signature", signatureResponse.signature);
+      formData.append("timestamp", String(signatureData.timestamp));
+      formData.append("api_key", signatureData.api_key);
+      formData.append("signature", signatureData.signature);
       
       const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: "POST", body: formData });
       if (!response.ok) throw new Error((await response.json()).error.message);
@@ -268,5 +278,3 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
     </Dialog>
   );
 }
-
-    

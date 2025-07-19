@@ -29,8 +29,6 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { runFlow } from '@genkit-ai/next/client';
-import { generateCloudinarySignature } from "@/ai/flows/generate-cloudinary-signature-flow";
 import { useAuth } from "@/context/auth-context";
 
 
@@ -99,10 +97,24 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     const idToken = await currentUser.getIdToken();
 
     try {
-        const signatureResponse = await runFlow(generateCloudinarySignature, {
-            timestamp,
-            upload_preset: uploadPreset,
-        }, { auth: idToken });
+        const response = await fetch('/api/cloudinary/signature', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+                timestamp,
+                upload_preset: uploadPreset,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.json();
+            throw new Error(errorBody.error || 'Failed to fetch signature.');
+        }
+
+        const signatureResponse = await response.json();
         
         const widget = window.cloudinary.createUploadWidget(
         {
@@ -148,7 +160,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         );
         widget.open();
     } catch(flowError) {
-        toast({ title: "Could not open uploader", description: "Failed to get required signature from the server.", variant: "destructive"});
+        toast({ title: "Could not open uploader", description: (flowError as Error).message, variant: "destructive"});
     }
   };
 
