@@ -1,4 +1,3 @@
-
 // src/app/suggestions/page.tsx
 "use client";
 
@@ -148,12 +147,13 @@ export default function SuggestionsPage() {
       return;
     }
     try {
+      const idToken = await currentUser.getIdToken();
       await addReplyToSuggestion({
         suggestionId,
         replyText,
         senderId: currentUser.uid,
         senderName: userData.displayName || "User",
-      });
+      }, { headers: { Authorization: `Bearer ${idToken}` } });
       toast({ title: "Reply Sent", description: "Your reply has been added." });
       // No need to manually refetch, onSnapshot will handle it
     } catch (e) {
@@ -191,8 +191,8 @@ export default function SuggestionsPage() {
           suggesterId: currentUser.uid,
           suggesterName: userData.displayName || currentUser.email || "Anonymous User"
         };
-        
-        await submitSuggestion(input);
+        const idToken = await currentUser.getIdToken();
+        await submitSuggestion(input, { headers: { Authorization: `Bearer ${idToken}` } });
 
         toast({
           title: "Suggestion Submitted!",
