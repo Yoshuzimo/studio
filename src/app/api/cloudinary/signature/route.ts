@@ -37,9 +37,9 @@ export async function POST(request: Request) {
     }
     
     const paramsToSign: Record<string, any> = {
+        public_id: public_id,
         timestamp: timestamp,
         upload_preset: upload_preset,
-        public_id: public_id,
     };
 
     // Correctly sort the keys alphabetically before creating the signature string.
