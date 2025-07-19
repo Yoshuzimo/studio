@@ -73,6 +73,10 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     if (isOpen) {
       form.reset(initialData ? { name: initialData.name, level: initialData.level } : { name: "", level: 1 });
       setUploadedImageUrl(initialData?.iconUrl || null);
+      // Ensure the script loaded state is also checked/set when opening
+      if (window.cloudinary) {
+        setIsCloudinaryScriptLoaded(true);
+      }
     }
   }, [initialData, form, isOpen]);
 
