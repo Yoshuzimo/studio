@@ -19,7 +19,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });
     }
 
-    const { timestamp, upload_preset } = await request.json();
+    const { timestamp, upload_preset, folder, public_id } = await request.json();
 
     if (!timestamp || !upload_preset) {
         return NextResponse.json({ error: 'Missing timestamp or upload_preset' }, { status: 400 });
@@ -32,8 +32,22 @@ export async function POST(request: Request) {
       console.error("Cloudinary API Key or Secret is not defined in environment variables.");
       return NextResponse.json({ error: 'Server configuration error: Cloudinary credentials missing.' }, { status: 500 });
     }
+    
+    // The signature must include all parameters that are being sent in the upload request,
+    // sorted alphabetically by parameter name.
+    const paramsToSign: Record<string, any> = {
+        timestamp: timestamp,
+        upload_preset: upload_preset,
+    };
+    if (folder) paramsToSign.folder = folder;
+    if (public_id) paramsToSign.public_id = public_id;
 
-    const stringToSign = `timestamp=${timestamp}&upload_preset=${upload_preset}${cloudinaryApiSecret}`;
+    const sortedParams = Object.keys(paramsToSign)
+        .sort()
+        .map(key => `${key}=${paramsToSign[key]}`)
+        .join('&');
+
+    const stringToSign = `${sortedParams}${cloudinaryApiSecret}`;
 
     const signature = crypto
       .createHash('sha256')

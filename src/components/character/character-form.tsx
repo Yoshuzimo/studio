@@ -72,9 +72,14 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   const imageUploadButtonId = `image-upload-button-${uniqueId}`;
 
   useEffect(() => {
-    // Check if script is already loaded when component mounts or `isOpen` becomes true
-    if (isOpen && window.cloudinary) {
-      setIsCloudinaryScriptLoaded(true);
+    // This effect ensures we check for the script whenever the dialog opens.
+    if (isOpen) {
+      if (window.cloudinary) {
+        setIsCloudinaryScriptLoaded(true);
+      } else {
+        // If script isn't loaded, trigger loading (or rely on the <Script> component)
+        // The <Script> component should handle loading it automatically.
+      }
     }
   }, [isOpen]);
 
@@ -101,13 +106,14 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
     const characterName = form.getValues("name") || "character";
     const safeFileName = characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-    const publicId = `ddo_toolkit/characters/${safeFileName}_${initialData?.id || currentUser.uid.slice(0, 8)}`;
+    const folder = "ddo_toolkit/characters";
+    const publicId = `${folder}/${safeFileName}_${initialData?.id || currentUser.uid.slice(0, 8)}`;
     
     const timestamp = Math.round(Date.now() / 1000);
     const idToken = await currentUser.getIdToken();
 
     try {
-        const response = await fetch('/api/cloudinary/signature', {
+        const signatureResponse = await fetch('/api/cloudinary/signature', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -116,24 +122,26 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
             body: JSON.stringify({
                 timestamp,
                 upload_preset: uploadPreset,
+                folder,
+                public_id: publicId,
             }),
         });
 
-        if (!response.ok) {
-            const errorBody = await response.json();
+        if (!signatureResponse.ok) {
+            const errorBody = await signatureResponse.json();
             throw new Error(errorBody.error || 'Failed to fetch signature.');
         }
 
-        const signatureResponse = await response.json();
+        const signatureData = await signatureResponse.json();
         
         const widget = window.cloudinary.createUploadWidget(
         {
             cloudName: cloudName,
             uploadPreset: uploadPreset,
-            apiKey: signatureResponse.api_key,
-            uploadSignatureTimestamp: signatureResponse.timestamp,
-            uploadSignature: signatureResponse.signature,
-            folder: "ddo_toolkit/characters",
+            apiKey: signatureData.api_key,
+            uploadSignatureTimestamp: signatureData.timestamp,
+            uploadSignature: signatureData.signature,
+            folder: folder,
             public_id: publicId,
             cropping: true,
             croppingAspectRatio: 4 / 3,
@@ -200,10 +208,9 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="font-headline">{initialData ? "Edit Character" : "Create Character"}</DialogTitle>
-            {/* The DialogDescription component was removed in a previous step, so we're leaving it out */}
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8 pt-4">
               <FormField
                 control={form.control}
                 name="name"
