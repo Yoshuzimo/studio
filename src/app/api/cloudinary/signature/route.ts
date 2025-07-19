@@ -1,3 +1,4 @@
+
 // src/app/api/cloudinary/signature/route.ts
 import { NextResponse } from 'next/server';
 import * as crypto from 'crypto';
@@ -20,8 +21,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });
     }
 
-    const { timestamp, upload_preset, public_id, folder } = await request.json();
-    console.log("[Cloudinary Signature] Received params for signing:", { timestamp, upload_preset, public_id, folder });
+    const { timestamp, upload_preset, public_id, folder, custom_coordinates, source } = await request.json();
+    console.log("[Cloudinary Signature] Received params for signing:", { timestamp, upload_preset, public_id, folder, custom_coordinates, source });
 
     if (!timestamp || !upload_preset) {
         console.error("[Cloudinary Signature] Error: Missing timestamp or upload_preset.");
@@ -43,7 +44,9 @@ export async function POST(request: Request) {
 
     if (public_id) paramsToSign.public_id = public_id;
     if (folder) paramsToSign.folder = folder;
-
+    if (source) paramsToSign.source = source;
+    if (custom_coordinates) paramsToSign.custom_coordinates = custom_coordinates;
+    
     // Force alphabetical sorting of keys to match Cloudinary's expectation.
     const sortedParams = Object.entries(paramsToSign)
       .sort(([a], [b]) => a.localeCompare(b))
