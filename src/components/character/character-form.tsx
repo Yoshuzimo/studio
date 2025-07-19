@@ -60,7 +60,6 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   });
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(initialData?.iconUrl || null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const { toast } = useToast();
@@ -69,7 +68,6 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     if (isOpen) {
       form.reset(initialData ? { name: initialData.name, level: initialData.level } : { name: "", level: 1 });
       setSelectedFile(null);
-      setPreviewUrl(initialData?.iconUrl || null);
       setIsUploading(false);
       setUploadProgress(null);
     }
@@ -79,14 +77,8 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
     } else {
       setSelectedFile(null);
-      setPreviewUrl(initialData?.iconUrl || null);
     }
   };
 
@@ -138,7 +130,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
     } catch (error) {
       console.error("Upload failed:", error);
-      toast({ title: "Icon Upload Failed", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Image Upload Failed", description: (error as Error).message, variant: "destructive" });
       return null;
     } finally {
       setIsUploading(false);
@@ -153,8 +145,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       if (uploadedUrl) {
         finalIconUrl = uploadedUrl;
       } else {
-        // Upload failed, so we shouldn't proceed with the character form submission if an icon change was intended
-        toast({ title: "Submission Halted", description: "Icon upload failed, so character details were not saved.", variant: "destructive" });
+        toast({ title: "Submission Halted", description: "Image upload failed, so character details were not saved.", variant: "destructive" });
         return;
       }
     }
@@ -170,7 +161,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         <DialogHeader>
           <DialogTitle className="font-headline">{initialData ? "Edit Character" : "Create Character"}</DialogTitle>
           <DialogDescription>
-            {initialData ? "Update your character's details and icon." : "Add a new character to your roster."}
+            {initialData ? "Update your character's details and background image." : "Add a new character to your roster."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -202,7 +193,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
               )}
             />
             <FormItem>
-              <FormLabel htmlFor="character-icon-upload">Character Icon</FormLabel>
+              <FormLabel htmlFor="character-icon-upload">Card Background Image (Optional)</FormLabel>
               <Input 
                 id="character-icon-upload" 
                 type="file" 
@@ -211,11 +202,6 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                 disabled={effectiveIsSubmitting}
                 className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
               />
-              {previewUrl && (
-                <div className="mt-2 relative w-24 h-24 rounded-md overflow-hidden border-2 border-primary">
-                  <Image src={previewUrl} alt="Icon preview" layout="fill" objectFit="contain" sizes="96px" />
-                </div>
-              )}
               {isUploading && uploadProgress !== null && (
                  <div className="mt-2">
                    <Progress value={uploadProgress} className="w-full h-2" />
