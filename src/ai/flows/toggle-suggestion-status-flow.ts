@@ -11,9 +11,9 @@
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { auth as adminAuth } from '@/lib/firebase-admin';
-import { headers } from 'next/headers';
+import { getAuth } from 'firebase-admin/auth';
 import type { Suggestion } from '@/types';
+import { cookies } from 'next/headers';
 
 const ToggleSuggestionStatusInputSchema = z.object({
   suggestionId: z.string().describe('The ID of the suggestion whose status is being changed.'),
@@ -28,27 +28,25 @@ const ToggleSuggestionStatusOutputSchema = z.object({
 export type ToggleSuggestionStatusOutput = z.infer<typeof ToggleSuggestionStatusOutputSchema>;
 
 export async function toggleSuggestionStatus(input: ToggleSuggestionStatusInput): Promise<ToggleSuggestionStatusOutput> {
-    const authorization = headers().get('Authorization');
-    let decodedToken;
+    const sessionCookie = cookies().get('__session')?.value;
+    if (!sessionCookie) {
+      throw new Error('Unauthorized');
+    }
 
-    if (authorization?.startsWith('Bearer ')) {
-        const idToken = authorization.split('Bearer ')[1];
-        try {
-            decodedToken = await adminAuth.verifyIdToken(idToken);
-        } catch(error) {
-            console.error("Authentication error in toggleSuggestionStatus", error);
-            throw new Error('Authentication failed');
-        }
-    } else {
-        throw new Error('Unauthorized');
+    let decodedToken;
+    try {
+        decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
+    } catch(error) {
+        console.error("Authentication error in toggleSuggestionStatus", error);
+        throw new Error('Authentication failed');
     }
 
     if (decodedToken.uid !== input.adminId) {
         throw new Error('Mismatched admin ID.');
     }
 
-    const userRecord = await adminAuth.getUser(decodedToken.uid);
-    if (userRecord.customClaims?.admin !== true) {
+    const userDocSnap = await getDoc(doc(db, 'users', decodedToken.uid));
+    if (!userDocSnap.exists() || userDocSnap.data().isAdmin !== true) {
         throw new Error('Insufficient permissions. Only admins can change status.');
     }
 

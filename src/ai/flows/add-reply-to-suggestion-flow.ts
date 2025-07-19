@@ -11,10 +11,10 @@
 import {z} from 'zod';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
-import { auth as adminAuth } from '@/lib/firebase-admin';
-import { headers } from 'next/headers';
+import { getAuth } from 'firebase-admin/auth';
 import type { SuggestionConversationItem, Suggestion } from '@/types';
 import { serverTimestamp } from 'firebase/firestore';
+import { cookies } from 'next/headers';
 
 const AddReplyToSuggestionInputSchema = z.object({
   suggestionId: z.string().describe('The ID of the suggestion being replied to.'),
@@ -32,21 +32,17 @@ export type AddReplyToSuggestionOutput = z.infer<typeof AddReplyToSuggestionOutp
 
 
 export async function addReplyToSuggestion(input: AddReplyToSuggestionInput): Promise<AddReplyToSuggestionOutput> {
-  const authorization = headers().get('Authorization');
-  let decodedToken;
-
-  if (authorization?.startsWith('Bearer ')) {
-      const idToken = authorization.split('Bearer ')[1];
-      try {
-        decodedToken = await adminAuth.verifyIdToken(idToken);
-      } catch(error) {
-        console.error("Authentication error in addReplyToSuggestion", error);
-        throw new Error('Authentication failed');
-      }
-  } else {
-    // This case might be for a server action call from another server action, or a non-standard client.
-    // For now, let's assume if no bearer token, it's an unauthenticated attempt.
+  const sessionCookie = cookies().get('__session')?.value;
+  if (!sessionCookie) {
     throw new Error('Unauthorized');
+  }
+
+  let decodedToken;
+  try {
+    decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
+  } catch(error) {
+    console.error("Authentication error in addReplyToSuggestion", error);
+    throw new Error('Authentication failed');
   }
 
   if (decodedToken.uid !== input.senderId) {
@@ -74,8 +70,8 @@ export async function addReplyToSuggestion(input: AddReplyToSuggestionInput): Pr
     
     // Authorization check: Only admin or original suggester can reply.
     const isSuggester = decodedToken.uid === suggestionData.suggesterId;
-    const userDoc = await adminAuth.getUser(decodedToken.uid);
-    const isAdmin = userDoc.customClaims?.admin === true;
+    const userDocSnap = await getDoc(doc(db, 'users', decodedToken.uid));
+    const isAdmin = userDocSnap.exists() && userDocSnap.data().isAdmin === true;
 
     if (!isSuggester && !isAdmin) {
         throw new Error("You do not have permission to reply to this suggestion.");

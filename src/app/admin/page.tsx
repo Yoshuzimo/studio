@@ -265,8 +265,7 @@ export default function AdminPage() {
   const handleToggleSuggestionStatus = async (suggestionId: string) => {
     if (!currentUser) return;
     try {
-        const idToken = await currentUser.getIdToken();
-        const result = await toggleSuggestionStatus({ suggestionId, adminId: currentUser.uid }, { headers: { Authorization: `Bearer ${idToken}` } });
+        const result = await toggleSuggestionStatus({ suggestionId, adminId: currentUser.uid });
         toast({ title: 'Status Updated', description: result.message });
     } catch (e) {
         const error = e as Error;
@@ -596,5 +595,3 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
     </div>
   );
 }
-
-    

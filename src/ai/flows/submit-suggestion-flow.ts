@@ -12,8 +12,9 @@ import {z} from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, type FieldValue } from 'firebase/firestore';
 import { auth as adminAuth } from '@/lib/firebase-admin';
-import { headers } from 'next/headers';
 import type { SuggestionConversationItem } from '@/types';
+import { getAuth } from 'firebase-admin/auth';
+import { cookies } from 'next/headers';
 
 const SubmitSuggestionInputSchema = z.object({
   title: z.string().min(5, { message: "Title must be at least 5 characters."}).max(100, {message: "Title must be 100 characters or less."}).describe('The title of the user\'s suggestion.'),
@@ -40,21 +41,17 @@ type SuggestionData = {
 };
 
 export async function submitSuggestion(input: SubmitSuggestionInput): Promise<SubmitSuggestionOutput> {
-  const authorization = headers().get('Authorization');
-  let decodedToken;
-
-  if (authorization?.startsWith('Bearer ')) {
-      const idToken = authorization.split('Bearer ')[1];
-      try {
-        decodedToken = await adminAuth.verifyIdToken(idToken);
-      } catch(error) {
-        console.error("Authentication error in submitSuggestion", error);
-        throw new Error('Authentication failed');
-      }
-  } else {
-    // This case might be for a server action call from another server action, or a non-standard client.
-    // For now, let's assume if no bearer token, it's an unauthenticated attempt.
+  const sessionCookie = cookies().get('__session')?.value;
+  if (!sessionCookie) {
     throw new Error('Unauthorized');
+  }
+
+  let decodedToken;
+  try {
+    decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
+  } catch (error) {
+    console.error("Authentication error in submitSuggestion", error);
+    throw new Error('Authentication failed');
   }
 
   if (decodedToken.uid !== input.suggesterId) {

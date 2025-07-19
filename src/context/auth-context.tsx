@@ -122,11 +122,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       console.log('[AuthContext] onAuthStateChanged triggered. User:', user?.uid || null);
       if (user) {
-        try { await user.reload(); console.log('[AuthContext] User reloaded successfully.'); } 
+        try { 
+            await user.reload(); 
+            const idToken = await user.getIdToken(true);
+            
+            const response = await fetch('/api/auth/session', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${idToken}` }
+            });
+
+            if(!response.ok) {
+              throw new Error("Failed to create session cookie");
+            }
+
+            console.log('[AuthContext] User reloaded and session cookie set successfully.'); 
+        } 
         catch (reloadError: any) { 
-            console.error('[AuthContext] User reload failed:', reloadError);
+            console.error('[AuthContext] User reload or session creation failed:', reloadError);
             if (['auth/user-token-expired', 'auth/user-disabled', 'auth/invalid-user-token', 'auth/network-request-failed'].includes(reloadError.code)) {
-                try { await firebaseSignOut(auth); console.log('[AuthContext] Signed out user due to reload error.'); } catch (signOutError) { console.error('[AuthContext] Error signing out after reload failure:', signOutError); }
+                try { 
+                  await firebaseSignOut(auth); 
+                  await fetch('/api/auth/session', { method: 'DELETE' }); // Clear session cookie on sign out
+                  console.log('[AuthContext] Signed out user due to reload error.'); 
+                } catch (signOutError) { 
+                  console.error('[AuthContext] Error signing out after reload failure:', signOutError); 
+                }
             }
         }
         
@@ -215,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         console.log('[AuthContext] No Firebase user from onAuthStateChanged. States cleared.');
+        await fetch('/api/auth/session', { method: 'DELETE' }); // Clear session cookie on sign out
         setCurrentUser(null);
         setUserData(null);
       }
@@ -306,6 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[AuthContext] logout called.');
     try {
       await firebaseSignOut(auth);
+      await fetch('/api/auth/session', { method: 'DELETE' }); // Clear session cookie
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
       router.push('/login'); 
     } catch (error) {
@@ -724,5 +746,3 @@ export function useAuth() {
   }
   return context;
 }
-
-    
