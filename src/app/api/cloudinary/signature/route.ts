@@ -20,11 +20,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });
     }
 
-    const { timestamp, upload_preset, public_id } = await request.json();
-    console.log("[Cloudinary Signature] Received params for signing:", { timestamp, upload_preset, public_id });
+    const { timestamp, upload_preset, public_id, folder } = await request.json();
+    console.log("[Cloudinary Signature] Received params for signing:", { timestamp, upload_preset, public_id, folder });
 
-    if (!timestamp || !upload_preset || !public_id) {
-        console.error("[Cloudinary Signature] Error: Missing timestamp, upload_preset, or public_id.");
+    if (!timestamp || !upload_preset) {
+        console.error("[Cloudinary Signature] Error: Missing timestamp or upload_preset.");
         return NextResponse.json({ error: 'Missing required parameters for signing' }, { status: 400 });
     }
 
@@ -37,10 +37,12 @@ export async function POST(request: Request) {
     }
     
     const paramsToSign: Record<string, any> = {
-        public_id,
         timestamp,
         upload_preset,
     };
+
+    if (public_id) paramsToSign.public_id = public_id;
+    if (folder) paramsToSign.folder = folder;
 
     // Force alphabetical sorting of keys to match Cloudinary's expectation.
     const sortedParams = Object.entries(paramsToSign)
