@@ -91,8 +91,10 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   }, [initialData, form, isOpen]);
 
   const openCloudinaryWidget = async () => {
+    console.log("[Cloudinary Widget] openCloudinaryWidget called.");
     if (!isCloudinaryScriptLoaded || !currentUser) {
       toast({ title: "Widget not ready", description: "The image upload widget is not loaded yet or you are not logged in.", variant: "destructive" });
+      console.error("[Cloudinary Widget] Aborted: Script loaded:", isCloudinaryScriptLoaded, "User exists:", !!currentUser);
       return;
     }
 
@@ -101,6 +103,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
     if (!cloudName || !uploadPreset) {
       toast({ title: "Client Configuration Error", description: "Cloudinary settings are missing.", variant: "destructive" });
+      console.error("[Cloudinary Widget] Aborted: Missing cloudName or uploadPreset.");
       return;
     }
 
@@ -112,6 +115,14 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     const timestamp = Math.round(Date.now() / 1000);
     const idToken = await currentUser.getIdToken();
 
+    const signaturePayload = {
+        timestamp,
+        upload_preset: uploadPreset,
+        folder,
+        public_id: publicId,
+    };
+    console.log("[Cloudinary Widget] Requesting signature with payload:", signaturePayload);
+
     try {
         const signatureResponse = await fetch('/api/cloudinary/signature', {
             method: 'POST',
@@ -119,23 +130,18 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${idToken}`,
             },
-            body: JSON.stringify({
-                timestamp,
-                upload_preset: uploadPreset,
-                folder,
-                public_id: publicId,
-            }),
+            body: JSON.stringify(signaturePayload),
         });
 
         if (!signatureResponse.ok) {
             const errorBody = await signatureResponse.json();
-            throw new Error(errorBody.error || 'Failed to fetch signature.');
+            throw new Error(errorBody.error || `Failed to fetch signature. Status: ${signatureResponse.status}`);
         }
 
         const signatureData = await signatureResponse.json();
+        console.log("[Cloudinary Widget] Received signature data from server:", signatureData);
         
-        const widget = window.cloudinary.createUploadWidget(
-        {
+        const widgetOptions = {
             cloudName: cloudName,
             uploadPreset: uploadPreset,
             apiKey: signatureData.api_key,
@@ -164,20 +170,31 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                     sourceBg: "#303F9F"
                 },
             }
-        },
-        (error: any, result: any) => {
-            if (!error && result && result.event === "success") {
-                console.log("Upload Widget success:", result.info);
-                setUploadedImageUrl(result.info.secure_url);
-                toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
-            } else if (error) {
-                console.error("Upload Widget error:", error);
-                toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
+        };
+
+        console.log("[Cloudinary Widget] Creating widget with options:", widgetOptions);
+
+        const widget = window.cloudinary.createUploadWidget(
+            widgetOptions,
+            (error: any, result: any) => {
+                if (error) {
+                    console.error("Upload Widget error:", error);
+                    toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
+                    return;
+                }
+
+                if (result && result.event === "success") {
+                    console.log("Upload Widget success:", result.info);
+                    setUploadedImageUrl(result.info.secure_url);
+                    toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
+                } else if (result) {
+                    console.log("[Cloudinary Widget] Event:", result.event, result.info);
+                }
             }
-        }
         );
         widget.open();
     } catch(flowError) {
+        console.error("[Cloudinary Widget] Flow Error:", flowError);
         toast({ title: "Could not open uploader", description: (flowError as Error).message, variant: "destructive"});
     }
   };
@@ -208,6 +225,9 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="font-headline">{initialData ? "Edit Character" : "Create Character"}</DialogTitle>
+            <DialogDescription>
+              {initialData ? "Update this character's name, level, or background image." : "Create a new character for your trackers."}
+            </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8 pt-4">
