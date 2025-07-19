@@ -11,7 +11,7 @@
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { auth } from 'firebase-admin';
+import { auth as adminAuth } from '@/lib/firebase-admin';
 import { headers } from 'next/headers';
 import type { Suggestion } from '@/types';
 
@@ -28,21 +28,29 @@ const ToggleSuggestionStatusOutputSchema = z.object({
 export type ToggleSuggestionStatusOutput = z.infer<typeof ToggleSuggestionStatusOutputSchema>;
 
 export async function toggleSuggestionStatus(input: ToggleSuggestionStatusInput): Promise<ToggleSuggestionStatusOutput> {
-  const authorization = headers().get('Authorization');
-  if (!authorization?.startsWith('Bearer ')) {
-    throw new Error('Unauthorized');
-  }
-  const idToken = authorization.split('Bearer ')[1];
-  
-  try {
-    const decodedToken = await auth().verifyIdToken(idToken);
-    if (decodedToken.uid !== input.adminId || !decodedToken.admin) {
-      throw new Error('Mismatched user ID or insufficient permissions. Only admins can change status.');
+    const authorization = headers().get('Authorization');
+    let decodedToken;
+
+    if (authorization?.startsWith('Bearer ')) {
+        const idToken = authorization.split('Bearer ')[1];
+        try {
+            decodedToken = await adminAuth.verifyIdToken(idToken);
+        } catch(error) {
+            console.error("Authentication error in toggleSuggestionStatus", error);
+            throw new Error('Authentication failed');
+        }
+    } else {
+        throw new Error('Unauthorized');
     }
-  } catch (error) {
-    console.error("Authentication error in toggleSuggestionStatus", error);
-    throw new Error('Authentication failed or insufficient permissions');
-  }
+
+    if (decodedToken.uid !== input.adminId) {
+        throw new Error('Mismatched admin ID.');
+    }
+
+    const userRecord = await adminAuth.getUser(decodedToken.uid);
+    if (userRecord.customClaims?.admin !== true) {
+        throw new Error('Insufficient permissions. Only admins can change status.');
+    }
 
   try {
     const suggestionRef = doc(db, 'suggestions', input.suggestionId);

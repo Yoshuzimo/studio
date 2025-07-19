@@ -43,13 +43,12 @@ export function ReplyToSuggestionForm({ suggestion }: ReplyToSuggestionFormProps
 
     startTransition(async () => {
       try {
-        const idToken = await currentUser.getIdToken();
         await addReplyToSuggestion({
             suggestionId: suggestion.id,
             replyText: replyText,
             senderId: currentUser.uid,
             senderName: userData.displayName || 'Admin',
-        }, { headers: { Authorization: `Bearer ${idToken}` } });
+        });
 
         toast({
           title: "Reply Sent!",
@@ -106,5 +105,3 @@ export function ReplyToSuggestionForm({ suggestion }: ReplyToSuggestionFormProps
     </form>
   );
 }
-
-    

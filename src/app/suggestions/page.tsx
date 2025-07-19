@@ -75,7 +75,7 @@ function SuggestionItem({ suggestion, onReply }: { suggestion: Suggestion; onRep
                     <p className="text-xs font-semibold mb-1">{item.senderName}</p>
                     <p className="text-sm whitespace-pre-wrap">{item.text}</p>
                     <p className="text-xs text-right mt-1 opacity-70">
-                        {formatDistanceToNow((item.timestamp as any).toDate(), { addSuffix: true })}
+                        {item.timestamp ? formatDistanceToNow((item.timestamp as any).toDate(), { addSuffix: true }) : 'just now'}
                     </p>
                     </div>
                 </div>
@@ -148,13 +148,12 @@ export default function SuggestionsPage() {
       return;
     }
     try {
-      const idToken = await currentUser.getIdToken();
       await addReplyToSuggestion({
         suggestionId,
         replyText,
         senderId: currentUser.uid,
         senderName: userData.displayName || "User",
-      }, { headers: { Authorization: `Bearer ${idToken}` } });
+      });
       toast({ title: "Reply Sent", description: "Your reply has been added." });
       // No need to manually refetch, onSnapshot will handle it
     } catch (e) {
@@ -193,8 +192,7 @@ export default function SuggestionsPage() {
           suggesterName: userData.displayName || currentUser.email || "Anonymous User"
         };
         
-        const idToken = await currentUser.getIdToken();
-        await submitSuggestion(input, { headers: { Authorization: `Bearer ${idToken}` } } as any);
+        await submitSuggestion(input);
 
         toast({
           title: "Suggestion Submitted!",
@@ -308,4 +306,3 @@ export default function SuggestionsPage() {
     </div>
   );
 }
-
