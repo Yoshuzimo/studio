@@ -93,90 +93,76 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     console.log("[Cloudinary Widget] openCloudinaryWidget called.");
     if (!isCloudinaryScriptLoaded || !currentUser) {
       toast({ title: "Widget not ready", description: "The image upload widget is not loaded yet or you are not logged in.", variant: "destructive" });
-      console.error("[Cloudinary Widget] Aborted: Script loaded:", isCloudinaryScriptLoaded, "User exists:", !!currentUser);
       return;
     }
-  
+
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-  
+
     if (!cloudName || !uploadPreset) {
       toast({ title: "Client Configuration Error", description: "Cloudinary settings are missing.", variant: "destructive" });
-      console.error("[Cloudinary Widget] Aborted: Missing cloudName or uploadPreset.");
       return;
     }
-  
-    // We will generate a timestamp and public_id here to send to the server for signing
-    const timestamp = Math.round(Date.now() / 1000);
-    const public_id = `${form.getValues('name').replace(/\s+/g, '_').toLowerCase()}_${crypto.randomBytes(12).toString('hex')}`;
-  
+
+    // This is the correct, sequential flow.
+    // 1. Get a signature from the server first.
     try {
-      // Step 1: Fetch the signature from the server
       const idToken = await currentUser.getIdToken();
+      // We only need a timestamp for the signature, the other params are added by the widget itself.
       const signatureResponse = await fetch('/api/cloudinary/signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-        body: JSON.stringify({ timestamp, upload_preset: uploadPreset, public_id }),
+        body: JSON.stringify({ timestamp: Math.round(Date.now() / 1000) })
       });
-  
+
       if (!signatureResponse.ok) {
         const errorBody = await signatureResponse.json();
         throw new Error(errorBody.error || `Failed to fetch signature. Status: ${signatureResponse.status}`);
       }
-  
+      
       const signatureData = await signatureResponse.json();
-      console.log("[Cloudinary Widget] Received signature and API key from server:", signatureData);
-  
-      // Step 2: Create the widget with the fetched data
-      const widgetOptions = {
+      console.log("[Cloudinary Widget] Fetched signature and API key from server:", signatureData);
+
+      // 2. Now that we have the key and signature, create and open the widget.
+      const widget = window.cloudinary.createUploadWidget({
         cloudName: cloudName,
         uploadPreset: uploadPreset,
-        apiKey: signatureData.api_key, // Use the API key from the server response
+        apiKey: signatureData.api_key, // CRITICAL: Use the key from the server
         folder: "ddo_toolkit/characters",
         cropping: true,
         croppingAspectRatio: 4 / 3,
         showAdvancedOptions: true,
         sources: ["local", "url", "camera"],
-        // The widget will use these parameters for the upload.
-        // The signature is now passed directly, not via a callback.
         uploadSignature: signatureData.signature,
-        uploadSignatureTimestamp: timestamp,
-        public_id: public_id,
+        uploadSignatureTimestamp: signatureData.timestamp,
         styles: {
-          palette: {
-            window: "#283593", windowBorder: "#3F51B5", tabIcon: "#FFFFFF", menuIcons: "#FFFFFF",
-            textDark: "#000000", textLight: "#FFFFFF", link: "#FF9800", action: "#FF9800",
-            inactiveTabIcon: "#BDBDBD", error: "#F44336", inProgress: "#0078FF",
-            complete: "#4CAF50", sourceBg: "#303F9F"
-          },
+            palette: {
+              window: "#283593", windowBorder: "#3F51B5", tabIcon: "#FFFFFF", menuIcons: "#FFFFFF",
+              textDark: "#000000", textLight: "#FFFFFF", link: "#FF9800", action: "#FF9800",
+              inactiveTabIcon: "#BDBDBD", error: "#F44336", inProgress: "#0078FF",
+              complete: "#4CAF50", sourceBg: "#303F9F"
+            },
         }
-      };
-  
-      console.log("[Cloudinary Widget] Creating widget with options:", widgetOptions);
-  
-      const widget = window.cloudinary.createUploadWidget(
-        widgetOptions,
-        (error: any, result: any) => {
-          if (error) {
-            console.error("Upload Widget error:", error);
-            toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
-            return;
-          }
-  
-          if (result && result.event === "success") {
-            console.log("Upload Widget success:", result.info);
-            setUploadedImageUrl(result.info.secure_url);
-            toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
-          } else if (result) {
-            console.log("[Cloudinary Widget] Event:", result.event, result.info);
-          }
+      }, (error: any, result: any) => {
+        if (error) {
+          console.error("Upload Widget error:", error);
+          toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
+          return;
         }
-      );
+
+        if (result && result.event === "success") {
+          console.log("Upload Widget success:", result.info);
+          setUploadedImageUrl(result.info.secure_url);
+          toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
+        } else if (result) {
+          console.log("[Cloudinary Widget] Event:", result.event, result.info);
+        }
+      });
       widget.open();
-  
-    } catch (flowError) {
-      console.error("[Cloudinary Widget] Signature fetch or widget creation error:", flowError);
-      toast({ title: "Could not open uploader", description: (flowError as Error).message, variant: "destructive"});
+
+    } catch (error) {
+      console.error("[Cloudinary Widget] Error in widget flow:", error);
+      toast({ title: "Could not open uploader", description: (error as Error).message, variant: "destructive" });
     }
   };
 

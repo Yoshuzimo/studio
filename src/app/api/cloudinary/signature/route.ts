@@ -1,3 +1,4 @@
+
 // src/app/api/cloudinary/signature/route.ts
 import { NextResponse } from 'next/server';
 import * as crypto from 'crypto';
@@ -21,10 +22,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });
     }
 
-    // The entire body is now the paramsToSign object, sent from the widget
-    const paramsToSign = await request.json();
+    // The widget now sends only the timestamp for signature generation purposes.
+    // The other parameters are added by the widget itself during the actual upload.
+    const { timestamp } = await request.json();
 
-    console.log("[Cloudinary Signature] Received params for signing:", paramsToSign);
+    if (!timestamp) {
+      return NextResponse.json(
+        { error: 'Missing required parameter: timestamp is mandatory.' },
+        { status: 400 }
+      );
+    }
 
     const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
     const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
@@ -37,7 +44,22 @@ export async function POST(request: Request) {
       );
     }
     
-    // Sort the parameters alphabetically by key. This is a crucial step.
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    if (!uploadPreset) {
+      console.error("[Cloudinary Signature] Cloudinary upload preset is missing.");
+       return NextResponse.json(
+        { error: 'Server configuration error: Cloudinary upload preset missing.' },
+        { status: 500 }
+      );
+    }
+
+    // Per Cloudinary docs for uploadSignature, only timestamp and upload_preset are needed for this flow.
+    // The widget will combine this server-generated signature with other parameters client-side.
+    const paramsToSign = {
+      timestamp: String(timestamp),
+      upload_preset: uploadPreset,
+    };
+
     const sortedParams = Object.entries(paramsToSign)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, val]) => `${key}=${val}`)
@@ -47,15 +69,16 @@ export async function POST(request: Request) {
 
     const signature = crypto.createHash('sha256').update(stringToSign).digest('hex');
 
-    console.log("[Cloudinary Signature] Generated signature details:", {
+    console.log("[Cloudinary Signature] Generated signature for widget:", {
       sortedParams,
-      stringToSign,
       signature,
     });
 
+    // Return all necessary info for the widget to perform the upload.
     return NextResponse.json({
       signature,
-      // The widget only needs the signature back from this function. Timestamp and API key are handled client-side.
+      timestamp,
+      api_key: cloudinaryApiKey,
     });
 
   } catch (error) {
