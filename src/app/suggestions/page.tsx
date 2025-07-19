@@ -99,9 +99,6 @@ export default function SuggestionsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-amber-600 dark:text-amber-400 font-semibold mb-4 text-center">
-            Still Under development
-          </p>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <Label htmlFor="suggestion-text" className="block text-sm font-medium mb-1">
