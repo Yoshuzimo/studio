@@ -11,7 +11,7 @@
 import {z} from 'zod';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase-admin/auth';
+import { adminAuth } from '@/lib/firebase-admin';
 import type { SuggestionConversationItem, Suggestion } from '@/types';
 import { serverTimestamp } from 'firebase/firestore';
 import { cookies } from 'next/headers';
@@ -39,7 +39,7 @@ export async function addReplyToSuggestion(input: AddReplyToSuggestionInput): Pr
 
   let decodedToken;
   try {
-    decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
+    decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
   } catch(error) {
     console.error("Authentication error in addReplyToSuggestion", error);
     throw new Error('Authentication failed');

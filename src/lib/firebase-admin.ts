@@ -1,10 +1,11 @@
 // src/lib/firebase-admin.ts
 import { getApps, initializeApp, cert, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 
 let app: App;
 
-if (!getApps().length) {
+if (getApps().length === 0) {
   const serviceAccountKeyBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
   if (!serviceAccountKeyBase64) {
@@ -24,8 +25,10 @@ if (!getApps().length) {
     throw new Error("Firebase Admin SDK initialization failed due to invalid credentials.");
   }
 } else {
-  app = getApps()[0]!;
+  app = getApps()[0];
 }
 
-export const auth = getAuth(app);
-export const db = app.firestore();
+const adminAuth = getAuth(app);
+const db = getFirestore(app);
+
+export { adminAuth, db };

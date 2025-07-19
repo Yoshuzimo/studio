@@ -1,7 +1,7 @@
 // src/app/api/cloudinary/signature/route.ts
 import { NextResponse } from 'next/server';
 import * as crypto from 'crypto';
-import { auth } from '@/lib/firebase-admin'; // Using admin SDK for verification
+import { adminAuth } from '@/lib/firebase-admin'; // Using admin SDK for verification
 
 export async function POST(request: Request) {
   try {
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     
     // Verify the user is authenticated using the Firebase Admin SDK
     try {
-        await auth.verifyIdToken(idToken);
+        await adminAuth.verifyIdToken(idToken);
     } catch (error) {
         console.error("Firebase Auth Error:", error);
         return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });

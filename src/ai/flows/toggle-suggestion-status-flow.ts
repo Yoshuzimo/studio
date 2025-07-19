@@ -11,7 +11,7 @@
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase-admin/auth';
+import { adminAuth } from '@/lib/firebase-admin';
 import type { Suggestion } from '@/types';
 import { cookies } from 'next/headers';
 
@@ -35,7 +35,7 @@ export async function toggleSuggestionStatus(input: ToggleSuggestionStatusInput)
 
     let decodedToken;
     try {
-        decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
+        decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
     } catch(error) {
         console.error("Authentication error in toggleSuggestionStatus", error);
         throw new Error('Authentication failed');
