@@ -1,4 +1,3 @@
-
 // Favor-Tracker-V2
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -332,16 +331,29 @@ export default function FavorTrackerPage() {
   const handleSettingsPopoverOpenChange = (open: boolean) => { if (open) setPopoverColumnVisibility(columnVisibility); setIsSettingsPopoverOpen(open); };
 
   const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string) => {
-    if (!id || !editingCharacter) return;
-    const charToUpdate = characters.find(c => c.id === id);
-    if (!charToUpdate) return;
-
-    await updateCharacter({ ...charToUpdate, name: data.name, level: data.level, iconUrl });
-    const freshChar = await refetchCharacter(id);
-    if (freshChar) setCharacter(freshChar);
-
+    if (!id || !editingCharacter || !character) return;
+  
+    // Optimistic UI update
+    const updatedCharacterData: Character = {
+      ...character,
+      name: data.name,
+      level: data.level,
+      iconUrl: iconUrl === undefined ? character.iconUrl : iconUrl,
+    };
+    setCharacter(updatedCharacterData);
+    
     setIsEditModalOpen(false);
     setEditingCharacter(null);
+  
+    // Debounced update to Firestore via context
+    await updateCharacter(updatedCharacterData);
+  
+    // Optional: Refetch after a delay to ensure sync, though optimistic update handles UI.
+    setTimeout(() => {
+        refetchCharacter(id).then(freshChar => {
+            if (freshChar) setCharacter(freshChar);
+        });
+    }, 2000); // 2s delay to allow debounced update to likely complete
   };
 
   const openEditModal = (characterToEdit: Character) => {
