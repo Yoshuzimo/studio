@@ -64,7 +64,11 @@ export async function POST(request: Request) {
       .update(stringToSign)
       .digest('hex');
     
-    console.log("[Cloudinary Signature] Generated signature:", signature);
+    console.log("[Signature Generation]", {
+      sortedParams,
+      stringToSign,
+      expectedSignature: signature
+    });
     
     return NextResponse.json({
       signature,
