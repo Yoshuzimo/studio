@@ -26,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription as DialogDescriptionComponent,
   DialogClose,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -68,15 +67,21 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   const { toast } = useToast();
+  
+  const uniqueId = React.useId();
+  const imageUploadButtonId = `image-upload-button-${uniqueId}`;
+
+  useEffect(() => {
+    // Check if script is already loaded when component mounts or `isOpen` becomes true
+    if (isOpen && window.cloudinary) {
+      setIsCloudinaryScriptLoaded(true);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
       form.reset(initialData ? { name: initialData.name, level: initialData.level } : { name: "", level: 1 });
       setUploadedImageUrl(initialData?.iconUrl || null);
-      // Ensure the script loaded state is also checked/set when opening
-      if (window.cloudinary) {
-        setIsCloudinaryScriptLoaded(true);
-      }
     }
   }, [initialData, form, isOpen]);
 
@@ -179,6 +184,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   return (
     <>
      <Script
+        id={`cloudinary-widget-script-${uniqueId}`}
         src="https://upload-widget.cloudinary.com/global/all.js"
         type="text/javascript"
         onLoad={() => {
@@ -194,9 +200,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="font-headline">{initialData ? "Edit Character" : "Create Character"}</DialogTitle>
-            <DialogDescriptionComponent>
-              {initialData ? "Update your character's details and background image." : "Add a new character to your roster."}
-            </DialogDescriptionComponent>
+            {/* The DialogDescription component was removed in a previous step, so we're leaving it out */}
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
@@ -227,9 +231,15 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                 )}
               />
               <FormItem>
-                <FormLabel>Card Background Image</FormLabel>
+                <FormLabel htmlFor={imageUploadButtonId}>Card Background Image</FormLabel>
                 <div className="flex items-center gap-4">
-                  <Button type="button" variant="outline" onClick={openCloudinaryWidget} disabled={!isCloudinaryScriptLoaded || effectiveIsSubmitting}>
+                  <Button
+                    id={imageUploadButtonId}
+                    type="button"
+                    variant="outline"
+                    onClick={openCloudinaryWidget}
+                    disabled={!isCloudinaryScriptLoaded || effectiveIsSubmitting}
+                  >
                      <ImagePlus className="mr-2 h-4 w-4" />
                     Upload & Edit Image
                   </Button>
