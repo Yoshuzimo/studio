@@ -49,7 +49,7 @@ const submitSuggestionFlow = ai.defineFlow(
     try {
       const suggestionData: SuggestionFirebaseData = {
         text: input.suggestionText,
-        createdAt: serverTimestamp(), 
+        createdAt: serverTimestamp() as any, // Cast to any to resolve type mismatch
         suggesterId: input.suggesterId, 
         suggesterName: input.suggesterName,
       };
