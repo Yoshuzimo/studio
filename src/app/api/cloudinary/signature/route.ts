@@ -42,6 +42,7 @@ export async function POST(request: Request) {
         upload_preset,
     };
 
+    // Dynamically include all other optional parameters that were sent
     if (public_id) paramsToSign.public_id = public_id;
     if (folder) paramsToSign.folder = folder;
     if (source) paramsToSign.source = source;
@@ -55,17 +56,17 @@ export async function POST(request: Request) {
     
     const stringToSign = `${sortedParams}${cloudinaryApiSecret}`;
     
+    const signature = crypto
+      .createHash('sha1')
+      .update(stringToSign)
+      .digest('hex');
+    
     console.log("[Signature Debug]", {
       paramsToSign,
       sortedParams,
       stringToSign,
       cloudinaryApiSecret,
     });
-    
-    const signature = crypto
-      .createHash('sha256')
-      .update(stringToSign)
-      .digest('hex');
     
     console.log("[Signature Generation]", {
       sortedParams,
