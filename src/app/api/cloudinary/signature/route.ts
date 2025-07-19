@@ -51,7 +51,7 @@ export async function POST(request: Request) {
         .join('&');
 
     const stringToSign = `${sortedParams}${cloudinaryApiSecret}`;
-
+    
     console.log("[Signature Debug]", {
       paramsToSign,
       sortedParams,
