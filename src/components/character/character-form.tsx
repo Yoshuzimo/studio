@@ -7,7 +7,6 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import type { Character } from '@/types';
 import { Loader2 } from 'lucide-react';
-import Image from 'next/image';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -82,7 +81,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     }
   };
 
-  const uploadToCloudinary = async (file: File): Promise<string | null> => {
+  const uploadToCloudinary = async (file: File, characterName: string): Promise<string | null> => {
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
@@ -114,6 +113,11 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       formData.append("api_key", signatureResponse.api_key);
       formData.append("signature", signatureResponse.signature);
       
+      const safeFileName = characterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      const publicId = `ddo_toolkit/characters/${safeFileName}_${initialData?.id || currentUser.uid.slice(0, 8)}`;
+      formData.append("public_id", publicId);
+
+
       const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
         method: "POST",
         body: formData,
@@ -141,7 +145,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     let finalIconUrl = initialData?.iconUrl || null;
 
     if (selectedFile) {
-      const uploadedUrl = await uploadToCloudinary(selectedFile);
+      const uploadedUrl = await uploadToCloudinary(selectedFile, data.name);
       if (uploadedUrl) {
         finalIconUrl = uploadedUrl;
       } else {
