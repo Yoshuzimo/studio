@@ -15,10 +15,38 @@ interface CharacterCardProps {
   disabled?: boolean;
 }
 
+// Function to generate a Cloudinary transformation URL
+const getCloudinaryBgUrl = (imageUrl: string) => {
+  // Example URL: https://res.cloudinary.com/dgd1q5ufm/image/upload/v1721388856/ddo_toolkit/characters/yoshuzimo_a7035dts.jpg
+  // We want to insert transformations after /upload/
+  const parts = imageUrl.split('/upload/');
+  if (parts.length !== 2) {
+    // Not a standard Cloudinary URL, return as is
+    return imageUrl;
+  }
+  
+  // Transformations:
+  // c_fill: Fill the container
+  // g_auto: Gravity auto - AI finds the subject
+  // ar_4:3: Aspect ratio (adjust as needed for card shape)
+  // w_600: Width of 600px (good for cards)
+  // q_auto:f_auto: Automatic quality and format
+  // e_blur:800: A slight blur for background effect
+  // e_brightness:-20: Slightly darken the image for text contrast
+  const transformation = "c_fill,g_auto,ar_4:3,w_600,q_auto,f_auto,e_blur:200,e_brightness:-20";
+  
+  return `${parts[0]}/upload/${transformation}/${parts[1]}`;
+};
+
+
 export function CharacterCard({ character, onEdit, onDelete, disabled = false }: CharacterCardProps) {
   const linkHref = `/favor-tracker/${character.id}`;
   
-  const cardStyle = character.iconUrl ? { backgroundImage: `url(${character.iconUrl})` } : {};
+  const cardStyle = character.iconUrl && character.iconUrl.includes('res.cloudinary.com')
+    ? { backgroundImage: `url(${getCloudinaryBgUrl(character.iconUrl)})` }
+    : character.iconUrl
+    ? { backgroundImage: `url(${character.iconUrl})` } // Fallback for non-cloudinary URLs
+    : {};
 
   return (
     <Card className={cn(
