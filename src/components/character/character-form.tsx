@@ -17,6 +17,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription,
+  DialogDescription as DialogDescriptionComponent,
   DialogClose,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -189,9 +190,9 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="font-headline">{initialData ? "Edit Character" : "Create Character"}</DialogTitle>
-            <DialogDescription>
+            <DialogDescriptionComponent>
               {initialData ? "Update your character's details and background image." : "Add a new character to your roster."}
-            </DialogDescription>
+            </DialogDescriptionComponent>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">

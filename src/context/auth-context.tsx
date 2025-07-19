@@ -1,4 +1,3 @@
-
 // src/context/auth-context.tsx
 "use client";
 
@@ -124,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         try { 
             await user.reload(); 
+            console.log('[AuthContext] User reloaded successfully.');
             const idToken = await user.getIdToken(true);
             
             const response = await fetch('/api/auth/session', {
@@ -132,10 +132,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
 
             if(!response.ok) {
-              throw new Error("Failed to create session cookie");
+              const errorBody = await response.text();
+              console.error(`[AuthContext] Session cookie creation API responded with ${response.status}:`, errorBody);
+              throw new Error(`Failed to create session cookie (status: ${response.status})`);
             }
-
-            console.log('[AuthContext] User reloaded and session cookie set successfully.'); 
+ 
         } 
         catch (reloadError: any) { 
             console.error('[AuthContext] User reload or session creation failed:', reloadError);
