@@ -116,34 +116,32 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     const timestamp = Math.round(Date.now() / 1000);
     const idToken = await currentUser.getIdToken();
 
-    // The widget sends a payload to the server to get a signature.
-    // This payload MUST ONLY include defined fields to ensure the signature is correct.
-    // Any optional parameters sent by the widget during the actual upload (like 'source' or 'custom_coordinates')
-    // must be included here if they are to be signed. We now pass them to the server.
-    const getSignature = async (paramsToSign: any) => {
-      try {
-        const signatureResponse = await fetch('/api/cloudinary/signature', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`,
-            },
-            body: JSON.stringify(paramsToSign),
-        });
+    // Dynamically create the payload to be signed
+    // This function will be called by the widget to get the signature
+    const getSignature = async (callback: (signature: string) => void, params_to_sign: any) => {
+        try {
+            console.log("[Cloudinary Widget] Params to be signed by server:", params_to_sign);
+            const signatureResponse = await fetch('/api/cloudinary/signature', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`,
+                },
+                body: JSON.stringify(params_to_sign),
+            });
 
-        if (!signatureResponse.ok) {
-            const errorBody = await signatureResponse.json();
-            throw new Error(errorBody.error || `Failed to fetch signature. Status: ${signatureResponse.status}`);
+            if (!signatureResponse.ok) {
+                const errorBody = await signatureResponse.json();
+                throw new Error(errorBody.error || `Failed to fetch signature. Status: ${signatureResponse.status}`);
+            }
+
+            const signatureData = await signatureResponse.json();
+            console.log("[Cloudinary Widget] Received signature from server:", signatureData.signature);
+            callback(signatureData.signature);
+        } catch(flowError) {
+            console.error("[Cloudinary Widget] Signature Fetch Flow Error:", flowError);
+            toast({ title: "Could not get upload signature", description: (flowError as Error).message, variant: "destructive"});
         }
-
-        const signatureData = await signatureResponse.json();
-        console.log("[Cloudinary Widget] Received signature data from server:", signatureData);
-        return signatureData.signature;
-      } catch(flowError) {
-          console.error("[Cloudinary Widget] Signature Fetch Flow Error:", flowError);
-          toast({ title: "Could not get upload signature", description: (flowError as Error).message, variant: "destructive"});
-          return null;
-      }
     };
         
     const widgetOptions = {
