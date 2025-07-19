@@ -21,30 +21,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });
     }
 
-    const {
-      timestamp,
-      upload_preset,
-      public_id,
-      folder,
-      custom_coordinates,
-      source,
-    } = await request.json();
+    // The entire body is now the paramsToSign object, sent from the widget
+    const paramsToSign = await request.json();
 
-    console.log("[Cloudinary Signature] Received params for signing:", {
-      timestamp,
-      upload_preset,
-      public_id,
-      folder,
-      custom_coordinates,
-      source,
-    });
-
-    if (!timestamp || !upload_preset) {
-      return NextResponse.json(
-        { error: 'Missing required parameters: timestamp and upload_preset are mandatory.' },
-        { status: 400 }
-      );
-    }
+    console.log("[Cloudinary Signature] Received params for signing:", paramsToSign);
 
     const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
     const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
@@ -56,16 +36,8 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-
-    // Build and sort the params
-    const paramsToSign: Record<string, string> = {};
-    if (custom_coordinates) paramsToSign.custom_coordinates = custom_coordinates;
-    if (folder) paramsToSign.folder = folder;
-    if (public_id) paramsToSign.public_id = public_id;
-    if (source) paramsToSign.source = source;
-    paramsToSign.timestamp = String(timestamp);
-    paramsToSign.upload_preset = upload_preset;
-
+    
+    // Sort the parameters alphabetically by key. This is a crucial step.
     const sortedParams = Object.entries(paramsToSign)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, val]) => `${key}=${val}`)
@@ -83,8 +55,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       signature,
-      timestamp,
-      api_key: cloudinaryApiKey,
+      // The widget only needs the signature back from this function. Timestamp and API key are handled client-side.
     });
 
   } catch (error) {
