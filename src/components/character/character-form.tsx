@@ -116,7 +116,8 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       form.reset(defaultValues);
       setPreviewImageUrl(defaultValues.iconUrl);
     }
-  }, [initialData, form, isOpen, activeAccountId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData, isOpen, activeAccountId]);
 
   const openCloudinaryWidget = async () => {
     if (!isCloudinaryScriptLoaded || !currentUser) {
