@@ -1,3 +1,4 @@
+
 // src/components/account/account-card.tsx
 "use client";
 
@@ -23,7 +24,7 @@ export function AccountCard({ account, onEdit, onDelete, disabled = false }: Acc
   const handleCardClick = () => {
     if (disabled) return;
     setActiveAccountId(account.id);
-    router.push('/'); // Navigate to the character list for this account
+    router.push('/adventure-packs'); // Navigate to the adventure packs page for this account
   };
 
   return (
@@ -39,7 +40,7 @@ export function AccountCard({ account, onEdit, onDelete, disabled = false }: Acc
       >
         <CardHeader className="p-4">
           <CardTitle className="font-headline text-2xl text-primary-foreground shadow-lg">{account.name}</CardTitle>
-          <CardDescription className="text-primary-foreground/80 font-medium">View characters for this account</CardDescription>
+          <CardDescription className="text-primary-foreground/80 font-medium">Manage adventure packs for this account</CardDescription>
         </CardHeader>
       </div>
       <CardFooter className="flex justify-end gap-2 p-4 pt-2 border-t border-white/20 mt-auto">

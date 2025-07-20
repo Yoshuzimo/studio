@@ -1,3 +1,4 @@
+
 // src/app/page.tsx
 "use client";
 
@@ -99,8 +100,6 @@ export default function CharactersPage() {
     setIsDeleteDialogOpen(false);
     setCharacterToDeleteId(null);
   };
-
-  const filteredCharacters = activeAccountId ? characters.filter(char => char.accountId === activeAccountId) : [];
   
   if (pageOverallLoading || (!currentUser && !authIsLoading)) {
     return (
@@ -125,7 +124,7 @@ export default function CharactersPage() {
         </h1>
         <div className="flex items-center gap-4">
           <div className="w-48">
-             <Label htmlFor="account-select" className="sr-only">Select Account</Label>
+             <Label htmlFor="account-select" className="sr-only">Select Account for New Character</Label>
              <Select value={activeAccountId || ''} onValueChange={(value) => setActiveAccountId(value)} disabled={pageOverallLoading}>
                   <SelectTrigger id="account-select">
                     <SelectValue placeholder="Select Account" />
@@ -150,16 +149,16 @@ export default function CharactersPage() {
         <div className="text-center py-10"><Loader2 className="mr-2 h-8 w-8 animate-spin mx-auto" /> <p>Loading characters...</p></div>
       )}
 
-      {!pageOverallLoading && filteredCharacters.length === 0 && isDataLoaded && !isSetDisplayNameModalOpen && (
+      {!pageOverallLoading && characters.length === 0 && isDataLoaded && !isSetDisplayNameModalOpen && (
         <div className="text-center py-10">
-          <p className="text-xl text-muted-foreground mb-4">No characters for this account. Start by adding one!</p>
+          <p className="text-xl text-muted-foreground mb-4">No characters found. Add one to get started!</p>
            <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty character list placeholder" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
         </div>
       )}
 
-      {!isSetDisplayNameModalOpen && filteredCharacters.length > 0 && (
+      {!isSetDisplayNameModalOpen && characters.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCharacters.map((character) => (
+          {characters.map((character) => (
             <CharacterCard
               key={character.id}
               character={character}
