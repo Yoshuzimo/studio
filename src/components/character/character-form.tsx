@@ -194,8 +194,8 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     }
   };
   
-  const handleFormSubmit = (data: CharacterFormData) => {
-    console.log("[CharacterForm] LOG: Form submitted with data:", data);
+  const handleSubmission = (data: CharacterFormData) => {
+    console.log("[CharacterForm] LOG: handleSubmission received data from react-hook-form:", data);
     onSubmit(data);
   };
   
@@ -224,7 +224,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-8 pt-4">
+            <form onSubmit={form.handleSubmit(handleSubmission)} className="space-y-8 pt-4">
               <FormField
                 control={form.control}
                 name="name"
