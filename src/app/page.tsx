@@ -108,12 +108,13 @@ export default function CharactersPage() {
         return;
     }
     
+    // Correctly merge the form data with the existing character data
     const updatedCharacterData: Character = {
-        ...editingCharacter,
-        name: data.name,
-        level: data.level,
-        accountId: data.accountId,
-        iconUrl: data.iconUrl,
+        ...editingCharacter, // Start with the original character data
+        name: data.name,       // Update name from form
+        level: data.level,     // Update level from form
+        accountId: data.accountId, // Update accountId from form
+        iconUrl: data.iconUrl, // This is the key: use the iconUrl from the form data
     };
     
     console.log("[CharactersPage] LOG: Constructed updatedCharacterData before sending to context:", updatedCharacterData);
