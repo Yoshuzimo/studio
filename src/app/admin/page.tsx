@@ -18,7 +18,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { ManageAdminsPopover } from '@/components/admin/manage-admins-popover';
 import { GeneratedCodeDialog } from '@/components/admin/generated-code-dialog';
 import { toggleSuggestionStatus } from '@/ai/flows/toggle-suggestion-status-flow';
 import { useToast } from '@/hooks/use-toast';
@@ -155,7 +154,7 @@ function SuggestionItem({ suggestion, onStatusToggle }: { suggestion: Suggestion
 }
 
 export default function AdminPage() {
-  const { currentUser, userData, isLoading: authIsLoading, getAllUsers } = useAuth();
+  const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -170,9 +169,6 @@ export default function AdminPage() {
 
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
-  const [allUsers, setAllUsers] = useState<AppUser[]>([]);
-  const [isLoadingAllUsers, setIsLoadingAllUsers] = useState(false); 
-  const [hasFetchedAllUsers, setHasFetchedAllUsers] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [generatedCodeDialogTitle, setGeneratedCodeDialogTitle] = useState('');
   const [generatedCodeDialogDescription, setGeneratedCodeDialogDescription] = useState('');
@@ -218,26 +214,6 @@ export default function AdminPage() {
     return () => unsubscribe(); // Cleanup listener on component unmount
   }, [currentUser, userData, toast]);
 
-  const fetchAllUsersList = useCallback(async () => {
-    if (currentUser && userData?.isAdmin && !hasFetchedAllUsers) {
-      setIsLoadingAllUsers(true);
-      try {
-        const usersList = await getAllUsers();
-        setAllUsers(usersList);
-        setHasFetchedAllUsers(true);
-      } catch (error) {
-        console.error("[AdminPage] Failed to fetch all users on admin page:", error);
-      } finally {
-        setIsLoadingAllUsers(false);
-      }
-    }
-  }, [currentUser, userData, getAllUsers, hasFetchedAllUsers]);
-  
-  useEffect(() => {
-    if (!authIsLoading && currentUser && userData?.isAdmin) {
-      fetchAllUsersList();
-    }
-  }, [currentUser, userData, authIsLoading, fetchAllUsersList]);
 
   const handleToggleSuggestionStatus = async (suggestionId: string) => {
     if (!currentUser) return;
@@ -449,7 +425,7 @@ ${newQuests.map(questToString).join(',\n')}
   }, [quests]);
 
   const pageOverallInitialLoad = authIsLoading || isInitialAppDataLoading;
-  const pageContentLoading = isInitialAppDataLoading || isLoadingSuggestions || isLoadingAllUsers; 
+  const pageContentLoading = isInitialAppDataLoading || isLoadingSuggestions; 
   const uiDisabled = pageContentLoading || isAppContextUpdating; 
 
   if (authIsLoading) { 
@@ -478,14 +454,6 @@ ${newQuests.map(questToString).join(',\n')}
         <h1 className="font-headline text-3xl font-bold flex items-center">
           <ShieldCheck className="mr-3 h-8 w-8 text-primary" /> Admin Panel
         </h1>
-        {userData?.isAdmin && (
-          <ManageAdminsPopover
-            currentUserData={userData}
-            allUsers={allUsers}
-            onUsersUpdate={fetchAllUsersList}
-            isLoadingUsers={isLoadingAllUsers} 
-          />
-        )}
       </div>
 
       <Card>

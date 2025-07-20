@@ -33,7 +33,6 @@ interface AuthContextType {
   reauthenticateWithPassword: (password: string) => Promise<void>;
   updateUserEmail: (newEmail: string) => Promise<void>;
   updateUserDisplayName: (newDisplayName: string, newIconUrl?: string | null) => Promise<boolean>;
-  getAllUsers: () => Promise<AppUser[]>;
   updateUserAdminStatus: (targetUserId: string, isAdmin: boolean) => Promise<void>;
   updateUserOwnerStatus: (targetUserId: string, isOwner: boolean) => Promise<void>;
 }
@@ -501,34 +500,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [toast, setUserData]);
 
-  const getAllUsers = useCallback(async (): Promise<AppUser[]> => {
-    console.log('[AuthContext] getAllUsers called.');
-    try {
-      const usersCollectionRef = collection(db, 'users');
-      const usersSnapshot = await getDocs(usersCollectionRef);
-      const allUsers = usersSnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          email: data.email,
-          displayName: data.displayName,
-          isAdmin: data.isAdmin || false,
-          isOwner: data.isOwner || false,
-          isCreator: data.isCreator || false,
-          createdAt: data.createdAt as FirestoreTimestampType,
-          emailVerified: data.emailVerified || false,
-          iconUrl: data.iconUrl === undefined ? null : data.iconUrl,
-        } as AppUser;
-      });
-      console.log('[AuthContext] Fetched all users:', allUsers.length);
-      return allUsers;
-    } catch (error) {
-      console.error('[AuthContext] Error fetching all users:', error);
-      toast({ title: "Error Fetching Users", description: (error as Error).message, variant: "destructive" });
-      return [];
-    }
-  }, [toast]);
-
  const updateUserAdminStatus = useCallback(async (targetUserId: string, makeAdmin: boolean): Promise<void> => {
     const actingUser = auth.currentUser; 
     const actingUserDataSnapshot = lastUserDataRef.current;
@@ -732,7 +703,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       reauthenticateWithPassword,
       updateUserEmail,
       updateUserDisplayName,
-      getAllUsers,
       updateUserAdminStatus,
       updateUserOwnerStatus
     }}>
