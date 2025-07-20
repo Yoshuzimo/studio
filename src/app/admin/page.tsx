@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppData } from '@/context/app-data-context';
 import { CsvUploader } from '@/components/admin/csv-uploader';
-import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, DatabaseZap } from 'lucide-react';
 import type { Quest, CSVQuest, Suggestion, User as AppUser, AdventurePack, CSVAdventurePack } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { collection, doc, getDocs, query, orderBy, onSnapshot, Unsubscribe, writeBatch, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
@@ -21,6 +21,7 @@ import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { GeneratedCodeDialog } from '@/components/admin/generated-code-dialog';
 import { toggleSuggestionStatus } from '@/ai/flows/toggle-suggestion-status-flow';
+import { migrateCharactersToAccounts } from '@/ai/flows/migrate-characters-flow';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -181,6 +182,7 @@ export default function AdminPage() {
   const [isQuestFormOpen, setIsQuestFormOpen] = useState(false);
   const [questToDeleteId, setQuestToDeleteId] = useState<string | null>(null);
   const [isDeleteQuestDialogOpen, setIsDeleteQuestDialogOpen] = useState(false);
+  const [isMigrationRunning, setIsMigrationRunning] = useState(false);
 
   useEffect(() => {
     if (!authIsLoading && (!currentUser || !userData?.isAdmin)) {
@@ -224,6 +226,23 @@ export default function AdminPage() {
     } catch (e) {
         const error = e as Error;
         toast({ title: 'Update Failed', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleRunMigration = async () => {
+    if (!currentUser) {
+        toast({ title: 'Unauthorized', description: 'You must be logged in as an admin.', variant: 'destructive' });
+        return;
+    }
+    setIsMigrationRunning(true);
+    try {
+        const result = await migrateCharactersToAccounts({ adminId: currentUser.uid });
+        toast({ title: 'Migration Complete', description: result.message, duration: 8000 });
+    } catch (e) {
+        const error = e as Error;
+        toast({ title: 'Migration Failed', description: error.message, variant: 'destructive', duration: 8000 });
+    } finally {
+        setIsMigrationRunning(false);
     }
   };
 
@@ -434,7 +453,7 @@ ${newQuests.map(questToString).join(',\n')}
 
   const pageOverallInitialLoad = authIsLoading || isInitialAppDataLoading;
   const pageContentLoading = isInitialAppDataLoading || isLoadingSuggestions; 
-  const uiDisabled = pageContentLoading || isAppContextUpdating; 
+  const uiDisabled = pageContentLoading || isAppContextUpdating || isMigrationRunning; 
 
   if (authIsLoading) { 
     return (
@@ -494,6 +513,28 @@ ${newQuests.map(questToString).join(',\n')}
         <CsvUploader dataType="Adventure Packs" onFileUpload={handleFileUpload} disabled={uiDisabled} />
         <CsvUploader dataType="Quests" onFileUpload={handleFileUpload} disabled={uiDisabled} />
       </div>
+
+      <Card>
+        <CardHeader>
+            <CardTitle className="font-headline flex items-center"><DatabaseZap className="mr-2 h-6 w-6 text-primary" /> Data Migration</CardTitle>
+            <CardDescription>One-time utilities to update database structures.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="font-semibold">Assign Characters to Accounts</h3>
+                    <p className="text-sm text-muted-foreground">
+                        Scans all characters and assigns any that are missing an Account ID to their owner's "Default" account. Creates a "Default" account if needed.
+                    </p>
+                </div>
+                <Button onClick={handleRunMigration} disabled={uiDisabled}>
+                    {isMigrationRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Run Character Migration
+                </Button>
+            </div>
+        </CardContent>
+      </Card>
+
 
       <div className="grid grid-cols-1 gap-8 mt-8">
         <Card>
