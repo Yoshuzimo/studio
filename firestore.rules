@@ -2,94 +2,72 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
+    
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper function to check if the user owns the document
-    function isOwner(userId) {
+    function isUser(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
     
-    // Helper function to check if a user is creating their own data
-    function isCreatingOwnData(userIdField) {
-      return isOwner(request.resource.data[userIdField]);
-    }
-    
-    // Helper function to get the current user's data from the 'users' collection
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-    
-    // Helper function to check if the user is an admin
     function isAdmin() {
-      return isSignedIn() && getUserData().isAdmin == true;
-    }
-
-    // Accounts collection rules
-    match /accounts/{accountId} {
-      // A user can list their own accounts. The query must include `where('userId', '==', request.auth.uid)`.
-      allow list: if isOwner(request.query.where.userId);
-      allow get: if isOwner(resource.data.userId);
-
-      // Users can create their own accounts
-      allow create: if isCreatingOwnData('userId');
-
-      // Users can update their own accounts, except the 'Default' one
-      allow update: if isOwner(resource.data.userId) && resource.data.name != 'Default';
-      
-      // Users can delete their own accounts, except the 'Default' one
-      allow delete: if isOwner(resource.data.userId) && resource.data.name != 'Default';
-    }
-
-    // Characters collection rules
-    match /characters/{characterId} {
-      // A user can list their own characters. The query must include `where('userId', '==', request.auth.uid)`.
-      allow list: if isOwner(request.query.where.userId);
-      allow get: if isOwner(resource.data.userId);
-
-      // Users can create, update, and delete their own characters
-      allow write: if isCreatingOwnData('userId') || isOwner(resource.data.userId);
-    }
-
-    // Suggestions collection rules
-    match /suggestions/{suggestionId} {
-      allow read, get: if isOwner(resource.data.suggesterId) || isAdmin();
-      // Allow users to list their own suggestions, or admins to list all
-      allow list: if (isOwner(request.query.where.suggesterId)) || isAdmin();
-      allow create: if isCreatingOwnData('suggesterId');
-      allow update: if isOwner(resource.data.suggesterId) || isAdmin();
-    }
-
-    // User configuration collection rules
-    match /userConfiguration/{userId}/{subcollection}/{docId} {
-      // Users can read and write to their own configuration documents
-      allow read, write: if isOwner(userId);
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
     
-    // Public Profiles
-    match /publicProfiles/{userId} {
-      allow read: if true; // Everyone can read public profiles
-      allow create, update: if isOwner(userId); // Only the owner can create/update their profile
+    function isOwner() {
+       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isOwner == true;
     }
 
-    // Users collection rules
+    function isCreator() {
+       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isCreator == true;
+    }
+
     match /users/{userId} {
-      // Users can read their own user document
-      allow get: if isOwner(userId) || isAdmin();
-
-      // Users can be created during signup
-      allow create: if request.resource.data.id == request.auth.uid;
-      
-      // Allow users to update their own displayName and iconUrl. Admin status can only be changed by an admin.
-      allow update: if isOwner(userId) || isAdmin();
+      allow read: if isUser(userId) || isAdmin();
+      allow write: if isUser(userId) || isAdmin();
     }
     
-    // Logs collection rules
-    match /Logs/{logType}/{logId} {
-        // Only admins should be able to read/write logs
-        allow read, write: if isAdmin();
+    match /publicProfiles/{userId} {
+      allow get;
+      allow list;
+      allow write: if isUser(userId);
+    }
+    
+    match /characters/{characterId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn(); // Query must include .where('userId', '==', auth.uid)
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow write, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    match /accounts/{accountId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn(); // Query must include .where('userId', '==', auth.uid)
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow write, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Suggestions can be created by any user.
+    // They can only be read/listed by their creator or an admin.
+    // They can only be updated (replied to, status changed) by the creator or an admin.
+    match /suggestions/{suggestionId} {
+      allow create: if isSignedIn() && request.resource.data.suggesterId == request.auth.uid;
+      allow read, list: if isSignedIn() && (resource.data.suggesterId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource.data.suggesterId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Owned packs are stored in a subcollection under userConfiguration.
+    // A user can only access their own configuration document.
+    match /userConfiguration/{userId}/{subcollection}/{docId} {
+       allow read, write, delete: if isUser(userId);
+    }
+
+    // Logs can only be read by admins and created by the system (server-side functions).
+    match /Logs/{logCollectionId}/{entryId} {
+        allow read: if isAdmin();
+        allow write: if false; // Only server-side can write logs
     }
   }
 }

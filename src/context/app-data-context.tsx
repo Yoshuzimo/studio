@@ -190,16 +190,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const accSnapshot = await getDocs(accQuery);
         let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
 
-        // If no accounts, create a "Default" one. This is a crucial step for new users.
         if (loadedAccounts.length === 0) {
-            console.log('[AppDataProvider] LOG: No accounts found for user. Creating "Default" account.');
-            const newAccountData: Omit<Account, 'id' | 'userId'> = { name: 'Default' };
-            const newAccount = await addAccount(newAccountData);
-            if(newAccount) {
-              loadedAccounts.push(newAccount);
-            }
+            console.log('[AppDataProvider] LOG: No accounts found for user. Assuming new user and redirecting to create one.');
+            // This is handled by pages now, so we just set an empty array.
+            setAccounts([]);
+        } else {
+             setAccounts(loadedAccounts);
         }
-        setAccounts(loadedAccounts);
         
         const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
         const charSnapshot = await getDocs(charQuery);
@@ -226,7 +223,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                 setActiveAccountId(defaultAccount.id);
             }
         } else {
-            setActiveAccountId(null); // Should not happen if default is created, but a safe fallback
+            setActiveAccountId(null);
         }
 
         // Check for legacy owned packs data
