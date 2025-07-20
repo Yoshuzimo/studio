@@ -1,4 +1,3 @@
-
 // src/context/app-data-context.tsx
 "use client";
 
@@ -30,7 +29,7 @@ interface AppDataContextType {
   updateAccount: (account: Account) => Promise<void>;
   deleteAccount: (account: Account) => Promise<void>;
   activeAccountId: string | null;
-  setActiveAccountId: (accountId: string) => void;
+  setActiveAccountId: (accountId: string | null) => void;
 
   allCharacters: Character[]; // All characters for the user
   addCharacter: (characterData: Omit<Character, 'id' | 'userId' | 'iconUrl' | 'preferences'> & { iconUrl?: string | null }) => Promise<Character | undefined>;
@@ -71,6 +70,8 @@ const QUEST_COMPLETIONS_SUBCOLLECTION = 'questCompletions';
 const LEGACY_OWNED_PACKS_DOC_ID = 'packs'; // ID for old user-level pack data document
 
 const BATCH_OPERATION_LIMIT = 490;
+const LOCAL_STORAGE_ACTIVE_ACCOUNT_KEY_PREFIX = 'ddoToolkit_activeAccountId_';
+
 
 const normalizeAdventurePackNameForStorage = (name?: string | null): string | null => {
   if (!name) return null;
@@ -102,7 +103,7 @@ const quests: Quest[] = QUESTS_DATA.map(q => ({
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
+  const [activeAccountId, _setActiveAccountId] = useState<string | null>(null);
   const [allCharacters, setAllCharacters] = useState<Character[]>([]);
 
   const [ownedPacks, setOwnedPacksInternal] = useState<string[]>([]);
@@ -119,6 +120,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const initialDataLoadedForUserRef = useRef<string | null>(null);
   const lastKnownOwnedPacksRef = useRef<string | null>(null);
   const characterUpdateDebounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  const setActiveAccountId = useCallback((accountId: string | null) => {
+    _setActiveAccountId(accountId);
+    if (typeof window !== 'undefined' && currentUser) {
+      const key = `${LOCAL_STORAGE_ACTIVE_ACCOUNT_KEY_PREFIX}${currentUser.uid}`;
+      if (accountId) {
+        localStorage.setItem(key, accountId);
+      } else {
+        localStorage.removeItem(key);
+      }
+    }
+  }, [currentUser]);
+
 
   const fetchQuestCompletionsForCharacter = useCallback(async (characterIdToFetch: string) => {
     if (!currentUser) {
@@ -184,18 +198,33 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
         const loadedCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
-          return {
+          const char = {
             id: docSnap.id,
             ...data,
           } as Character;
+          // Assign default account ID if missing
+          if (!char.accountId && loadedAccounts.length > 0) {
+            char.accountId = (loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0]).id;
+          }
+          return char;
         });
         setAllCharacters(loadedCharacters);
 
-        // Determine active account
-        if (loadedAccounts.length > 0 && !activeAccountId) {
-            const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
-            setActiveAccountId(defaultAccount.id);
+        // Determine active account from localStorage or default
+        if (loadedAccounts.length > 0) {
+            const savedAccountId = localStorage.getItem(`${LOCAL_STORAGE_ACTIVE_ACCOUNT_KEY_PREFIX}${currentUser.uid}`);
+            const accountExists = savedAccountId && loadedAccounts.some(acc => acc.id === savedAccountId);
+
+            if (accountExists) {
+                setActiveAccountId(savedAccountId);
+            } else {
+                const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
+                setActiveAccountId(defaultAccount.id);
+            }
+        } else {
+            setActiveAccountId(null); // No accounts, so no active account
         }
+
 
         // Check for legacy owned packs data
         const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
@@ -224,7 +253,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     
     loadInitialData();
 
-  }, [currentUser, toast, activeAccountId]);
+  }, [currentUser, toast, setActiveAccountId]);
   
   const setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>> = useCallback((valueOrFn) => {
     setOwnedPacksInternal(prevOwnedPacks => {
@@ -251,6 +280,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!currentUser || !activeAccountId) {
       setOwnedPacksInternal([]);
+      lastKnownOwnedPacksRef.current = JSON.stringify([]);
       return;
     };
     
