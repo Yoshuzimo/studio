@@ -96,25 +96,27 @@ export default function CharactersPage() {
   }, [currentUser, userData]);
 
   const handleAddCharacterSubmit = async (data: CharacterFormData) => {
-    console.log("[CharactersPage] handleAddCharacterSubmit received data:", data);
+    console.log("[CharactersPage] LOG: handleAddCharacterSubmit received data:", data);
     await addCharacter(data); 
     setIsCreateModalOpen(false);
   };
 
   const handleEditCharacterSubmit = async (data: CharacterFormData) => {
-    console.log("[CharactersPage] handleEditCharacterSubmit received data:", { data, id: editingCharacter?.id });
-    if (!editingCharacter) return;
+    console.log("[CharactersPage] LOG: handleEditCharacterSubmit received form data:", data);
+    if (!editingCharacter) {
+        console.error("[CharactersPage] ERROR: handleEditCharacterSubmit called but editingCharacter is undefined.");
+        return;
+    }
     
-    // Explicitly construct the update payload to avoid overwriting the new URL
     const updatedCharacterData: Character = {
         ...editingCharacter,
         name: data.name,
         level: data.level,
         accountId: data.accountId,
-        iconUrl: data.iconUrl, // This is the crucial change
+        iconUrl: data.iconUrl,
     };
     
-    console.log("[CharactersPage] Calling updateCharacter with payload:", updatedCharacterData);
+    console.log("[CharactersPage] LOG: Constructed updatedCharacterData before sending to context:", updatedCharacterData);
     await updateCharacter(updatedCharacterData);
     setIsEditModalOpen(false);
     setEditingCharacter(undefined);

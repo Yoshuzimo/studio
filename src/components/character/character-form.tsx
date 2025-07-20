@@ -181,7 +181,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
         if (result && result.event === "success") {
             const secureUrl = result.info.secure_url;
-            console.log("[CharacterForm] Cloudinary success. URL:", secureUrl);
+            console.log("[CharacterForm] LOG: Cloudinary success. URL:", secureUrl);
             form.setValue('iconUrl', secureUrl, { shouldValidate: true });
             setPreviewImageUrl(secureUrl);
             toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
@@ -192,6 +192,11 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     } catch(error) {
         toast({ title: "Authentication Error", description: "Could not get authentication token for upload.", variant: "destructive" });
     }
+  };
+  
+  const handleFormSubmit = (data: CharacterFormData) => {
+    console.log("[CharacterForm] LOG: Form submitted with data:", data);
+    onSubmit(data);
   };
   
   const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting;
@@ -219,7 +224,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pt-4">
+            <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-8 pt-4">
               <FormField
                 control={form.control}
                 name="name"

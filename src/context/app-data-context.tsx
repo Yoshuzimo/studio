@@ -448,12 +448,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const addCharacter = async (characterData: CharacterFormData): Promise<Character | undefined> => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return undefined; }
-    console.log("[AppDataContext] addCharacter received data:", characterData);
+    console.log("[AppDataContext] LOG: addCharacter received data:", characterData);
     setIsUpdating(true);
     try {
       const newId = doc(collection(db, CHARACTERS_COLLECTION)).id;
       const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, iconUrl: characterData.iconUrl || null, preferences: {} };
-      console.log("[AppDataContext] addCharacter FINAL PAYLOAD for Firestore:", newCharacter);
+      console.log("[AppDataContext] LOG: addCharacter FINAL PAYLOAD for Firestore:", newCharacter);
       await setDoc(doc(db, CHARACTERS_COLLECTION, newId), newCharacter);
       setAllCharacters(prev => [...prev, newCharacter]);
       toast({ title: "Character Added", description: `${newCharacter.name} created.` });
@@ -471,7 +471,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Unauthorized", variant: "destructive" });
       return;
     }
-    console.log("[AppDataContext] updateCharacter received data:", character);
+    console.log("[AppDataContext] LOG: updateCharacter received character object:", character);
     setAllCharacters(prev => prev.map(c => c.id === character.id ? character : c));
     
     if (characterUpdateDebounceTimers.current.has(character.id)) {
@@ -482,21 +482,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setIsUpdating(true);
       try {
         const charRef = doc(db, CHARACTERS_COLLECTION, character.id);
-        const updatePayload: Partial<Character> = {
-          name: character.name,
-          level: character.level,
-          iconUrl: character.iconUrl,
-          preferences: character.preferences || {},
-          accountId: character.accountId,
-        };
-        console.log("[AppDataContext] updateCharacter FINAL PAYLOAD for Firestore:", updatePayload);
-        await updateDoc(charRef, {
+        const updatePayload = {
             name: character.name,
             level: character.level,
             iconUrl: character.iconUrl,
             accountId: character.accountId,
             preferences: character.preferences || {},
-        });
+        };
+        console.log("[AppDataContext] LOG: Debounced updateCharacter FINAL PAYLOAD for Firestore:", updatePayload);
+        await updateDoc(charRef, updatePayload);
         toast({ title: "Character Updated", description: `${character.name}'s details saved.` });
       } catch (error) {
         console.error("[AppDataContext] Error updating character in Firestore:", error);
