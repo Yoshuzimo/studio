@@ -1,4 +1,3 @@
-
 // src/app/adventure-packs/page.tsx
 "use client";
 
@@ -20,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,

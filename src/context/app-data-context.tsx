@@ -1,4 +1,3 @@
-
 // src/context/app-data-context.tsx
 "use client";
 
@@ -68,7 +67,7 @@ const OWNED_PACKS_INFO_SUBCOLLECTION = 'ownedPacksInfo';
 const CHARACTERS_COLLECTION = 'characters';
 const ACCOUNTS_COLLECTION = 'accounts';
 const QUEST_COMPLETIONS_SUBCOLLECTION = 'questCompletions';
-const LEGACY_OWNED_PACKS_DOC_ID = 'ownedPacks'; // ID for old user-level pack data
+const LEGACY_OWNED_PACKS_DOC_ID = 'packs'; // ID for old user-level pack data document
 
 const BATCH_OPERATION_LIMIT = 490;
 
@@ -171,15 +170,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const loadInitialData = async () => {
       console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
       try {
-        // Step 1: Fetch accounts.
-        console.log('[AppDataProvider] LOG: Querying accounts collection...');
+        // Step 1: Sequentially fetch accounts.
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
         const accSnapshot = await getDocs(accQuery);
         let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
 
-        // Step 2: If no accounts, create a "Default" one.
+        // If no accounts, create a "Default" one.
         if (loadedAccounts.length === 0) {
-            console.log('[AppDataProvider] LOG: No accounts found. Creating default account.');
             const newId = doc(collection(db, ACCOUNTS_COLLECTION)).id;
             const newAccount: Account = { id: newId, userId: currentUser.uid, name: 'Default' };
             await setDoc(doc(db, ACCOUNTS_COLLECTION, newId), newAccount);
@@ -187,12 +184,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         }
         setAccounts(loadedAccounts);
 
-        // Step 3: Fetch characters.
-        console.log('[AppDataProvider] LOG: Querying characters collection...');
+        // Step 2: Sequentially fetch characters.
         const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
         const charSnapshot = await getDocs(charQuery);
         
-        // Step 4: Process characters, assigning a default accountId if missing.
+        // Step 3: Process characters, assigning a default accountId if missing.
         const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
         if (!defaultAccount) {
           throw new Error("Critical error: Could not find or create a default account.");
@@ -217,8 +213,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             setActiveAccountId(defaultAccount.id);
         }
 
-        // Step 5: Check for legacy owned packs data
-        const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', 'packs');
+        // Step 4: Check for legacy owned packs data
+        const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
         const legacyPacksSnap = await getDoc(legacyPacksDocRef);
         if (legacyPacksSnap.exists()) {
           const data = legacyPacksSnap.data();
@@ -329,7 +325,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       batch.set(newPacksDocRef, { names: legacyOwnedPacks }, { merge: true });
 
       // 2. Delete the old legacy document
-      const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', 'packs');
+      const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
       batch.delete(legacyPacksDocRef);
 
       await batch.commit();
