@@ -40,26 +40,35 @@ type SuggestionData = {
 };
 
 export async function submitSuggestion(input: SubmitSuggestionInput): Promise<SubmitSuggestionOutput> {
+  console.log('[submitSuggestion] LOG: Flow started.');
+
   const sessionCookie = cookies().get('__session')?.value;
   if (!sessionCookie) {
-    throw new Error('Unauthorized');
+    console.error('[submitSuggestion] ERROR: Session cookie not found.');
+    throw new Error('Unauthorized: No session cookie found. Please log in.');
   }
+  console.log('[submitSuggestion] LOG: Session cookie found.');
 
   let decodedToken;
   try {
     decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+    console.log('[submitSuggestion] LOG: Session cookie verified for UID:', decodedToken.uid);
   } catch (error) {
-    console.error("Authentication error in submitSuggestion", error);
+    console.error("[submitSuggestion] ERROR: Authentication error.", error);
     throw new Error('Authentication failed');
   }
 
   if (decodedToken.uid !== input.suggesterId) {
+      console.error(`[submitSuggestion] ERROR: Mismatched user ID. Token UID: ${decodedToken.uid}, Input UID: ${input.suggesterId}`);
       throw new Error('Mismatched user ID');
   }
+  console.log('[submitSuggestion] LOG: User ID matches token.');
 
   try {
     SubmitSuggestionInputSchema.parse(input);
+    console.log('[submitSuggestion] LOG: Input validation successful.');
   } catch (error) {
+    console.error('[submitSuggestion] ERROR: Input validation failed.', error);
     if (error instanceof z.ZodError) {
       throw new Error(error.errors.map(e => e.message).join(', '));
     }
@@ -67,6 +76,7 @@ export async function submitSuggestion(input: SubmitSuggestionInput): Promise<Su
   }
   
   const newSuggestionRef = doc(collection(db, 'suggestions'));
+  console.log('[submitSuggestion] LOG: Generated new suggestion ID:', newSuggestionRef.id);
   
   try {
     const suggestionData: Omit<SuggestionData, 'conversation'> = {
@@ -76,9 +86,11 @@ export async function submitSuggestion(input: SubmitSuggestionInput): Promise<Su
       createdAt: serverTimestamp(),
       status: 'open',
     };
-
+    console.log('[submitSuggestion] LOG: Preparing to set initial document with data:', suggestionData);
+    
     // Step 1: Create the document without the conversation array.
     await setDoc(newSuggestionRef, suggestionData);
+    console.log('[submitSuggestion] LOG: setDoc successful.');
 
     // Step 2: Create the first conversation item and update the document.
     const initialMessage: SuggestionConversationItem = {
@@ -88,18 +100,23 @@ export async function submitSuggestion(input: SubmitSuggestionInput): Promise<Su
         timestamp: suggestionData.createdAt, // Use the same serverTimestamp FieldValue
     };
     
+    console.log('[submitSuggestion] LOG: Preparing to update document with conversation:', [initialMessage]);
     await updateDoc(newSuggestionRef, {
         conversation: [initialMessage]
     });
+    console.log('[submitSuggestion] LOG: updateDoc successful.');
     
-    console.log(`New suggestion saved to Firestore with ID: ${newSuggestionRef.id}`);
+    console.log(`[submitSuggestion] LOG: New suggestion saved to Firestore with ID: ${newSuggestionRef.id}`);
 
-    return {
+    const successOutput = {
       message: 'Thank you! Your suggestion has been received and saved for review.',
       suggestionId: newSuggestionRef.id,
     };
+    console.log('[submitSuggestion] LOG: Flow finished successfully. Returning:', successOutput);
+    return successOutput;
+
   } catch (error) {
-    console.error("Failed to save suggestion to Firestore:", error);
+    console.error("[submitSuggestion] ERROR: Failed to save suggestion to Firestore:", error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while saving your suggestion.";
     throw new Error(`There was an issue submitting your suggestion: ${errorMessage}. Please try again later.`);
   }
