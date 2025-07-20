@@ -2,6 +2,7 @@
 "use client";
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Character } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ interface CharacterCardProps {
   character: Character;
   onEdit: (character: Character) => void;
   onDelete: (characterId: string) => void;
+  onAssignAccount: (character: Character) => void;
   disabled?: boolean;
 }
 
@@ -39,8 +41,24 @@ const getCloudinaryBgUrl = (imageUrl: string) => {
 };
 
 
-export function CharacterCard({ character, onEdit, onDelete, disabled = false }: CharacterCardProps) {
-  const linkHref = `/favor-tracker/${character.id}`;
+export function CharacterCard({ character, onEdit, onDelete, onAssignAccount, disabled = false }: CharacterCardProps) {
+  const router = useRouter();
+  
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    
+    // Prevent navigation if the click is on a button
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
+
+    if (!character.accountId) {
+      e.preventDefault(); // Prevent link navigation
+      onAssignAccount(character);
+    } else {
+      router.push(`/favor-tracker/${character.id}`);
+    }
+  };
   
   const cardStyle = character.iconUrl && character.iconUrl.includes('res.cloudinary.com')
     ? { backgroundImage: `url(${getCloudinaryBgUrl(character.iconUrl)})` }
@@ -51,25 +69,20 @@ export function CharacterCard({ character, onEdit, onDelete, disabled = false }:
   return (
     <Card className={cn(
         "w-full max-w-sm transform transition-all hover:scale-105 hover:shadow-xl flex flex-col justify-between overflow-hidden bg-cover bg-center",
-        disabled && "opacity-70 pointer-events-none"
+        disabled && "opacity-70 pointer-events-none",
+        !character.accountId && "border-2 border-dashed border-accent"
       )}
       style={cardStyle}
+      onClick={handleCardClick}
     >
-      <div className="relative flex-grow flex flex-col justify-between bg-gradient-to-t from-black/80 via-black/50 to-transparent">
-        <Link
-          href={disabled ? '#' : linkHref}
-          className={cn(
-              "flex-grow block p-4",
-              disabled && "cursor-not-allowed"
-          )}
-          aria-disabled={disabled}
-          onClick={(e) => disabled && e.preventDefault()}
-          >
-            <CardHeader className="p-0">
-              <CardTitle className="font-headline text-2xl text-white shadow-lg">{character.name}</CardTitle>
-              <CardDescription className="text-primary-foreground/80 font-medium">Level {character.level}</CardDescription>
-            </CardHeader>
-        </Link>
+      <div className="relative flex-grow flex flex-col justify-between bg-gradient-to-t from-black/80 via-black/50 to-transparent cursor-pointer">
+          <CardHeader className="p-4">
+            <CardTitle className="font-headline text-2xl text-white shadow-lg">{character.name}</CardTitle>
+            <CardDescription className="text-primary-foreground/80 font-medium">Level {character.level}</CardDescription>
+            {!character.accountId && (
+              <CardDescription className="text-accent font-bold pt-1">Click to assign to an account</CardDescription>
+            )}
+          </CardHeader>
         <CardFooter className="flex justify-end gap-2 p-4 pt-2 border-t border-white/20 mt-auto">
           <Button variant="outline" size="sm" onClick={() => onEdit(character)} aria-label={`Edit ${character.name}`} disabled={disabled} className="bg-white/10 text-white border-white/30 hover:bg-white/20">
             <Pencil className="mr-2 h-4 w-4" /> Edit

@@ -2,17 +2,25 @@
 // src/app/page.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppData } from '@/context/app-data-context';
 import { CharacterCard } from '@/components/character/character-card';
 import { CharacterForm, type CharacterFormData } from '@/components/character/character-form';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Users, Loader2, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Users, Loader2, AlertTriangle, Link2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Character } from '@/types';
 import { useAuth, DISPLAY_NAME_PLACEHOLDER_SUFFIX } from '@/context/auth-context'; // Import placeholder suffix
 import { useRouter } from 'next/navigation';
 import { SetDisplayNameModal } from '@/components/auth/set-display-name-modal'; // Import the new modal
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogContent,
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -23,8 +31,8 @@ import {
 import { Label } from '@/components/ui/label';
 
 export default function CharactersPage() {
-  const { currentUser, userData, isLoading: authIsLoading } = useAuth(); 
-  const { characters, addCharacter, updateCharacter, deleteCharacter, accounts, activeAccountId, setActiveAccountId, isDataLoaded, isLoading: appDataIsLoading } = useAppData();
+  const { currentUser, userData, isLoading: authIsLoading } = useAuth();
+  const { allCharacters, addCharacter, updateCharacter, deleteCharacter, accounts, activeAccountId, setActiveAccountId, isDataLoaded, isLoading: appDataIsLoading } = useAppData();
   const router = useRouter();
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -34,9 +42,22 @@ export default function CharactersPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [characterToDeleteId, setCharacterToDeleteId] = useState<string | null>(null);
 
+  // New state for account assignment modal
+  const [isAssignAccountModalOpen, setIsAssignAccountModalOpen] = useState(false);
+  const [characterToAssign, setCharacterToAssign] = useState<Character | null>(null);
+  const [selectedAccountIdForAssign, setSelectedAccountIdForAssign] = useState('');
+
+
   const [isSetDisplayNameModalOpen, setIsSetDisplayNameModalOpen] = useState(false);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
+  
+  const charactersForDisplay = useMemo(() => {
+    // Show characters for the active account OR characters with no accountId
+    return allCharacters.filter(
+      (char) => !char.accountId || char.accountId === activeAccountId
+    );
+  }, [allCharacters, activeAccountId]);
 
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
@@ -84,6 +105,26 @@ export default function CharactersPage() {
     setIsEditModalOpen(false);
     setEditingCharacter(undefined);
   };
+  
+  const openAssignAccountModal = (character: Character) => {
+    setCharacterToAssign(character);
+    setSelectedAccountIdForAssign(activeAccountId || '');
+    setIsAssignAccountModalOpen(true);
+  };
+  
+  const handleAssignAccount = async () => {
+    if (!characterToAssign || !selectedAccountIdForAssign) return;
+    
+    const updatedCharacter = { ...characterToAssign, accountId: selectedAccountIdForAssign };
+    await updateCharacter(updatedCharacter);
+
+    setIsAssignAccountModalOpen(false);
+    setCharacterToAssign(null);
+    setSelectedAccountIdForAssign('');
+    // After assigning, navigate to the tracker page
+    router.push(`/favor-tracker/${updatedCharacter.id}`);
+  };
+
 
   const openEditModal = (character: Character) => {
     setEditingCharacter(character);
@@ -146,25 +187,26 @@ export default function CharactersPage() {
         </div>
       </div>
 
-      {pageOverallLoading && characters.length === 0 && !isDataLoaded && (
+      {pageOverallLoading && allCharacters.length === 0 && !isDataLoaded && (
         <div className="text-center py-10"><Loader2 className="mr-2 h-8 w-8 animate-spin mx-auto" /> <p>Loading characters...</p></div>
       )}
 
-      {!pageOverallLoading && characters.length === 0 && isDataLoaded && !isSetDisplayNameModalOpen && (
+      {!pageOverallLoading && allCharacters.length === 0 && isDataLoaded && !isSetDisplayNameModalOpen && (
         <div className="text-center py-10">
           <p className="text-xl text-muted-foreground mb-4">No characters found. Add one to get started!</p>
            <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty character list placeholder" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
         </div>
       )}
 
-      {!isSetDisplayNameModalOpen && characters.length > 0 && (
+      {!isSetDisplayNameModalOpen && charactersForDisplay.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {characters.map((character) => (
+          {charactersForDisplay.map((character) => (
             <CharacterCard
               key={character.id}
               character={character}
               onEdit={openEditModal}
               onDelete={() => openDeleteDialog(character.id)}
+              onAssignAccount={openAssignAccountModal}
               disabled={pageOverallLoading || isSetDisplayNameModalOpen}
             />
           ))}
@@ -186,6 +228,40 @@ export default function CharactersPage() {
           isSubmitting={pageOverallLoading}
         />
       )}
+      
+       {/* Assign Account Modal */}
+       <Dialog open={isAssignAccountModalOpen} onOpenChange={setIsAssignAccountModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-headline flex items-center"><Link2 className="mr-2 h-6 w-6"/>Link Character to Account</DialogTitle>
+            <DialogDescription>
+              The character "{characterToAssign?.name}" needs to be linked to an account to track its adventure packs. Please select an account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="assign-account-select">Account</Label>
+            <Select value={selectedAccountIdForAssign} onValueChange={setSelectedAccountIdForAssign}>
+              <SelectTrigger id="assign-account-select">
+                <SelectValue placeholder="Select an account..." />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map(account => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAssignAccountModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleAssignAccount} disabled={!selectedAccountIdForAssign}>
+              Link Character
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
@@ -193,7 +269,7 @@ export default function CharactersPage() {
             <AlertDialogTitle>Are you sure you want to delete this character?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the character
-              "{characters.find(c => c.id === characterToDeleteId)?.name || ''}".
+              "{allCharacters.find(c => c.id === characterToDeleteId)?.name || ''}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

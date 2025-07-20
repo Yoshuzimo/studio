@@ -1,3 +1,4 @@
+
 // src/context/app-data-context.tsx
 "use client";
 
@@ -31,7 +32,7 @@ interface AppDataContextType {
   activeAccountId: string | null;
   setActiveAccountId: (accountId: string) => void;
 
-  characters: Character[];
+  allCharacters: Character[]; // All characters for the user
   addCharacter: (characterData: Omit<Character, 'id' | 'userId' | 'iconUrl' | 'preferences'> & { iconUrl?: string | null }) => Promise<Character | undefined>;
   updateCharacter: (character: Character) => Promise<void>;
   deleteCharacter: (characterId: string) => Promise<void>;
@@ -102,7 +103,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
-  const [characters, setCharacters] = useState<Character[]>([]);
+  const [allCharacters, setAllCharacters] = useState<Character[]>([]);
 
   const [ownedPacks, setOwnedPacksInternal] = useState<string[]>([]);
   const [legacyOwnedPacks, setLegacyOwnedPacks] = useState<string[] | null>(null);
@@ -151,7 +152,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       setIsDataLoaded(false);
       setAccounts([]);
-      setCharacters([]);
+      setAllCharacters([]);
       setOwnedPacksInternal([]);
       setLegacyOwnedPacks(null);
       setActiveAccountId(null);
@@ -170,50 +171,33 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const loadInitialData = async () => {
       console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
       try {
-        // Step 1: Sequentially fetch accounts.
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
-        const accSnapshot = await getDocs(accQuery);
-        let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
 
-        // If no accounts, create a "Default" one.
-        if (loadedAccounts.length === 0) {
-            const newId = doc(collection(db, ACCOUNTS_COLLECTION)).id;
-            const newAccount: Account = { id: newId, userId: currentUser.uid, name: 'Default' };
-            await setDoc(doc(db, ACCOUNTS_COLLECTION, newId), newAccount);
-            loadedAccounts.push(newAccount);
-        }
+        const [accSnapshot, charSnapshot] = await Promise.all([
+            getDocs(accQuery),
+            getDocs(charQuery),
+        ]);
+        
+        let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         setAccounts(loadedAccounts);
 
-        // Step 2: Sequentially fetch characters.
-        const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
-        const charSnapshot = await getDocs(charQuery);
-        
-        // Step 3: Process characters, assigning a default accountId if missing.
-        const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
-        if (!defaultAccount) {
-          throw new Error("Critical error: Could not find or create a default account.");
-        }
-
-        const finalCharacters = charSnapshot.docs.map(docSnap => {
+        const loadedCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
           return {
             id: docSnap.id,
-            userId: data.userId,
-            accountId: data.accountId || defaultAccount.id, // Assign default if missing
-            name: data.name,
-            level: data.level,
-            iconUrl: data.iconUrl || null,
-            preferences: data.preferences || {},
+            ...data,
           } as Character;
         });
-        setCharacters(finalCharacters);
+        setAllCharacters(loadedCharacters);
 
         // Determine active account
-        if (!activeAccountId) {
+        if (loadedAccounts.length > 0 && !activeAccountId) {
+            const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
             setActiveAccountId(defaultAccount.id);
         }
 
-        // Step 4: Check for legacy owned packs data
+        // Check for legacy owned packs data
         const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
         const legacyPacksSnap = await getDoc(legacyPacksDocRef);
         if (legacyPacksSnap.exists()) {
@@ -398,7 +382,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const defaultAccount = accounts.find(acc => acc.name === 'Default');
       if (!defaultAccount) throw new Error("Could not find a Default account to move characters to.");
 
-      const charsToMove = characters.filter(c => c.accountId === accountToDelete.id);
+      const charsToMove = allCharacters.filter(c => c.accountId === accountToDelete.id);
       if (charsToMove.length > 0) {
         charsToMove.forEach(char => {
           const charRef = doc(db, CHARACTERS_COLLECTION, char.id);
@@ -410,7 +394,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       // Optimistic UI updates
       setAccounts(prev => prev.filter(c => c.id !== accountToDelete.id));
-      setCharacters(prev => prev.map(c => c.accountId === accountToDelete.id ? {...c, accountId: defaultAccount.id} : c));
+      setAllCharacters(prev => prev.map(c => c.accountId === accountToDelete.id ? {...c, accountId: defaultAccount.id} : c));
 
       if (activeAccountId === accountToDelete.id) {
         setActiveAccountId(defaultAccount.id);
@@ -429,7 +413,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const newId = doc(collection(db, CHARACTERS_COLLECTION)).id;
       const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, iconUrl: characterData.iconUrl || null, preferences: {} };
       await setDoc(doc(db, CHARACTERS_COLLECTION, newId), newCharacter);
-      setCharacters(prev => [...prev, newCharacter]);
+      setAllCharacters(prev => [...prev, newCharacter]);
       toast({ title: "Character Added", description: `${newCharacter.name} created.` });
       return newCharacter;
     } catch (error) { toast({ title: "Error Adding Character", description: (error as Error).message, variant: 'destructive' }); return undefined; }
@@ -441,7 +425,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Unauthorized", variant: "destructive" });
       return;
     }
-    setCharacters(prev => prev.map(c => c.id === character.id ? character : c));
+    setAllCharacters(prev => prev.map(c => c.id === character.id ? character : c));
     if (characterUpdateDebounceTimers.current.has(character.id)) {
       clearTimeout(characterUpdateDebounceTimers.current.get(character.id));
     }
@@ -470,14 +454,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [currentUser, toast]);
   
   const deleteCharacter = async (characterId: string): Promise<void> => {
-    const characterToDelete = characters.find(c => c.id === characterId);
+    const characterToDelete = allCharacters.find(c => c.id === characterId);
     if (!currentUser || !characterToDelete || characterToDelete.userId !== currentUser.uid) {
       toast({ title: "Unauthorized", variant: "destructive" }); return;
     }
     setIsUpdating(true);
     try {
       await deleteDoc(doc(db, CHARACTERS_COLLECTION, characterId));
-      setCharacters(prev => prev.filter(c => c.id !== characterId));
+      setAllCharacters(prev => prev.filter(c => c.id !== characterId));
       
       const completionsPath = `${CHARACTERS_COLLECTION}/${characterId}/${QUEST_COMPLETIONS_SUBCOLLECTION}`;
       const completionsSnapshot = await getDocs(collection(db, completionsPath));
@@ -496,7 +480,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   
   const batchUpdateUserQuestCompletions = useCallback(async (characterIdForUpdate: string, updates: QuestCompletionUpdate[]): Promise<void> => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
-    const characterDoc = characters.find(c => c.id === characterIdForUpdate);
+    const characterDoc = allCharacters.find(c => c.id === characterIdForUpdate);
     if (!characterDoc || characterDoc.userId !== currentUser.uid) { toast({ title: "Unauthorized", variant: "destructive" }); return; }
     setIsUpdating(true);
     try {
@@ -526,11 +510,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       } else { toast({ title: "No Updates", description: "No quest completions were changed by CSV." }); }
     } catch (error) { toast({ title: "Error Updating from CSV", description: (error as Error).message, variant: "destructive" }); throw error; }
     finally { setIsUpdating(false); }
-  }, [currentUser, characters, activeCharacterId, activeCharacterQuestCompletions, toast]);
+  }, [currentUser, allCharacters, activeCharacterId, activeCharacterQuestCompletions, toast]);
 
    const batchResetUserQuestCompletions = useCallback(async (characterIdForReset: string, questIdsToReset: string[]): Promise<void> => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return; }
-    const characterDoc = characters.find(c => c.id === characterIdForReset);
+    const characterDoc = allCharacters.find(c => c.id === characterIdForReset);
     if (!characterDoc || characterDoc.userId !== currentUser.uid) { toast({ title: "Unauthorized", variant: "destructive" }); return; }
     setIsUpdating(true);
     try {
@@ -566,7 +550,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       } else { toast({ title: "No Changes", description: "No quest completions needed resetting." }); }
     } catch (error) { toast({ title: "Error Resetting Completions", description: (error as Error).message, variant: "destructive" }); throw error; }
     finally { setIsUpdating(false); }
-  }, [currentUser, characters, activeCharacterId, activeCharacterQuestCompletions, toast]);
+  }, [currentUser, allCharacters, activeCharacterId, activeCharacterQuestCompletions, toast]);
   
   // These are now for the admin page to generate code, not for direct DB manipulation from context
   const updateQuestDefinition = async (quest: Quest): Promise<void> => { console.warn("updateQuestDefinition is a dev-only method now"); };
@@ -575,7 +559,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   return (
     <AppDataContext.Provider value={{
       accounts, setAccounts, addAccount, updateAccount, deleteAccount, activeAccountId, setActiveAccountId,
-      characters, addCharacter, updateCharacter, deleteCharacter,
+      allCharacters, addCharacter, updateCharacter, deleteCharacter,
       adventurePacks,
       quests,
       updateQuestDefinition, deleteQuestDefinition,
