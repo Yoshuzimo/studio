@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle, Users, Loader2, AlertTriangle, Link2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Character } from '@/types';
-import { useAuth, DISPLAY_NAME_PLACEHOLDER_SUFFIX } from '@/context/auth-context'; // Import placeholder suffix
+import { useAuth, DISPLAY_NAME_PLACEHOLDER_SUFFIX } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { SetDisplayNameModal } from '@/components/auth/set-display-name-modal'; // Import the new modal
+import { SetDisplayNameModal } from '@/components/auth/set-display-name-modal';
 import {
   Dialog,
   DialogHeader,
@@ -42,20 +42,31 @@ export default function CharactersPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [characterToDeleteId, setCharacterToDeleteId] = useState<string | null>(null);
 
-  // New state for account assignment modal
   const [isAssignAccountModalOpen, setIsAssignAccountModalOpen] = useState(false);
   const [characterToAssign, setCharacterToAssign] = useState<Character | null>(null);
   const [selectedAccountIdForAssign, setSelectedAccountIdForAssign] = useState('');
-
 
   const [isSetDisplayNameModalOpen, setIsSetDisplayNameModalOpen] = useState(false);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
   
+  // Enhanced Logging
+  useEffect(() => {
+    console.log('[CharactersPage] Data State Update:', {
+      isDataLoaded,
+      appDataIsLoading,
+      authIsLoading,
+      'allCharacters exists': !!allCharacters,
+      'allCharacters length': allCharacters?.length,
+      'accounts exists': !!accounts,
+      'accounts length': accounts?.length,
+      activeAccountId,
+    });
+  }, [isDataLoaded, appDataIsLoading, authIsLoading, allCharacters, accounts, activeAccountId]);
+
+
   const charactersForDisplay = useMemo(() => {
-    // Ensure allCharacters is an array before filtering.
     if (!allCharacters) return [];
-    // Show characters for the active account OR characters with no accountId
     return allCharacters.filter(
       (char) => !char.accountId || char.accountId === activeAccountId
     );
@@ -85,7 +96,6 @@ export default function CharactersPage() {
     }
   }, [currentUser, userData]);
 
-
   const handleAddCharacterSubmit = async (data: CharacterFormData, _id?:string, iconUrl?: string | null) => {
     await addCharacter({ ...data, iconUrl }); 
     setIsCreateModalOpen(false);
@@ -108,10 +118,17 @@ export default function CharactersPage() {
   };
   
   const openAssignAccountModal = (character: Character) => {
+    console.log('[CharactersPage] openAssignAccountModal called.', {
+      characterToAssign: character,
+      'accounts array state': accounts,
+      'activeAccountId state': activeAccountId,
+    });
     setCharacterToAssign(character);
-    // Find the 'Default' account, or fall back to the first available account, or the active one.
-    const defaultAccount = accounts.find(acc => acc.name === 'Default');
-    const fallbackAccountId = accounts.length > 0 ? accounts[0].id : '';
+    
+    // Defensive coding for setting the default selection
+    const defaultAccount = accounts?.find(acc => acc.name === 'Default');
+    const fallbackAccountId = accounts?.length > 0 ? accounts[0].id : '';
+    
     setSelectedAccountIdForAssign(activeAccountId || defaultAccount?.id || fallbackAccountId);
     setIsAssignAccountModalOpen(true);
   };
@@ -125,10 +142,8 @@ export default function CharactersPage() {
     setIsAssignAccountModalOpen(false);
     setCharacterToAssign(null);
     setSelectedAccountIdForAssign('');
-    // After assigning, navigate to the tracker page
     router.push(`/favor-tracker/${updatedCharacter.id}`);
   };
-
 
   const openEditModal = (character: Character) => {
     setEditingCharacter(character);
@@ -154,6 +169,8 @@ export default function CharactersPage() {
       </div>
     );
   }
+
+  const characterForDialog = allCharacters?.find(c => c.id === characterToDeleteId);
 
   return (
     <div className="py-8 space-y-6"> 
@@ -233,7 +250,6 @@ export default function CharactersPage() {
         />
       )}
       
-       {/* Assign Account Modal */}
        <Dialog open={isAssignAccountModalOpen} onOpenChange={setIsAssignAccountModalOpen}>
         <DialogContent>
           <DialogHeader>
@@ -266,14 +282,13 @@ export default function CharactersPage() {
         </DialogContent>
       </Dialog>
 
-
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this character?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the character
-              "{allCharacters?.find(c => c.id === characterToDeleteId)?.name || ''}".
+              "{characterForDialog?.name || ''}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
