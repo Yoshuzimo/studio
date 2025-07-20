@@ -88,7 +88,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     }
   }, [initialData, form, isOpen]);
 
-  const openCloudinaryWidget = () => {
+  const openCloudinaryWidget = async () => {
     console.log("[Cloudinary Widget] openCloudinaryWidget called.");
     if (!isCloudinaryScriptLoaded || !currentUser) {
       toast({ title: "Widget not ready", description: "The image upload widget is not loaded yet or you are not logged in.", variant: "destructive" });
@@ -103,18 +103,17 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       return;
     }
 
-    // This is the correct flow: use the `uploadSignature` callback
     const widget = window.cloudinary.createUploadWidget({
       cloudName: cloudName,
       uploadPreset: uploadPreset,
-      // The API key is not needed here if using the uploadSignature flow correctly.
       folder: "ddo_toolkit/characters",
       cropping: true,
+      multiple: false,
+      sources: ['local'],
       croppingAspectRatio: 4 / 3,
       showAdvancedOptions: true,
-      sources: ["local", "url", "camera"],
       uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, any>) => {
-        console.log("[Cloudinary Widget] Params to be signed by server:", paramsToSign);
+        console.log("[Cloudinary Widget] Requesting signature for:", paramsToSign);
         try {
           if (!currentUser) throw new Error("Not authenticated.");
           const idToken = await currentUser.getIdToken();
@@ -148,17 +147,16 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       }
     }, (error: any, result: any) => {
       if (error) {
-        console.error("Upload Widget error:", error);
+        console.error("[Cloudinary Widget] Upload Error:", error);
         toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
         return;
       }
 
+      console.log("[Cloudinary Widget] Upload Result:", result);
+
       if (result && result.event === "success") {
-        console.log("Upload Widget success:", result.info);
         setUploadedImageUrl(result.info.secure_url);
         toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
-      } else if (result) {
-        console.log("[Cloudinary Widget] Event:", result.event, result.info);
       }
     });
 
