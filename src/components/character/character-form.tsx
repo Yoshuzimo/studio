@@ -1,4 +1,3 @@
-
 // src/components/character/character-form.tsx
 "use client";
 
@@ -104,15 +103,13 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       return;
     }
 
-    // This is the correct, sequential flow.
-    // 1. Get a signature from the server first.
     try {
       const idToken = await currentUser.getIdToken();
-      // We only need a timestamp for the signature, the other params are added by the widget itself.
+      
       const signatureResponse = await fetch('/api/cloudinary/signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-        body: JSON.stringify({ timestamp: Math.round(Date.now() / 1000) })
+        body: JSON.stringify({ timestamp: Math.round(Date.now() / 1000) }) 
       });
 
       if (!signatureResponse.ok) {
@@ -123,11 +120,10 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       const signatureData = await signatureResponse.json();
       console.log("[Cloudinary Widget] Fetched signature and API key from server:", signatureData);
 
-      // 2. Now that we have the key and signature, create and open the widget.
       const widget = window.cloudinary.createUploadWidget({
         cloudName: cloudName,
         uploadPreset: uploadPreset,
-        apiKey: signatureData.api_key, // CRITICAL: Use the key from the server
+        apiKey: signatureData.api_key,
         folder: "ddo_toolkit/characters",
         cropping: true,
         croppingAspectRatio: 4 / 3,
@@ -135,6 +131,9 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         sources: ["local", "url", "camera"],
         uploadSignature: signatureData.signature,
         uploadSignatureTimestamp: signatureData.timestamp,
+        params: {
+          api_key: signatureData.api_key // Explicitly force the api_key into the upload parameters
+        },
         styles: {
             palette: {
               window: "#283593", windowBorder: "#3F51B5", tabIcon: "#FFFFFF", menuIcons: "#FFFFFF",
