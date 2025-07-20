@@ -184,7 +184,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           return {
             id: docSnap.id,
             userId: data.userId,
-            accountId: data.accountId, // This might be undefined
+            accountId: data.accountId || (defaultAccount ? defaultAccount.id : ''), // Assign default account if missing
             name: data.name,
             level: data.level,
             iconUrl: data.iconUrl || null,
