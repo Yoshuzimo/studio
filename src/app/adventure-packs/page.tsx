@@ -1,17 +1,26 @@
+
 // src/app/adventure-packs/page.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppData } from '@/context/app-data-context';
 import { AdventurePackItem } from '@/components/adventure-pack/adventure-pack-item';
-import type { AdventurePack, AdventurePackCsvUploadResult } from '@/types';
+import type { AdventurePack, AdventurePackCsvUploadResult, Account } from '@/types';
 import { AdventurePackCsvUploaderDialog } from '@/components/adventure-pack/adventure-pack-csv-uploader-dialog';
 import { Button } from '@/components/ui/button';
-import { Package, Info, Loader2, Upload, AlertTriangle } from 'lucide-react';
+import { Package, Info, Loader2, Upload, AlertTriangle, Move } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -33,6 +42,69 @@ const normalizeAdventurePackNameForStorage = (name?: string | null): string | nu
   return trimmedName;
 };
 
+// New Component for Migration Dialog
+function LegacyPacksMigrationDialog({
+    isOpen,
+    onOpenChange,
+    accounts,
+    onMigrate,
+    isMigrating
+}: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    accounts: Account[];
+    onMigrate: (selectedAccountId: string) => Promise<void>;
+    isMigrating: boolean;
+}) {
+    const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+
+    const handleMigrateClick = async () => {
+        if (!selectedAccountId) return;
+        await onMigrate(selectedAccountId);
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle className="font-headline flex items-center">
+                        <Move className="mr-2 h-6 w-6 text-primary" /> Migrate Owned Packs
+                    </DialogTitle>
+                    <DialogDescription>
+                        We've updated how owned packs are stored! They are now tied to specific accounts. 
+                        Please select which account you'd like to move your existing list of owned packs to. This is a one-time process.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-2">
+                    <Label htmlFor="migrate-account-select">Move Pack List to Account:</Label>
+                    <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                        <SelectTrigger id="migrate-account-select">
+                            <SelectValue placeholder="Select an account..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {accounts.map(account => (
+                                <SelectItem key={account.id} value={account.id}>
+                                    {account.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <DialogFooter>
+                    <Button
+                        onClick={handleMigrateClick}
+                        disabled={!selectedAccountId || isMigrating}
+                    >
+                        {isMigrating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Migrate Packs
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
 export default function AdventurePacksPage() {
   const { currentUser, isLoading: authIsLoading } = useAuth();
   const { 
@@ -42,19 +114,31 @@ export default function AdventurePacksPage() {
     accounts,
     activeAccountId,
     setActiveAccountId,
+    legacyOwnedPacks,
+    migrateLegacyPacksToAccount,
     isDataLoaded, 
-    isLoading: isContextLoading 
+    isLoading: isContextLoading,
+    isUpdating
   } = useAppData();
   const router = useRouter();
   
   const [isUploadCsvDialogOpen, setIsUploadCsvDialogOpen] = useState(false);
   const [isCsvProcessing, setIsCsvProcessing] = useState(false);
+  
+  const showMigrationDialog = !!legacyOwnedPacks && accounts.length > 0;
 
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
       router.replace('/login');
     }
   }, [authIsLoading, currentUser, router]);
+  
+  useEffect(() => {
+    if (isDataLoaded && accounts.length === 0 && !isContextLoading && !isUpdating) {
+        router.push('/accounts?action=create');
+    }
+  }, [isDataLoaded, accounts, isContextLoading, isUpdating, router]);
+
 
   const handleTogglePackOwnership = (packName: string, isOwned: boolean) => {
     setOwnedPacks((prevOwnedPacks) => {
@@ -186,7 +270,7 @@ export default function AdventurePacksPage() {
     }
   };
   
-  const pageIsLoading = authIsLoading || isContextLoading || isCsvProcessing;
+  const pageIsLoading = authIsLoading || isContextLoading || isCsvProcessing || isUpdating;
 
   if (authIsLoading || (!currentUser && !authIsLoading)) {
     return (
@@ -209,6 +293,16 @@ export default function AdventurePacksPage() {
 
   return (
     <div className="py-8 space-y-6"> 
+      <LegacyPacksMigrationDialog
+        isOpen={showMigrationDialog}
+        onOpenChange={(open) => {
+            if (!open) console.log("Migration dialog closed without action.");
+        }}
+        accounts={accounts}
+        onMigrate={migrateLegacyPacksToAccount}
+        isMigrating={isUpdating}
+      />
+
       <div className="flex justify-between items-center mb-8">
         <h1 className="font-headline text-3xl font-bold flex items-center">
           <Package className="mr-3 h-8 w-8 text-primary" /> Adventure Packs

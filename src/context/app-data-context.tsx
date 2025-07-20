@@ -51,6 +51,10 @@ interface AppDataContextType {
 
   ownedPacks: string[];
   setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>>;
+  
+  // New properties for legacy pack migration
+  legacyOwnedPacks: string[] | null;
+  migrateLegacyPacksToAccount: (accountId: string) => Promise<void>;
 
   isDataLoaded: boolean;
   isLoading: boolean;
@@ -60,10 +64,11 @@ interface AppDataContextType {
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
 
 const USER_CONFIGURATION_COLLECTION = 'userConfiguration';
-const OWNED_PACKS_SUBCOLLECTION = 'ownedPacksInfo';
+const OWNED_PACKS_INFO_SUBCOLLECTION = 'ownedPacksInfo';
 const CHARACTERS_COLLECTION = 'characters';
 const ACCOUNTS_COLLECTION = 'accounts';
 const QUEST_COMPLETIONS_SUBCOLLECTION = 'questCompletions';
+const LEGACY_OWNED_PACKS_DOC_ID = 'ownedPacks'; // ID for old user-level pack data
 
 const BATCH_OPERATION_LIMIT = 490;
 
@@ -101,6 +106,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [characters, setCharacters] = useState<Character[]>([]);
 
   const [ownedPacks, setOwnedPacksInternal] = useState<string[]>([]);
+  const [legacyOwnedPacks, setLegacyOwnedPacks] = useState<string[] | null>(null);
   
   const [activeCharacterId, setActiveCharacterIdState] = useState<string | null>(null);
   const [activeCharacterQuestCompletions, setActiveCharacterQuestCompletions] = useState<Map<string, UserQuestCompletionData>>(new Map());
@@ -148,6 +154,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setAccounts([]);
       setCharacters([]);
       setOwnedPacksInternal([]);
+      setLegacyOwnedPacks(null);
       setActiveAccountId(null);
       setActiveCharacterIdState(null);
       initialDataLoadedForUserRef.current = null;
@@ -166,18 +173,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       try {
         let loadedAccounts: Account[] = [];
         
-        // Step 1: Fetch accounts sequentially first.
+        // Step 1: Fetch accounts.
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
         const accSnapshot = await getDocs(accQuery);
         loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
 
-        // Step 2: Handle new user case: no accounts exist.
         if (loadedAccounts.length === 0) {
-          console.log('[AppDataProvider] LOG: No accounts found. Creating default account for new user.');
-          const newId = doc(collection(db, ACCOUNTS_COLLECTION)).id;
-          const defaultAccount: Account = { id: newId, userId: currentUser.uid, name: 'Default' };
-          await setDoc(doc(db, ACCOUNTS_COLLECTION, newId), defaultAccount);
-          loadedAccounts.push(defaultAccount);
+          console.log('[AppDataProvider] LOG: No accounts found. User might need to be redirected to create one.');
         }
         setAccounts(loadedAccounts);
 
@@ -187,7 +189,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             setActiveAccountId(defaultAccount.id);
         }
 
-        // Step 3: Fetch characters
+        // Step 2: Fetch characters
         const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
         const charSnapshot = await getDocs(charQuery);
         
@@ -196,15 +198,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           return {
             id: docSnap.id,
             userId: data.userId,
-            accountId: data.accountId || (defaultAccount ? defaultAccount.id : ''), // Assign default account if missing
+            accountId: data.accountId || (defaultAccount ? defaultAccount.id : ''),
             name: data.name,
             level: data.level,
             iconUrl: data.iconUrl || null,
             preferences: data.preferences || {},
           } as Character;
         });
-
         setCharacters(finalCharacters);
+
+        // Step 3: Check for legacy owned packs data
+        const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', 'packs');
+        const legacyPacksSnap = await getDoc(legacyPacksDocRef);
+        if (legacyPacksSnap.exists()) {
+          const data = legacyPacksSnap.data();
+          if(data && Array.isArray(data.names)) {
+            console.log('[AppDataProvider] LOG: Found legacy user-level owned packs data.');
+            setLegacyOwnedPacks(data.names);
+          }
+        } else {
+          setLegacyOwnedPacks(null);
+        }
+
         initialDataLoadedForUserRef.current = currentUser.uid;
         console.log('[AppDataProvider] LOG: Initial data load complete.');
 
@@ -252,7 +267,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const fetchOwnedPacks = async () => {
       setIsUpdating(true);
       try {
-        const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_SUBCOLLECTION, activeAccountId);
+        const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, activeAccountId);
         const ownedPacksDocSnap = await getDoc(ownedPacksDocRef);
         const rawOwnedPacks = ownedPacksDocSnap.exists() ? (ownedPacksDocSnap.data()?.names || []) as string[] : [];
         setOwnedPacks(rawOwnedPacks); // This will normalize and handle special packs
@@ -277,7 +292,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       
       setIsUpdating(true);
       try {
-        const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, freshestCurrentUser.uid, OWNED_PACKS_SUBCOLLECTION, activeAccountId);
+        const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, freshestCurrentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, activeAccountId);
         await setDoc(ownedPacksDocRef, { names: ownedPacks }, { merge: true });
         lastKnownOwnedPacksRef.current = currentOwnedPacksString;
         toast({ title: "Adventure Packs Saved", description: "Your owned packs for this account have been saved."});
@@ -289,6 +304,42 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }, 1500);
     return () => clearTimeout(handler);
   }, [ownedPacks, currentUser, isLoading, activeAccountId, toast]);
+  
+  const migrateLegacyPacksToAccount = async (accountId: string) => {
+    if (!currentUser || !legacyOwnedPacks) {
+        toast({ title: "Migration Error", description: "No user or legacy data found to migrate.", variant: "destructive" });
+        return;
+    }
+    setIsUpdating(true);
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Set the new account-specific pack data
+      const newPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, accountId);
+      batch.set(newPacksDocRef, { names: legacyOwnedPacks }, { merge: true });
+
+      // 2. Delete the old legacy document
+      const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', 'packs');
+      batch.delete(legacyPacksDocRef);
+
+      await batch.commit();
+
+      // 3. Update local state to reflect changes
+      if (accountId === activeAccountId) {
+        setOwnedPacks(legacyOwnedPacks);
+      }
+      setLegacyOwnedPacks(null); // Clear legacy data from state
+
+      toast({ title: "Packs Migrated!", description: "Your old pack list has been moved to the selected account."});
+
+    } catch (error) {
+      toast({ title: "Migration Failed", description: (error as Error).message, variant: "destructive" });
+      console.error("[migrateLegacyPacksToAccount] Error:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
 
   const addAccount = async (accountData: Omit<Account, 'id' | 'userId'>): Promise<Account | undefined> => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return undefined; }
@@ -526,6 +577,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       batchUpdateUserQuestCompletions, batchResetUserQuestCompletions,
       activeCharacterId, activeCharacterQuestCompletions,
       ownedPacks, setOwnedPacks,
+      legacyOwnedPacks, migrateLegacyPacksToAccount,
       isDataLoaded,
       isLoading,
       isUpdating,
