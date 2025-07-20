@@ -149,8 +149,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       
       const newCompletions = new Map<string, UserQuestCompletionData>();
       snapshot.docs.forEach(docSnap => {
-        // Log each fetched completion ID
-        console.log(`[AppDataProvider] Fetched completion from Firestore for quest ID: ${docSnap.id}`);
         newCompletions.set(docSnap.id, { ...docSnap.data() } as UserQuestCompletionData);
       });
       
@@ -626,3 +624,5 @@ export function useAppData() {
   }
   return context;
 }
+
+    
