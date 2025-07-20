@@ -70,7 +70,7 @@ function ThemeToggle() {
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { currentUser, userData, logout, isLoading: authIsLoading, sendVerificationEmail } = useAuth();
-  const { characters } = useAppData();
+  const { allCharacters } = useAppData();
   const [isSendingVerification, setIsSendingVerification] = React.useState(false);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = React.useState(false);
 
@@ -85,7 +85,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
 
   const visibleNavItems = getVisibleNavItems();
-  const sortedCharacters = React.useMemo(() => [...characters].sort((a, b) => a.name.localeCompare(b.name)), [characters]);
+  const sortedCharacters = React.useMemo(() => [...(allCharacters || [])].sort((a, b) => a.name.localeCompare(b.name)), [allCharacters]);
 
   if (authIsLoading) {
     return (
