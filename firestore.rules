@@ -3,6 +3,26 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ========================================
+    // Helper Functions
+    // ========================================
+    function isOwner() {
+      return request.auth != null &&
+             resource.data.userId == request.auth.uid;
+    }
+
+    function isCreatingOwnData() {
+      return request.auth != null &&
+             request.resource.data.userId == request.auth.uid;
+    }
+
+    // Corrected function: Checks if the query is filtering by the user's own ID.
+    // NOTE: ".exists()" is not valid here. The direct comparison is what works.
+    function isQueryingOwnData() {
+      return request.auth != null &&
+             request.query.where.userId == request.auth.uid;
+    }
+
+    // ========================================
     // Characters Collection
     // ========================================
     match /characters/{characterId} {
@@ -27,22 +47,16 @@ service cloud.firestore {
       allow get, update, delete, create: if request.auth != null && request.auth.uid == userId;
     }
 
-    // = a======================================
-    // Helper Functions
-    // ========================================
-    function isOwner() {
-      return request.auth != null &&
-             resource.data.userId == request.auth.uid;
-    }
+    // --- Add other collection rules below ---
 
-    function isCreatingOwnData() {
-      return request.auth != null &&
-             request.resource.data.userId == request.auth.uid;
+    // Example for quest completions nested under characters
+    match /characters/{characterId}/questCompletions/{completionId} {
+        allow read, write: if get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
     }
-
-    function isQueryingOwnData() {
-      return request.auth != null &&
-             request.query.where('userId', '==', request.auth.uid).exists();
+    
+    // Example for owned packs nested under a user config document
+     match /userConfiguration/{userId}/ownedPacksInfo/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
