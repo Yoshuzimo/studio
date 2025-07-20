@@ -9,7 +9,7 @@
  */
 
 import {z} from 'zod';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-admin'; // CORRECT: Use the admin db instance
 import { collection, doc, serverTimestamp, setDoc, updateDoc, type FieldValue } from 'firebase/firestore';
 import { adminAuth } from '@/lib/firebase-admin';
 import type { SuggestionConversationItem } from '@/types';
