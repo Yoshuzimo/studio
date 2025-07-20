@@ -10,7 +10,7 @@
 
 import {z} from 'zod';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, type FieldValue } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, setDoc, updateDoc, type FieldValue } from 'firebase/firestore';
 import { adminAuth } from '@/lib/firebase-admin';
 import type { SuggestionConversationItem } from '@/types';
 import { cookies } from 'next/headers';
@@ -66,30 +66,37 @@ export async function submitSuggestion(input: SubmitSuggestionInput): Promise<Su
     throw error;
   }
   
+  const newSuggestionRef = doc(collection(db, 'suggestions'));
+  
   try {
-    const initialMessage: SuggestionConversationItem = {
-      senderId: input.suggesterId,
-      senderName: input.suggesterName,
-      text: input.suggestionText,
-      timestamp: serverTimestamp(),
-    };
-
-    const suggestionData: SuggestionData = {
+    const suggestionData: Omit<SuggestionData, 'conversation'> = {
       title: input.title,
       suggesterId: input.suggesterId, 
       suggesterName: input.suggesterName,
       createdAt: serverTimestamp(),
       status: 'open',
-      conversation: [initialMessage],
     };
 
-    const docRef = await addDoc(collection(db, 'suggestions'), suggestionData);
+    // Step 1: Create the document without the conversation array.
+    await setDoc(newSuggestionRef, suggestionData);
+
+    // Step 2: Create the first conversation item and update the document.
+    const initialMessage: SuggestionConversationItem = {
+        senderId: input.suggesterId,
+        senderName: input.suggesterName,
+        text: input.suggestionText,
+        timestamp: suggestionData.createdAt, // Use the same serverTimestamp FieldValue
+    };
     
-    console.log(`New suggestion saved to Firestore with ID: ${docRef.id}`);
+    await updateDoc(newSuggestionRef, {
+        conversation: [initialMessage]
+    });
+    
+    console.log(`New suggestion saved to Firestore with ID: ${newSuggestionRef.id}`);
 
     return {
       message: 'Thank you! Your suggestion has been received and saved for review.',
-      suggestionId: docRef.id,
+      suggestionId: newSuggestionRef.id,
     };
   } catch (error) {
     console.error("Failed to save suggestion to Firestore:", error);
