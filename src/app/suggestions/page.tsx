@@ -141,6 +141,17 @@ export default function SuggestionsPage() {
     return () => unsubscribe(); // Cleanup listener
   }, [currentUser, toast]);
 
+  const getSessionCookie = () => {
+    if (typeof window === 'undefined') return undefined;
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+        let cookie = cookies[i].trim();
+        if (cookie.startsWith('__session=')) {
+            return cookie.substring('__session='.length, cookie.length);
+        }
+    }
+    return undefined;
+  };
 
   const handleAddReply = async (suggestionId: string, replyText: string) => {
     if (!currentUser || !userData) {
@@ -173,6 +184,13 @@ export default function SuggestionsPage() {
       return;
     }
 
+    const sessionCookie = getSessionCookie();
+    if (!sessionCookie) {
+        toast({ title: "Authentication Error", description: "Could not find session cookie. Please log in again.", variant: "destructive" });
+        setError("Could not find session cookie. Please log in again.");
+        return;
+    }
+
     if (title.trim().length < 5 || title.trim().length > 100) {
       setError("Title must be between 5 and 100 characters.");
       return;
@@ -189,7 +207,8 @@ export default function SuggestionsPage() {
           title,
           suggestionText,
           suggesterId: currentUser.uid,
-          suggesterName: userData.displayName || currentUser.email || "Anonymous User"
+          suggesterName: userData.displayName || currentUser.email || "Anonymous User",
+          sessionCookie: sessionCookie
         };
         await submitSuggestion(input);
 
