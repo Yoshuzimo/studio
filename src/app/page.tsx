@@ -53,6 +53,7 @@ export default function CharactersPage() {
   const pageOverallLoading = authIsLoading || appDataIsLoading;
   
   const charactersForDisplay = useMemo(() => {
+    if (!allCharacters) return [];
     // Show characters for the active account OR characters with no accountId
     return allCharacters.filter(
       (char) => !char.accountId || char.accountId === activeAccountId
