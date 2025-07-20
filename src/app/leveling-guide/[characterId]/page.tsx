@@ -1,3 +1,4 @@
+
 // src/app/leveling-guide/[characterId]/page.tsx
 "use client";
 
@@ -73,8 +74,6 @@ interface LevelingGuidePreferences {
   onCormyr: boolean;
   showRaids: boolean;
   sortConfig?: SortConfig | null;
-  useLevelOffset?: boolean;
-  levelOffset?: number;
 }
 
 function parseDurationToMinutes(durationString?: string | null): number | null {
@@ -185,68 +184,71 @@ export default function LevelingGuidePage() {
     }
   }, [authIsLoading, currentUser, router]);
 
-  const savePreferences = useCallback((newPrefs: Partial<LevelingGuidePreferences>) => {
+  const savePreferences = useCallback((newPrefs: Partial<LevelingGuidePreferences>, isShared: boolean = false) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-      const localKey = `ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`;
-      const existingPrefsString = localStorage.getItem(localKey);
-      const existingPrefs = existingPrefsString ? JSON.parse(existingPrefsString) : {};
-      const fullPrefs = { ...existingPrefs, ...newPrefs };
-      localStorage.setItem(localKey, JSON.stringify(fullPrefs));
+        const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
+        const existingPrefsString = localStorage.getItem(localKey);
+        const existingPrefs = existingPrefsString ? JSON.parse(existingPrefsString) : {};
 
-      const updatedCharacter: Character = {
-        ...character,
-        preferences: {
-          ...(character.preferences || {}),
-          levelingGuide: {
-            ...(character.preferences?.levelingGuide || {}),
-            ...newPrefs,
-          },
-        },
-      };
+        const prefsToUpdate = { ...existingPrefs, levelingGuide: { ...(existingPrefs.levelingGuide || {}), ...(isShared ? {} : newPrefs) } };
+        if (isShared) {
+            Object.assign(prefsToUpdate, newPrefs);
+        }
 
-      setCharacter(updatedCharacter);
-      updateCharacter(updatedCharacter);
-      
+        localStorage.setItem(localKey, JSON.stringify(prefsToUpdate));
+        const updatedCharacter = { ...character, preferences: { ...character.preferences, ...prefsToUpdate } };
+
+        setCharacter(updatedCharacter);
+        updateCharacter(updatedCharacter);
     } catch (error) { console.error("Failed to save leveling guide preferences:", error); }
   }, [characterId, isDataLoaded, currentUser, character, updateCharacter]);
 
+  // Combined function to save shared level offset preferences
+  const saveSharedLevelOffset = useCallback((offsetEnabled: boolean, offsetValue: number) => {
+    if (!character) return;
+    const newPrefs = {
+      ...character.preferences,
+      useLevelOffset: offsetEnabled,
+      levelOffset: offsetValue,
+    };
+    const updatedCharacter = { ...character, preferences: newPrefs };
+    setCharacter(updatedCharacter);
+    updateCharacter(updatedCharacter);
+  }, [character, updateCharacter]);
+
   // Load preferences
   useEffect(() => {
-    if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
-    try {
-        const localKey = `ddoToolkit_levelingGuidePrefs_${currentUser.uid}_${characterId}`;
+    if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
+      try {
+        const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
         const localPrefsString = localStorage.getItem(localKey);
-        const prefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.levelingGuide;
+        const storedPrefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences;
 
-        if (prefs) {
-            const mergedAdjustments = { ...durationAdjustmentDefaults };
-            if (prefs.durationAdjustments) {
-              for (const cat of DURATION_CATEGORIES) { if (prefs.durationAdjustments[cat] !== undefined && typeof prefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefs.durationAdjustments[cat]; }
+        if (storedPrefs) {
+            setUseLevelOffset(storedPrefs.useLevelOffset ?? false);
+            setLevelOffset(storedPrefs.levelOffset ?? 0);
+            
+            const levelingPrefs = storedPrefs.levelingGuide;
+            if (levelingPrefs) {
+                const mergedAdjustments = { ...durationAdjustmentDefaults };
+                if (levelingPrefs.durationAdjustments) {
+                  for (const cat of DURATION_CATEGORIES) { if (levelingPrefs.durationAdjustments[cat] !== undefined && typeof levelingPrefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = levelingPrefs.durationAdjustments[cat]; }
+                }
+                setDurationAdjustments(mergedAdjustments);
+                
+                setOnCormyr(levelingPrefs.onCormyr ?? false);
+                setShowRaids(levelingPrefs.showRaids ?? false);
+                setClickAction(levelingPrefs.clickAction ?? 'none');
+                setSortConfig(levelingPrefs.sortConfig ?? { key: 'experienceScore', direction: 'descending' });
+                
+                const defaultVis = getDefaultColumnVisibility();
+                const mergedVisibility = { ...defaultVis, ...(levelingPrefs.columnVisibility || {}) };
+                setColumnVisibility(mergedVisibility);
             }
-            setDurationAdjustments(mergedAdjustments);
-            
-            setOnCormyr(prefs.onCormyr ?? false);
-            setShowRaids(prefs.showRaids ?? false);
-            setClickAction(prefs.clickAction ?? 'none');
-            setSortConfig(prefs.sortConfig ?? { key: 'experienceScore', direction: 'descending' });
-            setUseLevelOffset(prefs.useLevelOffset ?? false);
-            setLevelOffset(prefs.levelOffset ?? 0);
-            
-            const defaultVis = getDefaultColumnVisibility();
-            const mergedVisibility = { ...defaultVis, ...(prefs.columnVisibility || {}) };
-            setColumnVisibility(mergedVisibility);
-        } else {
-            setColumnVisibility(getDefaultColumnVisibility());
-            setDurationAdjustments(durationAdjustmentDefaults);
-            setOnCormyr(false);
-            setShowRaids(false);
-            setClickAction('none');
-            setSortConfig({ key: 'experienceScore', direction: 'descending' });
-            setUseLevelOffset(false);
-            setLevelOffset(0);
         }
-    } catch (error) { console.error("Error loading quest guide preferences:", error); }
+      } catch (error) { console.error("Error loading quest guide preferences:", error); }
+    }
   }, [characterId, isDataLoaded, currentUser, character]);
 
   const handleDurationChange = (newAdjustments: Record<DurationCategory, number>) => {
@@ -468,7 +470,7 @@ export default function LevelingGuidePage() {
                     onCheckedChange={(checked) => {
                         const isChecked = !!checked;
                         setUseLevelOffset(isChecked);
-                        savePreferences({ useLevelOffset: isChecked });
+                        saveSharedLevelOffset(isChecked, levelOffset);
                     }} 
                     disabled={pageOverallLoading}
                   />
@@ -483,7 +485,7 @@ export default function LevelingGuidePage() {
                         const newOffset = parseInt(e.target.value, 10);
                         if (!isNaN(newOffset)) {
                             setLevelOffset(newOffset);
-                            savePreferences({ levelOffset: newOffset });
+                            saveSharedLevelOffset(useLevelOffset, newOffset);
                         }
                     }}
                     className="h-8 w-20"

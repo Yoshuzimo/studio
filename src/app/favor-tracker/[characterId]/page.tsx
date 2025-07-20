@@ -1,3 +1,4 @@
+
 // Favor-Tracker-V2
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -88,15 +89,13 @@ type DurationCategory = "Very Short" | "Short" | "Medium" | "Long" | "Very Long"
 const durationAdjustmentDefaults: Record<DurationCategory, number> = { "Very Short": 1.2, "Short": 1.1, "Medium": 1.0, "Long": 0.9, "Very Long": 0.8, };
 const DURATION_CATEGORIES: DurationCategory[] = ["Very Short", "Short", "Medium", "Long", "Very Long"];
 
-interface CharacterFavorTrackerPreferences {
+interface FavorTrackerPreferences {
   columnVisibility: Record<SortableColumnKey | string, boolean>;
   durationAdjustments: Record<DurationCategory, number>;
   showCompletedQuestsWithZeroRemainingFavor: boolean;
   onCormyr: boolean;
   showRaids: boolean;
   clickAction: 'none' | 'wiki' | 'map';
-  useLevelOffset?: boolean;
-  levelOffset?: number;
   sortConfig?: SortConfig | null;
 }
 
@@ -221,73 +220,68 @@ export default function FavorTrackerPage() {
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
 
-  const savePreferences = useCallback((newPrefs: Partial<CharacterFavorTrackerPreferences>) => {
+  const savePreferences = useCallback((newPrefs: Partial<FavorTrackerPreferences>, isShared: boolean = false) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-      const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
-      const existingPrefsString = localStorage.getItem(localKey);
-      const existingPrefs = existingPrefsString ? JSON.parse(existingPrefsString) : {};
-      const fullPrefs = { ...existingPrefs, ...newPrefs };
-      localStorage.setItem(localKey, JSON.stringify(fullPrefs));
+        const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
+        const existingPrefsString = localStorage.getItem(localKey);
+        const existingPrefs = existingPrefsString ? JSON.parse(existingPrefsString) : {};
+        
+        const prefsToUpdate = { ...existingPrefs, favorTracker: { ...(existingPrefs.favorTracker || {}), ...(isShared ? {} : newPrefs) } };
+        if (isShared) {
+            Object.assign(prefsToUpdate, newPrefs);
+        }
 
-      const updatedCharacter: Character = {
-        ...character,
-        preferences: {
-          ...(character.preferences || {}),
-          favorTracker: {
-            ...(character.preferences?.favorTracker || {}),
-            ...newPrefs,
-          },
-        },
-      };
-
-      setCharacter(updatedCharacter); // Immediately update local character state
-      updateCharacter(updatedCharacter); // Debounced update to Firestore
-
+        localStorage.setItem(localKey, JSON.stringify(prefsToUpdate));
+        const updatedCharacter = { ...character, preferences: { ...character.preferences, ...prefsToUpdate } };
+        
+        setCharacter(updatedCharacter); // Immediately update local character state
+        updateCharacter(updatedCharacter); // Debounced update to Firestore
     } catch (error) { console.error("Failed to save preferences:", error); }
   }, [characterId, isDataLoaded, currentUser, character, updateCharacter]);
+
+  // Combined function to save shared level offset preferences
+  const saveSharedLevelOffset = useCallback((offsetEnabled: boolean, offsetValue: number) => {
+    if (!character) return;
+    const newPrefs = {
+      ...character.preferences,
+      useLevelOffset: offsetEnabled,
+      levelOffset: offsetValue,
+    };
+    const updatedCharacter = { ...character, preferences: newPrefs };
+    setCharacter(updatedCharacter);
+    updateCharacter(updatedCharacter);
+  }, [character, updateCharacter]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
       try {
         const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
         const localPrefsString = localStorage.getItem(localKey);
-        const prefsToUse = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.favorTracker;
+        const storedPrefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences;
+        
+        if (storedPrefs) {
+            setUseLevelOffset(storedPrefs.useLevelOffset ?? false);
+            setLevelOffset(storedPrefs.levelOffset ?? 0);
 
-        if (prefsToUse) {
-            const mergedAdjustments = { ...durationAdjustmentDefaults };
-            if (prefsToUse.durationAdjustments) {
-              for (const cat of DURATION_CATEGORIES) { if (prefsToUse.durationAdjustments[cat] !== undefined && typeof prefsToUse.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = prefsToUse.durationAdjustments[cat]; }
+            const favorPrefs = storedPrefs.favorTracker;
+            if (favorPrefs) {
+                const mergedAdjustments = { ...durationAdjustmentDefaults };
+                if (favorPrefs.durationAdjustments) {
+                    for (const cat of DURATION_CATEGORIES) { if (favorPrefs.durationAdjustments[cat] !== undefined && typeof favorPrefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = favorPrefs.durationAdjustments[cat]; }
+                }
+                setDurationAdjustments(mergedAdjustments);
+                setShowCompletedQuestsWithZeroRemainingFavor(favorPrefs.showCompletedQuestsWithZeroRemainingFavor ?? false);
+                setOnCormyr(favorPrefs.onCormyr ?? false);
+                setShowRaids(favorPrefs.showRaids ?? false);
+                setClickAction(favorPrefs.clickAction ?? 'none');
+                setSortConfig(favorPrefs.sortConfig ?? { key: 'name', direction: 'ascending' });
+                const defaultVis = getDefaultColumnVisibility();
+                const mergedVisibility = { ...defaultVis, ...(favorPrefs.columnVisibility || {}) };
+                setColumnVisibility(mergedVisibility);
             }
-            setDurationAdjustments(mergedAdjustments);
-
-            setShowCompletedQuestsWithZeroRemainingFavor(prefsToUse.showCompletedQuestsWithZeroRemainingFavor ?? false);
-            setOnCormyr(prefsToUse.onCormyr ?? false);
-            setShowRaids(prefsToUse.showRaids ?? false);
-            setClickAction(prefsToUse.clickAction ?? 'none');
-            setSortConfig(prefsToUse.sortConfig ?? { key: 'name', direction: 'ascending' });
-            setUseLevelOffset(prefsToUse.useLevelOffset ?? false);
-            setLevelOffset(prefsToUse.levelOffset ?? 0);
-
-
-            const defaultVis = getDefaultColumnVisibility();
-            const mergedVisibility = { ...defaultVis, ...(prefsToUse.columnVisibility || {}) };
-            setColumnVisibility(mergedVisibility);
-        } else {
-            setColumnVisibility(getDefaultColumnVisibility());
-            setDurationAdjustments(durationAdjustmentDefaults);
-            setShowCompletedQuestsWithZeroRemainingFavor(false);
-            setOnCormyr(false);
-            setShowRaids(false);
-            setClickAction('none');
-            setSortConfig({ key: 'name', direction: 'ascending' });
-            setUseLevelOffset(false);
-            setLevelOffset(0);
         }
-      } catch (error) { 
-          console.error("Error loading preferences:", error); 
-          setColumnVisibility(getDefaultColumnVisibility());
-      }
+      } catch (error) { console.error("Error loading preferences:", error); setColumnVisibility(getDefaultColumnVisibility()); }
     }
   }, [characterId, isDataLoaded, currentUser, character]);
 
@@ -849,7 +843,7 @@ export default function FavorTrackerPage() {
                             onCheckedChange={(checked) => {
                                 const isChecked = !!checked;
                                 setUseLevelOffset(isChecked);
-                                savePreferences({ useLevelOffset: isChecked });
+                                saveSharedLevelOffset(isChecked, levelOffset);
                             }} 
                             disabled={pageOverallLoading}
                         />
@@ -864,7 +858,7 @@ export default function FavorTrackerPage() {
                                 const newOffset = parseInt(e.target.value, 10);
                                 if (!isNaN(newOffset)) {
                                     setLevelOffset(newOffset);
-                                    savePreferences({ levelOffset: newOffset });
+                                    saveSharedLevelOffset(useLevelOffset, newOffset);
                                 }
                             }}
                             className="h-8 w-20"

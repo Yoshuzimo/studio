@@ -40,8 +40,6 @@ interface FavorTrackerPreferences {
   onCormyr?: boolean;
   showRaids?: boolean;
   clickAction?: 'none' | 'wiki' | 'map';
-  useLevelOffset?: boolean;
-  levelOffset?: number;
   sortConfig?: PageSortConfig | null;
 }
 
@@ -70,6 +68,8 @@ export interface Character {
   level: number;
   iconUrl: string | null;
   preferences?: {
+    useLevelOffset?: boolean;
+    levelOffset?: number;
     favorTracker?: FavorTrackerPreferences;
     levelingGuide?: LevelingGuidePreferences;
     reaperRewards?: ReaperRewardsPreferences;

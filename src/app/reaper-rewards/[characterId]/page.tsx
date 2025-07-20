@@ -1,3 +1,4 @@
+
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
@@ -104,8 +105,6 @@ interface ReaperRewardsPreferences {
   showRaids: boolean;
   clickAction: 'none' | 'wiki' | 'map';
   sortConfig?: SortConfig | null;
-  useLevelOffset?: boolean;
-  levelOffset?: number;
 }
 
 const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
@@ -156,25 +155,20 @@ export default function ReaperRewardsPage() {
     }
   }, [authIsLoading, currentUser, router]);
 
-  const savePreferences = useCallback((newPrefs: Partial<ReaperRewardsPreferences>) => {
+  const savePreferences = useCallback((newPrefs: Partial<ReaperRewardsPreferences>, isShared: boolean = false) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
-      const localKey = `ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`;
+      const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
       const existingPrefsString = localStorage.getItem(localKey);
       const existingPrefs = existingPrefsString ? JSON.parse(existingPrefsString) : {};
-      const fullPrefs = { ...existingPrefs, ...newPrefs };
-      localStorage.setItem(localKey, JSON.stringify(fullPrefs));
 
-      const updatedCharacter: Character = {
-        ...character,
-        preferences: {
-          ...(character.preferences || {}),
-          reaperRewards: {
-            ...(character.preferences?.reaperRewards || {}),
-            ...newPrefs,
-          },
-        },
-      };
+      const prefsToUpdate = { ...existingPrefs, reaperRewards: { ...(existingPrefs.reaperRewards || {}), ...(isShared ? {} : newPrefs) } };
+      if (isShared) {
+          Object.assign(prefsToUpdate, newPrefs);
+      }
+      
+      localStorage.setItem(localKey, JSON.stringify(prefsToUpdate));
+      const updatedCharacter = { ...character, preferences: { ...character.preferences, ...prefsToUpdate } };
 
       setCharacter(updatedCharacter);
       updateCharacter(updatedCharacter);
@@ -183,33 +177,41 @@ export default function ReaperRewardsPage() {
     }
   }, [characterId, isDataLoaded, currentUser, character, updateCharacter]);
 
+  const saveSharedLevelOffset = useCallback((offsetEnabled: boolean, offsetValue: number) => {
+    if (!character) return;
+    const newPrefs = {
+      ...character.preferences,
+      useLevelOffset: offsetEnabled,
+      levelOffset: offsetValue,
+    };
+    const updatedCharacter = { ...character, preferences: newPrefs };
+    setCharacter(updatedCharacter);
+    updateCharacter(updatedCharacter);
+  }, [character, updateCharacter]);
+
   useEffect(() => {
     if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
       try {
-        const localKey = `ddoToolkit_reaperPrefs_${currentUser.uid}_${characterId}`;
+        const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
         const localPrefsString = localStorage.getItem(localKey);
         
-        const prefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences?.reaperRewards;
+        const storedPrefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences;
         
-        if (prefs) {
-          setOnCormyr(prefs.onCormyr ?? false);
-          setShowRaids(prefs.showRaids ?? false);
-          setClickAction(prefs.clickAction ?? 'none');
-          setSortConfig(prefs.sortConfig ?? {key: 'level', direction: 'ascending'});
-          setUseLevelOffset(prefs.useLevelOffset ?? false);
-          setLevelOffset(prefs.levelOffset ?? 0);
-          
-          const defaultVis = getDefaultColumnVisibility();
-          const mergedVisibility = { ...defaultVis, ...(prefs.columnVisibility || {}) };
-          setColumnVisibility(mergedVisibility);
-        } else {
-          setColumnVisibility(getDefaultColumnVisibility());
-          setOnCormyr(false);
-          setShowRaids(false);
-          setClickAction('none');
-          setSortConfig({key: 'level', direction: 'ascending'});
-          setUseLevelOffset(false);
-          setLevelOffset(0);
+        if (storedPrefs) {
+            setUseLevelOffset(storedPrefs.useLevelOffset ?? false);
+            setLevelOffset(storedPrefs.levelOffset ?? 0);
+
+            const reaperPrefs = storedPrefs.reaperRewards;
+            if (reaperPrefs) {
+              setOnCormyr(reaperPrefs.onCormyr ?? false);
+              setShowRaids(reaperPrefs.showRaids ?? false);
+              setClickAction(reaperPrefs.clickAction ?? 'none');
+              setSortConfig(reaperPrefs.sortConfig ?? {key: 'level', direction: 'ascending'});
+              
+              const defaultVis = getDefaultColumnVisibility();
+              const mergedVisibility = { ...defaultVis, ...(reaperPrefs.columnVisibility || {}) };
+              setColumnVisibility(mergedVisibility);
+            }
         }
       } catch (error) {
         console.error("Error loading preferences:", error);
@@ -469,7 +471,7 @@ export default function ReaperRewardsPage() {
                   onCheckedChange={(checked) => {
                       const isChecked = !!checked;
                       setUseLevelOffset(isChecked);
-                      savePreferences({ useLevelOffset: isChecked });
+                      saveSharedLevelOffset(isChecked, levelOffset);
                   }} 
                   disabled={pageOverallLoading}
                 />
@@ -484,7 +486,7 @@ export default function ReaperRewardsPage() {
                       const newOffset = parseInt(e.target.value, 10);
                       if (!isNaN(newOffset)) {
                           setLevelOffset(newOffset);
-                          savePreferences({ levelOffset: newOffset });
+                          saveSharedLevelOffset(useLevelOffset, newOffset);
                       }
                   }}
                   className="h-8 w-20"
