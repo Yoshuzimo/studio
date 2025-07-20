@@ -1,52 +1,93 @@
-rules_version = '2';
 
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isOwner(doc) {
-      return request.auth != null && request.auth.uid == doc.userId;
-    }
-    
-    function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    // =======================
+    // Characters Collection
+    // =======================
+    match /characters/{characterId} {
+      allow get: if isOwner(resource.data);
+      allow list: if isQueryingOwnData();
+      allow create: if isCreatingOwnData(request.resource.data);
+      allow update: if isOwner(resource.data);
+      allow delete: if isOwner(resource.data);
     }
 
+    match /characters/{characterId}/{subcollection}/{docId} {
+       allow read, write: if get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
+    }
+    
+    // =======================
+    // Accounts Collection
+    // =======================
+    match /accounts/{accountId} {
+      allow read, update, delete: if isOwner(resource.data);
+      allow list: if isQueryingOwnData();
+      allow create: if isCreatingOwnData(request.resource.data);
+    }
+    
+    // =======================
+    // User Configuration
+    // =======================
+    match /userConfiguration/{userId}/{subcollection}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // =======================
+    // Suggestions Collection
+    // =======================
+     match /suggestions/{suggestionId} {
+      allow read: if isOwner(resource.data);
+      allow create: if isCreatingOwnData(request.resource.data);
+      allow update: if isOwner(resource.data);
+      // Admin access is handled by server-side functions (flows)
+    }
+
+    // =======================
+    // Users & Public Profiles
+    // =======================
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == userId;
     }
 
     match /publicProfiles/{userId} {
-      allow get;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read;
+      allow update: if request.auth != null && request.auth.uid == userId;
     }
 
-    match /accounts/{accountId} {
-      allow get: if isOwner(resource.data);
-      allow list: if request.auth != null && request.query.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isOwner(resource.data);
+    // =======================
+    // Logs Collection (Admin Write Only)
+    // =======================
+    match /Logs/{logType}/{logId} {
+      allow read, write: if false; // No client access
+    }
+    match /Logs/{logType}/entries/{entryId} {
+       allow read, write: if false; // No client access
     }
 
-    match /characters/{characterId} {
-      allow get: if isOwner(resource.data);
-      allow list: if request.auth != null && request.query.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isOwner(resource.data);
-      
-      match /questCompletions/{completionId} {
-          allow read, write: if get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
-      }
+
+    // =======================
+    // Reusable Helper Functions
+    // =======================
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    match /userConfiguration/{userId}/ownedPacksInfo/{accountId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isOwner(docData) {
+      return isAuthenticated() && docData.userId == request.auth.uid;
     }
 
-    match /suggestions/{suggestionId} {
-      allow get: if resource.data.suggesterId == request.auth.uid || isAdmin();
-      allow list: if request.query.suggesterId == request.auth.uid || isAdmin();
-      allow create: if request.resource.data.suggesterId == request.auth.uid;
-      allow update: if resource.data.suggesterId == request.auth.uid || isAdmin();
+    function isCreatingOwnData(docData) {
+      return isAuthenticated() && docData.userId == request.auth.uid;
+    }
+
+    function isQueryingOwnData() {
+      // This rule is tricky and a common source of errors.
+      // It ensures that any 'list' (collection query) operation MUST include a `where('userId', '==', request.auth.uid)` clause.
+      // This prevents users from listing all documents in a collection.
+      return isAuthenticated() && 'userId' in request.query.resource.data;
     }
   }
 }

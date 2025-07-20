@@ -162,22 +162,34 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     
     const loadInitialData = async () => {
+      console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
       try {
-        console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
+        let loadedAccounts: Account[] = [];
+        
+        // Step 1: Fetch accounts sequentially first.
+        const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
+        const accSnapshot = await getDocs(accQuery);
+        loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
 
-        // Fetch both accounts and characters concurrently
-        const [accSnapshot, charSnapshot] = await Promise.all([
-          getDocs(query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid))),
-          getDocs(query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid)))
-        ]);
-        
-        const loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        // Step 2: Handle new user case: no accounts exist.
+        if (loadedAccounts.length === 0) {
+          console.log('[AppDataProvider] LOG: No accounts found. Creating default account for new user.');
+          const newId = doc(collection(db, ACCOUNTS_COLLECTION)).id;
+          const defaultAccount: Account = { id: newId, userId: currentUser.uid, name: 'Default' };
+          await setDoc(doc(db, ACCOUNTS_COLLECTION, newId), defaultAccount);
+          loadedAccounts.push(defaultAccount);
+        }
         setAccounts(loadedAccounts);
-        
+
+        // Determine active account
         const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
         if (!activeAccountId && defaultAccount) {
             setActiveAccountId(defaultAccount.id);
         }
+
+        // Step 3: Fetch characters
+        const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
+        const charSnapshot = await getDocs(charQuery);
         
         const finalCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
@@ -193,7 +205,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         });
 
         setCharacters(finalCharacters);
-        
         initialDataLoadedForUserRef.current = currentUser.uid;
         console.log('[AppDataProvider] LOG: Initial data load complete.');
 
