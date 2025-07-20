@@ -1,4 +1,3 @@
-
 // src/context/app-data-context.tsx
 "use client";
 
@@ -163,17 +162,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     
     const loadInitialData = async () => {
       try {
-        console.log('[AppDataProvider] Loading initial data for user:', currentUser.uid);
+        console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
 
         // Fetch accounts first
+        console.log('[AppDataProvider] LOG: Querying accounts collection...');
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
         const accSnapshot = await getDocs(accQuery);
+        console.log(`[AppDataProvider] LOG: Accounts query successful. Found ${accSnapshot.docs.length} accounts.`);
         let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         let currentActiveAccountId = activeAccountId;
 
         // Ensure default account exists
         if (loadedAccounts.length === 0) {
-          console.log('[AppDataProvider] No accounts found, creating default account.');
+          console.log('[AppDataProvider] LOG: No accounts found, creating default account.');
           const defaultAccountData = { userId: currentUser.uid, name: "Default" };
           const defaultAccountRef = doc(collection(db, ACCOUNTS_COLLECTION));
           await setDoc(defaultAccountRef, defaultAccountData);
@@ -188,12 +189,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         if (!currentActiveAccountId || !loadedAccounts.some(acc => acc.id === currentActiveAccountId)) {
             const defaultAcc = loadedAccounts.find(acc => acc.name === 'Default');
             currentActiveAccountId = defaultAcc?.id || loadedAccounts[0]?.id || null;
+            console.log('[AppDataProvider] LOG: Setting active account ID to:', currentActiveAccountId);
         }
         setActiveAccountId(currentActiveAccountId);
 
         // Fetch characters now that we have accounts
+        console.log('[AppDataProvider] LOG: Querying characters collection...');
         const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
         const charSnapshot = await getDocs(charQuery);
+        console.log(`[AppDataProvider] LOG: Characters query successful. Found ${charSnapshot.docs.length} characters.`);
+
         const loadedChars = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
           return {
@@ -209,8 +214,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setCharacters(loadedChars);
         
         initialDataLoadedForUserRef.current = currentUser.uid;
+        console.log('[AppDataProvider] LOG: Initial data load complete.');
       } catch (error) {
-        console.error("[AppDataProvider] Failed to load initial user-specific data:", error);
+        console.error("[AppDataProvider] LOG: Failed to load initial user-specific data:", error);
         toast({ title: "Data Load Error", description: (error as Error).message, variant: 'destructive' });
       } finally {
         setIsDataLoaded(true);
