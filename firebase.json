@@ -1,3 +1,4 @@
+
 {
   "hosting": {
     "source": "hosting",
@@ -9,5 +10,8 @@
     "frameworksBackend": {
       "region": "us-west1"
     }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }

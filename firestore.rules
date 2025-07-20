@@ -4,211 +4,67 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ============================
-    // Helper Functions
-    // ============================
-    function getActingUserDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    // Helper function to check if a user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    function isSelf(userId) {
-      return request.auth != null && request.auth.uid == userId;
+    // Helper function to check if the user is the owner of the document
+    function isOwner(userId) {
+      return request.auth.uid == userId;
     }
 
-    function isAdmin() {
-      return request.auth != null && getActingUserDoc().data.isAdmin == true;
-    }
-
-    function isOwner() {
-      return request.auth != null && getActingUserDoc().data.isOwner == true;
-    }
-
-    function isCreator() {
-      return request.auth != null && getActingUserDoc().data.isCreator == true;
-    }
-
-    function onlyAllowedKeysModified(allowedKeys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
-    }
-
-    function sensitiveFieldsUnchanged(sensitiveFields) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasAny(sensitiveFields) == false;
-    }
-
-    function fieldsAreUnchanged(fieldKeys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasAny(fieldKeys) == false;
-    }
-
-    // ============================
-    // Users Collection
-    // ============================
-    match /users/{document=**} {
-      allow list: if false; // 🔒 prevent listing full user docs
-    }
-
+    // USERS collection
+    // - Allow users to read their own document
+    // - Allow users to update their own document (e.g., displayName, iconUrl)
+    // - Creation is handled by backend functions/auth context
     match /users/{userId} {
-      allow read: if isSelf(userId) || isCreator();
-
-      allow create: if request.auth != null &&
-                     request.auth.uid == userId &&
-                     request.resource.data.id == request.auth.uid &&
-                     request.resource.data.email == request.auth.token.email &&
-                     request.resource.data.keys().hasAll(['id', 'email', 'displayName', 'isAdmin', 'isOwner', 'isCreator', 'createdAt', 'emailVerified', 'iconUrl']) &&
-                     request.resource.data.isAdmin == false &&
-                     request.resource.data.isOwner == false &&
-                     request.resource.data.isCreator == false &&
-                     request.resource.data.createdAt == request.time;
-
-      // ✅ Self-update for displayName AND iconUrl
-      allow update: if isSelf(userId) &&
-                    request.resource.data.keys().hasAll(['displayName', 'iconUrl', 'preferences', 'level', 'name', 'id', 'userId', 'email', 'isAdmin', 'isOwner', 'isCreator', 'createdAt', 'emailVerified' ]) &&
-                    sensitiveFieldsUnchanged([
-                      'id', 'email', 'isAdmin', 'isOwner', 'isCreator', 'emailVerified', 'createdAt'
-                    ]);
-
-      // Role updates
-      allow update: if request.auth != null && request.auth.uid != userId &&
-        (
-          (isCreator() && resource.data.isCreator == false &&
-            (
-              onlyAllowedKeysModified(['isAdmin', 'isOwner']) ||
-              (request.resource.data.isOwner == true && request.resource.data.isAdmin == true && onlyAllowedKeysModified(['isAdmin', 'isOwner']))
-            ) &&
-            sensitiveFieldsUnchanged(['isCreator', 'emailVerified', 'id', 'createdAt', 'email', 'displayName', 'iconUrl', 'preferences'])
-          ) ||
-          (isOwner() && resource.data.isCreator == false &&
-            (
-              (resource.data.isAdmin == true && resource.data.isOwner == false &&
-                request.resource.data.isOwner == true && request.resource.data.isAdmin == true &&
-                onlyAllowedKeysModified(['isOwner', 'isAdmin'])) ||
-              (resource.data.isAdmin == false && resource.data.isOwner == false &&
-                request.resource.data.isAdmin == true && request.resource.data.isOwner == false &&
-                onlyAllowedKeysModified(['isAdmin']))
-            ) &&
-            sensitiveFieldsUnchanged(['isCreator', 'emailVerified', 'id', 'createdAt', 'email', 'displayName', 'iconUrl', 'preferences'])
-          ) ||
-          (isAdmin() && resource.data.isCreator == false && resource.data.isOwner == false && resource.data.isAdmin == false &&
-            request.resource.data.isAdmin == true && request.resource.data.isOwner == false &&
-            onlyAllowedKeysModified(['isAdmin']) &&
-            sensitiveFieldsUnchanged(['isCreator', 'emailVerified', 'id', 'createdAt', 'email', 'displayName', 'iconUrl', 'preferences'])
-          )
-        );
-
-      // Creator updates emailVerified
-      allow update: if isCreator() &&
-                    onlyAllowedKeysModified(['emailVerified']) &&
-                    sensitiveFieldsUnchanged(['isAdmin', 'isOwner', 'isCreator', 'id', 'createdAt', 'email', 'displayName', 'iconUrl', 'preferences']);
-
-      allow delete: if false;
+      allow read, update: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated(); // Allow creation for new sign-ups
     }
 
-    // ============================
-    // Public Profiles Collection
-    // ============================
-    match /publicProfiles/{userId} {
-      allow read: if request.auth != null;
-      allow update: if isSelf(userId) &&
-                    onlyAllowedKeysModified(['displayName', 'iconUrl', 'updatedAt']) &&
-                    sensitiveFieldsUnchanged(['userId']);
-      allow create: if isSelf(userId);
-      allow delete: if false;
+    // ACCOUNTS collection
+    // - Users can create, read, update, and delete their own accounts
+    match /accounts/{accountId} {
+      allow read, create, update, delete: if isAuthenticated() && isOwner(request.resource.data.userId);
     }
 
-    // ============================
-    // Characters + Quest Completions
-    // ============================
+    // CHARACTERS collection
+    // - Users can create, read, update, and delete their own characters
     match /characters/{characterId} {
-      allow read, update, delete: if request.auth != null &&
-                                   resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null &&
-                    request.resource.data.userId == request.auth.uid;
+      allow read, create, update, delete: if isAuthenticated() && isOwner(request.resource.data.userId);
 
-      // ✅ NEW: Character-specific Quest Completion Tracking
-      match /questCompletions/{questCompletionId} {
-        allow read, create, update, delete: if request.auth != null &&
-          get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
+      // Quest completions are subcollections of characters
+      match /questCompletions/{questId} {
+        allow read, create, update, delete: if isAuthenticated() && get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
       }
     }
-
-    // ============================
-    // User Configuration / Owned Packs
-    // ============================
-    match /userConfiguration/{userId}/ownedPacksInfo/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    
+    // PUBLIC PROFILES collection
+    // - Allow any authenticated user to read public profiles
+    // - Allow users to create/update their own public profile
+    match /publicProfiles/{userId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && isOwner(userId);
     }
-
-    // ============================
-    // Suggestions
-    // ============================
+    
+    // SUGGESTIONS collection
+    // - Allow authenticated users to create suggestions
+    // - Allow a user to read their own suggestions
+    // - Allow an admin to read any suggestion
     match /suggestions/{suggestionId} {
-      allow read: if isAdmin() || (request.auth != null && resource.data.suggesterId == request.auth.uid);
-
-      allow create: if request.auth != null &&
-                     request.resource.data.suggesterId == request.auth.uid &&
-                     request.resource.data.status == 'open' &&
-                     request.resource.data.conversation.size() == 1 &&
-                     request.resource.data.conversation[0].senderId == request.auth.uid &&
-                     request.resource.data.title is string && request.resource.data.title.size() >= 5 && request.resource.data.title.size() <= 100 &&
-                     request.resource.data.conversation[0].text is string && request.resource.data.conversation[0].text.size() >= 10 && request.resource.data.conversation[0].text.size() <= 5000;
-
-      allow update: if request.auth != null &&
-        (
-          // Admin can change status OR add a reply
-          (
-            isAdmin() &&
-            (
-              // Allow changing only status
-              (onlyAllowedKeysModified(['status']) && request.resource.data.status in ['open', 'closed']) ||
-              // Allow adding a new message to conversation
-              (
-                request.resource.data.conversation.size() == resource.data.conversation.size() + 1 &&
-                fieldsAreUnchanged(['title', 'suggesterId', 'suggesterName', 'createdAt', 'status'])
-              )
-            )
-          ) ||
-          // User can add a reply, but only if they are the suggester and the suggestion is open
-          (
-            isSelf(resource.data.suggesterId) &&
-            resource.data.status == 'open' &&
-            request.resource.data.conversation.size() == resource.data.conversation.size() + 1 &&
-            fieldsAreUnchanged(['title', 'suggesterId', 'suggesterName', 'createdAt', 'status'])
-          )
-        );
-        
-      allow delete: if isCreator(); // Only creator can delete suggestions
+      allow create: if isAuthenticated();
+      allow read, update: if isAuthenticated() && (resource.data.suggesterId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
     }
 
-    // ============================
-    // Global Quests
-    // ============================
-    match /quests/{questId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+    // USER CONFIGURATION (for owned packs)
+    match /userConfiguration/{userId}/{document=**} {
+      allow read, create, update, delete: if isAuthenticated() && isOwner(userId);
     }
 
-    // ============================
-    // Quest/Data Metadata
-    // ============================
-    match /metadata/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // ============================
-    // Role Change Logs
-    // ============================
-    match /Logs/roleChanges/entries/{logId} {
-      allow create: if request.auth != null && (isAdmin() || isOwner() || isCreator());
-      allow read: if isCreator();
-      allow update: if request.auth != null &&
-                    (request.auth.uid == resource.data.changerId || isCreator()) &&
-                    onlyAllowedKeysModified(['status', 'newRoleApplied', 'timestampFinalized', 'errorDetails']) &&
-                    fieldsAreUnchanged([
-                      'changerId', 'changerDisplayName', 'changerTier',
-                      'targetUserId', 'targetUserDisplayName', 'targetUserOriginalRole',
-                      'requestedChange', 'timestampRequested'
-                    ]);
-      allow delete: if false;
+    // LOGS (admin-only write)
+    match /Logs/{logCollection}/{document=**} {
+        allow read, write: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
   }
 }
