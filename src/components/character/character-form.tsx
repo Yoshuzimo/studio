@@ -1,4 +1,3 @@
-
 // src/components/character/character-form.tsx
 "use client";
 
@@ -89,7 +88,6 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   }, [initialData, form, isOpen]);
 
   const openCloudinaryWidget = async () => {
-    console.log("[Cloudinary Widget] openCloudinaryWidget called.");
     if (!isCloudinaryScriptLoaded || !currentUser) {
       toast({ title: "Widget not ready", description: "The image upload widget is not loaded yet or you are not logged in.", variant: "destructive" });
       return;
@@ -97,15 +95,18 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 
-    if (!cloudName || !uploadPreset) {
+    if (!cloudName || !uploadPreset || !apiKey) {
       toast({ title: "Client Configuration Error", description: "Cloudinary settings are missing.", variant: "destructive" });
+      console.error("[Cloudinary Widget] Missing one of: cloudName, uploadPreset, apiKey", { cloudName, uploadPreset, apiKey });
       return;
     }
 
     const widget = window.cloudinary.createUploadWidget({
       cloudName: cloudName,
       uploadPreset: uploadPreset,
+      apiKey: apiKey, // Pass the public API key here
       folder: "ddo_toolkit/characters",
       cropping: true,
       multiple: false,
