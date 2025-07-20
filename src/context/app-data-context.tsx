@@ -166,12 +166,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
 
         // Step 1: Fetch accounts
+        console.log('[AppDataProvider] LOG: Querying accounts collection...');
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
         const accSnapshot = await getDocs(accQuery);
         let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
 
         // Step 2: Ensure default account exists if none are found
         if (loadedAccounts.length === 0) {
+          console.log('[AppDataProvider] LOG: No accounts found. Creating default account.');
           const defaultAccountData = { userId: currentUser.uid, name: "Default" };
           const defaultAccountRef = doc(collection(db, ACCOUNTS_COLLECTION));
           await setDoc(defaultAccountRef, defaultAccountData);
@@ -188,6 +190,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         }
 
         // Step 4: Fetch characters and perform migration if necessary
+        console.log('[AppDataProvider] LOG: Querying characters collection...');
         const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
         const charSnapshot = await getDocs(charQuery);
         
@@ -560,3 +563,5 @@ export function useAppData() {
   }
   return context;
 }
+
+    
