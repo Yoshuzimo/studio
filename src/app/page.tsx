@@ -1,3 +1,4 @@
+
 // src/app/page.tsx
 "use client";
 
@@ -44,14 +45,15 @@ export default function CharactersPage() {
   }, [authIsLoading, currentUser, router]);
 
   useEffect(() => {
-    // If accounts are loaded but no active account is set, select the default or first one.
-    if (isDataLoaded && accounts.length > 0 && !activeAccountId) {
+    if (isDataLoaded && accounts.length === 0 && !appDataIsLoading) {
+        router.push('/accounts?action=create');
+    } else if (isDataLoaded && accounts.length > 0 && !activeAccountId) {
       const defaultAccount = accounts.find(acc => acc.name === 'Default') || accounts[0];
       if (defaultAccount) {
         setActiveAccountId(defaultAccount.id);
       }
     }
-  }, [isDataLoaded, accounts, activeAccountId, setActiveAccountId]);
+  }, [isDataLoaded, accounts, activeAccountId, setActiveAccountId, router, appDataIsLoading]);
 
   useEffect(() => {
     if (currentUser && userData && userData.displayName === currentUser.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX) {

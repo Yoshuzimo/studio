@@ -1,3 +1,4 @@
+
 // src/app/accounts/page.tsx
 "use client";
 
@@ -10,12 +11,13 @@ import { PlusCircle, Loader2, Library } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Account } from '@/types';
 import { useAuth } from '@/context/auth-context';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function AccountsPage() {
   const { currentUser, isLoading: authIsLoading } = useAuth(); 
   const { accounts, addAccount, updateAccount, deleteAccount, isDataLoaded, isLoading: appDataIsLoading } = useAppData();
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -32,9 +34,19 @@ export default function AccountsPage() {
     }
   }, [authIsLoading, currentUser, router]);
 
+  useEffect(() => {
+    if (searchParams.get('action') === 'create' && isDataLoaded && accounts.length === 0) {
+      setIsCreateModalOpen(true);
+    }
+  }, [searchParams, isDataLoaded, accounts.length]);
+
+
   const handleAddAccountSubmit = async (data: AccountFormData) => {
-    await addAccount(data); 
+    const newAccount = await addAccount(data); 
     setIsCreateModalOpen(false);
+    if(newAccount) {
+        router.push('/'); // Redirect to home page after creating the first account
+    }
   };
 
   const handleEditAccountSubmit = async (data: AccountFormData) => {

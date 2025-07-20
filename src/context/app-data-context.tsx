@@ -162,53 +162,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     
     const loadInitialData = async () => {
-      let loadedAccounts: Account[] = [];
       try {
         console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
 
-        // Step 1: Fetch accounts
-        try {
-          console.log('[AppDataProvider] LOG: Querying accounts collection...');
-          const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
-          const accSnapshot = await getDocs(accQuery);
-          loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
-        } catch (error) {
-           const firebaseError = error as { code?: string };
-           if (firebaseError.code === 'permission-denied' || firebaseError.code === 'failed-precondition') {
-             console.warn('[AppDataProvider] LOG: Permission denied on account query, assuming new user. Creating default account.');
-           } else {
-             throw error;
-           }
-        }
-
-        // Step 2: Ensure default account exists if none are found.
-        if (loadedAccounts.length === 0) {
-          console.log('[AppDataProvider] LOG: No accounts found. Explicitly creating default account.');
-          const defaultAccountData = { userId: currentUser.uid, name: "Default" };
-          const defaultAccountRef = doc(collection(db, ACCOUNTS_COLLECTION));
-          await setDoc(defaultAccountRef, defaultAccountData);
-          const newDefaultAccount = { id: defaultAccountRef.id, ...defaultAccountData };
-          loadedAccounts.push(newDefaultAccount); // Add the new account to our loaded list
-          toast({ title: "Account Initialized", description: `Your "Default" account has been created.` });
-        }
+        // Fetch both accounts and characters concurrently
+        const [accSnapshot, charSnapshot] = await Promise.all([
+          getDocs(query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid))),
+          getDocs(query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid)))
+        ]);
         
+        const loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         setAccounts(loadedAccounts);
-        const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
-
-        // Step 3: Set active account ID
-        if (!activeAccountId || !loadedAccounts.some(acc => acc.id === activeAccountId)) {
-            setActiveAccountId(defaultAccount?.id || null);
-        }
-
-        // Step 4: Fetch characters and perform migration if necessary
-        console.log('[AppDataProvider] LOG: Querying characters collection...');
-        const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
-        const charSnapshot = await getDocs(charQuery);
         
-        const charsToMigrate: Character[] = [];
+        const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
+        if (!activeAccountId && defaultAccount) {
+            setActiveAccountId(defaultAccount.id);
+        }
+        
         const finalCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
-          const character: Character = {
+          return {
             id: docSnap.id,
             userId: data.userId,
             accountId: data.accountId, // This might be undefined
@@ -216,33 +189,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             level: data.level,
             iconUrl: data.iconUrl || null,
             preferences: data.preferences || {},
-          };
-          if (!character.accountId && defaultAccount) {
-            character.accountId = defaultAccount.id;
-            charsToMigrate.push(character);
-          }
-          return character;
+          } as Character;
         });
-        
-        setCharacters(finalCharacters);
 
-        // Step 5: If there are characters to migrate, update them in Firestore
-        if (charsToMigrate.length > 0 && defaultAccount) {
-            console.log(`[AppDataProvider] LOG: Starting migration for ${charsToMigrate.length} character(s).`);
-            const batch = writeBatch(db);
-            charsToMigrate.forEach(char => {
-                const charRef = doc(db, CHARACTERS_COLLECTION, char.id);
-                batch.update(charRef, { accountId: defaultAccount.id });
-            });
-            await batch.commit();
-            toast({ title: "Data Updated", description: `${charsToMigrate.length} character(s) were assigned to your 'Default' account.` });
-        }
+        setCharacters(finalCharacters);
         
         initialDataLoadedForUserRef.current = currentUser.uid;
         console.log('[AppDataProvider] LOG: Initial data load complete.');
+
       } catch (error) {
         console.error("[AppDataProvider] LOG: Failed to load initial user-specific data:", error);
-        toast({ title: "Data Load Error", description: (error as Error).message, variant: 'destructive' });
+        toast({ title: "Data Load Error", description: "Could not load your accounts and characters. Please try refreshing.", variant: 'destructive' });
       } finally {
         setIsDataLoaded(true);
         setIsLoading(false);
