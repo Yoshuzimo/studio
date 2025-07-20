@@ -1,4 +1,3 @@
-
 // Favor-Tracker-V2
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -218,6 +217,20 @@ export default function FavorTrackerPage() {
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
 
+    // Enhanced Logging
+  useEffect(() => {
+    console.log('[FavorTrackerPage] Data State Update:', {
+      characterId,
+      isDataLoaded,
+      appDataIsLoading,
+      authIsLoading,
+      'currentUser exists': !!currentUser,
+      'characters exists': !!characters,
+      'characters length': characters?.length,
+    });
+  }, [characterId, isDataLoaded, appDataIsLoading, authIsLoading, currentUser, characters]);
+
+
   const savePreferences = useCallback((newPrefs: Partial<FavorTrackerPreferences>, isShared: boolean = false) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
     try {
@@ -298,7 +311,7 @@ export default function FavorTrackerPage() {
   const handleResetColumnSettingsToDefault = () => { setPopoverColumnVisibility(getDefaultColumnVisibility()); };
   const handleSettingsPopoverOpenChange = (open: boolean) => { if (open) setPopoverColumnVisibility(columnVisibility); setIsSettingsPopoverOpen(open); };
 
-  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string) => {
+  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string | null) => {
     if (!id || !editingCharacter || !character) return;
   
     // Optimistic UI update
@@ -331,6 +344,12 @@ export default function FavorTrackerPage() {
     }
 
     const foundChar = characters.find(c => c.id === characterId && c.userId === currentUser.uid);
+
+    console.log('[FavorTrackerPage] Character Finding Logic:', {
+      'characters array': characters,
+      foundChar: foundChar,
+    });
+
 
     if (foundChar) {
       setCharacter(foundChar);
