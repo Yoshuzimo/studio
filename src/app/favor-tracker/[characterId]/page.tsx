@@ -95,6 +95,8 @@ interface CharacterFavorTrackerPreferences {
   onCormyr: boolean;
   showRaids: boolean;
   clickAction: 'none' | 'wiki' | 'map';
+  useLevelOffset?: boolean;
+  levelOffset?: number;
   sortConfig?: SortConfig | null;
 }
 
@@ -210,6 +212,9 @@ export default function FavorTrackerPage() {
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
+
+  const [useLevelOffset, setUseLevelOffset] = useState(false);
+  const [levelOffset, setLevelOffset] = useState(0);
   
   const initialSortPerformed = useRef(false);
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
@@ -261,6 +266,9 @@ export default function FavorTrackerPage() {
             setShowRaids(prefsToUse.showRaids ?? false);
             setClickAction(prefsToUse.clickAction ?? 'none');
             setSortConfig(prefsToUse.sortConfig ?? { key: 'name', direction: 'ascending' });
+            setUseLevelOffset(prefsToUse.useLevelOffset ?? false);
+            setLevelOffset(prefsToUse.levelOffset ?? 0);
+
 
             const defaultVis = getDefaultColumnVisibility();
             const mergedVisibility = { ...defaultVis, ...(prefsToUse.columnVisibility || {}) };
@@ -273,6 +281,8 @@ export default function FavorTrackerPage() {
             setShowRaids(false);
             setClickAction('none');
             setSortConfig({ key: 'name', direction: 'ascending' });
+            setUseLevelOffset(false);
+            setLevelOffset(0);
         }
       } catch (error) { 
           console.error("Error loading preferences:", error); 
@@ -595,6 +605,8 @@ export default function FavorTrackerPage() {
     }
   
     const newSortConfig = { key, direction: newDirection };
+    const effectiveCharacterLevel = character && useLevelOffset ? character.level + levelOffset : character?.level || 0;
+
 
     const areaAggregates = {
       favorMap: new Map<string, number>(),
@@ -602,7 +614,7 @@ export default function FavorTrackerPage() {
     };
     const visibleQuestData = Array.from(questDataMap.values()).filter(quest => {
         if (!character) return false;
-        const isEligibleLevel = quest.level > 0 && quest.level <= character.level;
+        const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
         const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
         const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
@@ -667,7 +679,7 @@ export default function FavorTrackerPage() {
       initialSortPerformed.current = true;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageOverallLoading, quests, character, sortConfig.key]);
+  }, [pageOverallLoading, quests, character, sortConfig.key, useLevelOffset, levelOffset]);
 
   const questsToRender = useMemo(() => {
     if (pageOverallLoading || sortedQuestIds.length === 0) return [];
@@ -681,6 +693,8 @@ export default function FavorTrackerPage() {
       });
   }, [sortedQuestIds, questDataMap, showCompletedQuestsWithZeroRemainingFavor, isDebugMode, pageOverallLoading]);
   
+  const effectiveCharacterLevel = character && useLevelOffset ? character.level + levelOffset : character?.level || 0;
+
   const pageStats = useMemo(() => {
     if (!character || questDataMap.size === 0) {
         return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
@@ -689,7 +703,7 @@ export default function FavorTrackerPage() {
     let questsCompleted = 0;
     
     questDataMap.forEach(quest => {
-        if (quest.level > 0 && quest.level <= character.level) {
+        if (quest.level > 0 && quest.level <= effectiveCharacterLevel) {
             const metrics = calculateFavorMetrics(quest, getQuestCompletion);
             favorEarned += metrics.earned;
             if (quest.baseFavor && quest.baseFavor > 0 && metrics.remaining <= 0 && (quest.casualCompleted || quest.normalCompleted || quest.hardCompleted || quest.eliteCompleted)) {
@@ -705,7 +719,7 @@ export default function FavorTrackerPage() {
         favorEarned: Math.round(favorEarned),
         favorRemaining: Math.round(favorRemaining)
     };
-  }, [character, questDataMap, questsToRender, calculateFavorMetrics, getQuestCompletion]);
+  }, [character, questDataMap, questsToRender, calculateFavorMetrics, getQuestCompletion, effectiveCharacterLevel]);
 
   const getSortIndicator = (columnKey: SortableColumnKey) => {
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
@@ -750,7 +764,7 @@ export default function FavorTrackerPage() {
                     <Pencil className="mr-2 h-4 w-4" /> Edit Character
                 </Button>
             </div>
-            <CardDescription>Level {character.level}</CardDescription>
+            <CardDescription>Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}</CardDescription>
           </CardHeader>
            <CardContent className="pt-2">
             <div className="pt-4 border-t">
@@ -805,28 +819,59 @@ export default function FavorTrackerPage() {
                     </Button>
                 </div>
               </div>
-               <div className="pt-2 border-t border-border mt-4">
-                <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
-                <RadioGroup
-                  value={clickAction}
-                  onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}}
-                  className="flex items-center space-x-4"
-                  disabled={pageOverallLoading}
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="none" id="action-none" />
-                    <Label htmlFor="action-none" className="font-normal cursor-pointer">None</Label>
+               <div className="pt-2 border-t border-border mt-4 flex justify-between items-center">
+                 <div>
+                    <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
+                    <RadioGroup
+                      value={clickAction}
+                      onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}}
+                      className="flex items-center space-x-4"
+                      disabled={pageOverallLoading}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="none" id="action-none" />
+                        <Label htmlFor="action-none" className="font-normal cursor-pointer">None</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="wiki" id="action-wiki" />
+                        <Label htmlFor="action-wiki" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="map" id="action-map" />
+                        <Label htmlFor="action-map" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label>
+                      </div>
+                    </RadioGroup>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="wiki" id="action-wiki" />
-                    <Label htmlFor="action-wiki" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="map" id="action-map" />
-                    <Label htmlFor="action-map" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label>
-                  </div>
-                </RadioGroup>
-              </div>
+                        <Checkbox 
+                            id="use-level-offset" 
+                            checked={useLevelOffset} 
+                            onCheckedChange={(checked) => {
+                                const isChecked = !!checked;
+                                setUseLevelOffset(isChecked);
+                                savePreferences({ useLevelOffset: isChecked });
+                            }} 
+                            disabled={pageOverallLoading}
+                        />
+                        <Label htmlFor="use-level-offset" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>
+                            Use LVL Offset:
+                        </Label>
+                        <Input
+                            type="number"
+                            id="level-offset"
+                            value={levelOffset}
+                            onChange={(e) => {
+                                const newOffset = parseInt(e.target.value, 10);
+                                if (!isNaN(newOffset)) {
+                                    setLevelOffset(newOffset);
+                                    savePreferences({ levelOffset: newOffset });
+                                }
+                            }}
+                            className="h-8 w-20"
+                            disabled={!useLevelOffset || pageOverallLoading}
+                        />
+                    </div>
+                </div>
             </div>
           </CardContent>
         </Card>
@@ -896,11 +941,11 @@ export default function FavorTrackerPage() {
         </CardHeader>
         <CardContent className="p-0 flex-1 min-h-0">
            {pageOverallLoading && questsToRender.length === 0 ? ( <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
-           : !pageOverallLoading && questsToRender.length === 0 && character ? ( <div className="p-6 text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {character.level}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
+           : !pageOverallLoading && questsToRender.length === 0 && character ? ( <div className="p-6 text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {effectiveCharacterLevel}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
            : ( 
             <div className="h-full overflow-y-auto">
                <Table>
-                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character?.name} at level {character?.level}.</TableCaption>
+                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest list for {character?.name} at level {effectiveCharacterLevel}.</TableCaption>
                 <TableHeader className="sticky top-0 z-10"> 
                     <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => {

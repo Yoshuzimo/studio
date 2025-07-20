@@ -1,5 +1,5 @@
 
-// Cache-busting comment to force rebuild of dependents: V5
+// Cache-busting comment to force rebuild of dependents: V6
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 
 export interface User {
@@ -40,6 +40,8 @@ interface FavorTrackerPreferences {
   onCormyr?: boolean;
   showRaids?: boolean;
   clickAction?: 'none' | 'wiki' | 'map';
+  useLevelOffset?: boolean;
+  levelOffset?: number;
   sortConfig?: PageSortConfig | null;
 }
 
