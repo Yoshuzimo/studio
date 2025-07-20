@@ -1,5 +1,9 @@
 // Cache-busting comment to force rebuild of dependents: V9
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
+import type { z } from 'zod';
+import type { characterFormSchema } from '@/components/character/character-form';
+
+export type CharacterFormData = z.infer<typeof characterFormSchema>;
 
 export interface User extends Omit<Character, 'id' | 'createdAt' > {
   id: string;

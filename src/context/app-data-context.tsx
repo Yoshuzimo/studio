@@ -4,7 +4,7 @@
 
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import type { Character, Account, AdventurePack, Quest, UserQuestCompletionData } from '@/types';
+import type { Character, Account, AdventurePack, Quest, UserQuestCompletionData, CharacterFormData } from '@/types';
 import { db, auth } from '@/lib/firebase';
 import {
   collection, getDocs, doc, writeBatch, setDoc, deleteDoc, query,
@@ -33,7 +33,7 @@ interface AppDataContextType {
   setActiveAccountId: (accountId: string | null) => void;
 
   allCharacters: Character[]; // All characters for the user
-  addCharacter: (characterData: Omit<Character, 'id' | 'userId' | 'preferences'>) => Promise<Character | undefined>;
+  addCharacter: (characterData: CharacterFormData) => Promise<Character | undefined>;
   updateCharacter: (character: Character) => Promise<void>;
   deleteCharacter: (characterId: string) => Promise<void>;
 
@@ -446,13 +446,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }
 
 
-  const addCharacter = async (characterData: Omit<Character, 'id' | 'userId' | 'preferences'>): Promise<Character | undefined> => {
+  const addCharacter = async (characterData: CharacterFormData): Promise<Character | undefined> => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return undefined; }
     console.log("[AppDataContext] addCharacter received data:", characterData);
     setIsUpdating(true);
     try {
       const newId = doc(collection(db, CHARACTERS_COLLECTION)).id;
-      const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, preferences: {} };
+      const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, iconUrl: characterData.iconUrl || null, preferences: {} };
       console.log("[AppDataContext] addCharacter FINAL PAYLOAD for Firestore:", newCharacter);
       await setDoc(doc(db, CHARACTERS_COLLECTION, newId), newCharacter);
       setAllCharacters(prev => [...prev, newCharacter]);
@@ -482,10 +482,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setIsUpdating(true);
       try {
         const charRef = doc(db, CHARACTERS_COLLECTION, character.id);
-        const updatePayload = {
+        const updatePayload: Partial<Character> = {
           name: character.name,
           level: character.level,
-          iconUrl: character.iconUrl === undefined ? null : character.iconUrl,
+          iconUrl: character.iconUrl,
           preferences: character.preferences || {},
           accountId: character.accountId,
         };

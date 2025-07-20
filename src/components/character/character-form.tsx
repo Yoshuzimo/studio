@@ -48,6 +48,7 @@ const characterFormSchema = z.object({
   }),
   level: z.coerce.number().min(1, { message: "Level must be at least 1." }).max(34, { message: "Level cannot exceed 34."}),
   accountId: z.string().min(1, { message: "An account must be selected." }),
+  iconUrl: z.string().url().nullable().optional(),
 });
 
 export type CharacterFormData = z.infer<typeof characterFormSchema>;
@@ -55,7 +56,7 @@ export type CharacterFormData = z.infer<typeof characterFormSchema>;
 interface CharacterFormProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onSubmit: (data: CharacterFormData, id?: string, iconUrl?: string | null) => Promise<void>;
+  onSubmit: (data: CharacterFormData, id?: string) => Promise<void>;
   initialData?: Character;
   isSubmitting?: boolean;
 }
@@ -73,11 +74,16 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   
   const form = useForm<CharacterFormData>({
     resolver: zodResolver(characterFormSchema),
-    defaultValues: initialData ? { name: initialData.name, level: initialData.level, accountId: initialData.accountId } : { name: "", level: 1, accountId: activeAccountId || undefined },
+    defaultValues: { 
+        name: "", 
+        level: 1, 
+        accountId: activeAccountId || undefined,
+        iconUrl: null
+    },
   });
   
   const [isCloudinaryScriptLoaded, setIsCloudinaryScriptLoaded] = useState(false);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const { toast } = useToast();
   
@@ -94,8 +100,21 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
   useEffect(() => {
     if (isOpen) {
-      form.reset(initialData ? { name: initialData.name, level: initialData.level, accountId: initialData.accountId } : { name: "", level: 1, accountId: activeAccountId || undefined });
-      setUploadedImageUrl(initialData?.iconUrl || null);
+      const defaultValues = initialData 
+        ? { 
+            name: initialData.name, 
+            level: initialData.level, 
+            accountId: initialData.accountId,
+            iconUrl: initialData.iconUrl 
+          } 
+        : { 
+            name: "", 
+            level: 1, 
+            accountId: activeAccountId || undefined,
+            iconUrl: null
+          };
+      form.reset(defaultValues);
+      setPreviewImageUrl(defaultValues.iconUrl);
     }
   }, [initialData, form, isOpen, activeAccountId]);
 
@@ -161,8 +180,10 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         }
 
         if (result && result.event === "success") {
-            console.log("[CharacterForm] Cloudinary success. Result info:", result.info);
-            setUploadedImageUrl(result.info.secure_url);
+            const secureUrl = result.info.secure_url;
+            console.log("[CharacterForm] Cloudinary success. URL:", secureUrl);
+            form.setValue('iconUrl', secureUrl, { shouldValidate: true });
+            setPreviewImageUrl(secureUrl);
             toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
         }
         });
@@ -174,8 +195,8 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   };
 
   const handleFormSubmit = form.handleSubmit(async (data) => {
-    console.log("[CharacterForm] handleSubmit triggered. Data:", data, "Uploaded Image URL:", uploadedImageUrl);
-    await onSubmit(data, initialData?.id, uploadedImageUrl);
+    console.log("[CharacterForm] Form submitted with data:", data);
+    await onSubmit(data, initialData?.id);
   });
   
   const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting;
@@ -203,7 +224,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={(e) => { e.preventDefault(); handleFormSubmit(); }} className="space-y-8 pt-4">
+            <form onSubmit={handleFormSubmit} className="space-y-8 pt-4">
               <FormField
                 control={form.control}
                 name="name"
@@ -236,7 +257,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Account</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={effectiveIsSubmitting}>
+                    <Select onValueChange={field.onChange} value={field.value || ''} disabled={effectiveIsSubmitting}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select an account" />
@@ -270,8 +291,8 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                      <ImagePlus className="mr-2 h-4 w-4" />
                     Upload & Edit Image
                   </Button>
-                  {uploadedImageUrl && (
-                      <img src={uploadedImageUrl} alt="Thumbnail preview" className="h-10 w-10 rounded-md object-cover border" />
+                  {previewImageUrl && (
+                      <img src={previewImageUrl} alt="Thumbnail preview" className="h-10 w-10 rounded-md object-cover border" />
                   )}
                 </div>
                  <FormDescription>

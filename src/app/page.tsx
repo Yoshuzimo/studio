@@ -95,16 +95,14 @@ export default function CharactersPage() {
     }
   }, [currentUser, userData]);
 
-  const handleAddCharacterSubmit = async (data: CharacterFormData, iconUrl?: string | null) => {
-    console.log("[CharactersPage] handleAddCharacterSubmit received:", { data, iconUrl });
-    const payload = { ...data, iconUrl: iconUrl === undefined ? null : iconUrl };
-    console.log("[CharactersPage] Calling addCharacter with payload:", payload);
-    await addCharacter(payload); 
+  const handleAddCharacterSubmit = async (data: CharacterFormData) => {
+    console.log("[CharactersPage] handleAddCharacterSubmit received data:", data);
+    await addCharacter(data); 
     setIsCreateModalOpen(false);
   };
 
-  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string | null) => {
-    console.log("[CharactersPage] handleEditCharacterSubmit received:", { data, id, iconUrl });
+  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string) => {
+    console.log("[CharactersPage] handleEditCharacterSubmit received data:", { data, id });
     if (!id || !editingCharacter) return;
     
     const updatedCharacterData: Character = {
@@ -112,7 +110,7 @@ export default function CharactersPage() {
         name: data.name,
         level: data.level,
         accountId: data.accountId,
-        iconUrl: iconUrl !== undefined ? iconUrl : editingCharacter.iconUrl,
+        iconUrl: data.iconUrl || editingCharacter.iconUrl,
     };
     
     console.log("[CharactersPage] Calling updateCharacter with payload:", updatedCharacterData);
@@ -247,7 +245,7 @@ export default function CharactersPage() {
         <CharacterForm
           isOpen={isEditModalOpen}
           onOpenChange={setIsEditModalOpen}
-          onSubmit={(data, _id, iconUrl) => handleEditCharacterSubmit(data, editingCharacter.id, iconUrl)}
+          onSubmit={(data) => handleEditCharacterSubmit(data, editingCharacter.id)}
           initialData={editingCharacter}
           isSubmitting={pageOverallLoading}
         />
