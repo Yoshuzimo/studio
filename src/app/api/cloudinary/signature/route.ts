@@ -1,3 +1,4 @@
+console.log("[Cloudinary Signature] ENV CLOUDINARY_API_KEY:", process.env.CLOUDINARY_API_KEY);
 
 // src/app/api/cloudinary/signature/route.ts
 import { NextResponse } from 'next/server';
