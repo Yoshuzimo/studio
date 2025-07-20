@@ -184,34 +184,54 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         }
         
         setAccounts(loadedAccounts);
+        const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
 
         // Set active account ID if not already set or invalid
         if (!currentActiveAccountId || !loadedAccounts.some(acc => acc.id === currentActiveAccountId)) {
-            const defaultAcc = loadedAccounts.find(acc => acc.name === 'Default');
-            currentActiveAccountId = defaultAcc?.id || loadedAccounts[0]?.id || null;
+            currentActiveAccountId = defaultAccount?.id || null;
             console.log('[AppDataProvider] LOG: Setting active account ID to:', currentActiveAccountId);
         }
         setActiveAccountId(currentActiveAccountId);
 
-        // Fetch characters now that we have accounts
+        // Fetch characters and perform migration if necessary
         console.log('[AppDataProvider] LOG: Querying characters collection...');
         const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
         const charSnapshot = await getDocs(charQuery);
         console.log(`[AppDataProvider] LOG: Characters query successful. Found ${charSnapshot.docs.length} characters.`);
 
-        const loadedChars = charSnapshot.docs.map(docSnap => {
+        const charsToMigrate: Character[] = [];
+        const finalCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
-          return {
+          const character: Character = {
             id: docSnap.id,
             userId: data.userId,
-            accountId: data.accountId,
+            accountId: data.accountId, // This might be undefined
             name: data.name,
             level: data.level,
             iconUrl: data.iconUrl || null,
             preferences: data.preferences || {},
-          } as Character;
+          };
+          if (!character.accountId && defaultAccount) {
+            console.log(`[AppDataProvider] LOG: Character ${character.name} (${character.id}) is missing accountId. Queuing for migration to Default account.`);
+            character.accountId = defaultAccount.id;
+            charsToMigrate.push(character);
+          }
+          return character;
         });
-        setCharacters(loadedChars);
+
+        // If there are characters to migrate, update them in Firestore
+        if (charsToMigrate.length > 0 && defaultAccount) {
+            console.log(`[AppDataProvider] LOG: Starting migration for ${charsToMigrate.length} character(s).`);
+            const batch = writeBatch(db);
+            charsToMigrate.forEach(char => {
+                const charRef = doc(db, CHARACTERS_COLLECTION, char.id);
+                batch.update(charRef, { accountId: defaultAccount.id });
+            });
+            await batch.commit();
+            toast({ title: "Data Updated", description: `${charsToMigrate.length} character(s) were assigned to your 'Default' account.` });
+        }
+        
+        setCharacters(finalCharacters);
         
         initialDataLoadedForUserRef.current = currentUser.uid;
         console.log('[AppDataProvider] LOG: Initial data load complete.');
