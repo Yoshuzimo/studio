@@ -1,42 +1,50 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ============================
+    // ========================================
     // Characters Collection
-    // ============================
+    // ========================================
     match /characters/{characterId} {
-      // Rule for single document operations (get, update, delete)
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-
-      // Rule for creating a new document
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Allow reading/updating/deleting a single document if the user owns it
+      allow get, update, delete: if isOwner();
       
-      // Rule for querying a list of documents
-      allow list: if request.auth != null && request.query.where.get('userId')[2] == request.auth.uid;
+      // Allow listing/querying documents only if the query filters by the user's own userId
+      allow list: if request.auth != null && request.query.resource.data.userId == request.auth.uid;
+      
+      // Allow creating a new document if the userId matches the user's own UID
+      allow create: if request.auth != null &&
+                    request.resource.data.userId == request.auth.uid;
     }
 
-    // ============================
+    // ========================================
     // Accounts Collection
-    // ============================
+    // ========================================
     match /accounts/{accountId} {
-      // Rule for single document operations (get, update, delete)
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow reading/updating/deleting a single document if the user owns it
+      allow get, update, delete: if isOwner();
+
+      // Allow listing/querying documents only if the query filters by the user's own userId
+      allow list: if request.auth != null && request.query.resource.data.userId == request.auth.uid;
       
-      // Rule for creating a new document
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      
-      // Rule for querying a list of documents
-      allow list: if request.auth != null && request.query.where.get('userId')[2] == request.auth.uid;
+      // Allow creating a new document if the userId matches the user's own UID
+      allow create: if request.auth != null &&
+                    request.resource.data.userId == request.auth.uid;
     }
 
-    // ============================
-    // Users Collection
-    // ============================
+    // ========================================
+    // Users Collection (Optional Profile Storage)
+    // ========================================
     match /users/{userId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
+      allow get, update, delete, create: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ========================================
+    // Helper Function
+    // ========================================
+    function isOwner() {
+      return request.auth != null &&
+             resource.data.userId == request.auth.uid;
     }
   }
 }
