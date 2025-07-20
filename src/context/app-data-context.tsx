@@ -1,3 +1,4 @@
+
 // src/context/app-data-context.tsx
 "use client";
 
@@ -164,10 +165,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       try {
         console.log('[AppDataProvider] Loading initial data for user:', currentUser.uid);
 
-        // Fetch accounts
+        // Fetch accounts first
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
         const accSnapshot = await getDocs(accQuery);
         let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+
+        let currentActiveAccountId = activeAccountId;
 
         // Ensure default account exists
         if (loadedAccounts.length === 0) {
@@ -177,16 +180,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           await setDoc(defaultAccountRef, defaultAccountData);
           const newDefaultAccount = { id: defaultAccountRef.id, ...defaultAccountData };
           loadedAccounts.push(newDefaultAccount);
-          setAccounts([newDefaultAccount]);
-          setActiveAccountId(newDefaultAccount.id);
-        } else {
-          setAccounts(loadedAccounts);
-          if (!activeAccountId || !loadedAccounts.some(acc => acc.id === activeAccountId)) {
-            setActiveAccountId(loadedAccounts.find(acc => acc.name === 'Default')?.id || loadedAccounts[0].id);
-          }
+          currentActiveAccountId = newDefaultAccount.id; // Set active ID to the new default
         }
+        
+        setAccounts(loadedAccounts);
 
-        // Fetch characters
+        // Set active account ID if not already set or invalid
+        if (!currentActiveAccountId || !loadedAccounts.some(acc => acc.id === currentActiveAccountId)) {
+            const defaultAcc = loadedAccounts.find(acc => acc.name === 'Default');
+            currentActiveAccountId = defaultAcc?.id || loadedAccounts[0]?.id || null;
+        }
+        setActiveAccountId(currentActiveAccountId);
+
+        // Fetch characters now that we have accounts
         const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
         const charSnapshot = await getDocs(charQuery);
         const loadedChars = charSnapshot.docs.map(docSnap => {
@@ -215,7 +221,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     
     loadInitialData();
 
-  }, [currentUser, toast, activeAccountId]);
+  }, [currentUser, toast]);
   
   const setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>> = useCallback((valueOrFn) => {
     setOwnedPacksInternal(prevOwnedPacks => {
@@ -325,9 +331,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setIsUpdating(true);
     try {
       await deleteDoc(doc(db, ACCOUNTS_COLLECTION, accountId));
-      setAccounts(prev => prev.filter(c => c.id !== accountId));
       
-      const defaultAccount = accounts.find(acc => acc.name === 'Default');
+      const remainingAccounts = accounts.filter(c => c.id !== accountId);
+      setAccounts(remainingAccounts);
+      
+      const defaultAccount = remainingAccounts.find(acc => acc.name === 'Default') || remainingAccounts[0];
       if (defaultAccount) {
           const charsToMove = characters.filter(c => c.accountId === accountId);
           if (charsToMove.length > 0) {
@@ -339,11 +347,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             await batch.commit();
             setCharacters(prev => prev.map(c => c.accountId === accountId ? {...c, accountId: defaultAccount.id} : c));
           }
+           if (activeAccountId === accountId) {
+            setActiveAccountId(defaultAccount.id);
+          }
+      } else {
+         // This case should ideally not happen if a default always exists.
+         if (activeAccountId === accountId) setActiveAccountId(null);
       }
       
-      if (activeAccountId === accountId) {
-        setActiveAccountId(accounts.find(acc => acc.name === 'Default')?.id || accounts[0]?.id || null);
-      }
       toast({ title: "Account Deleted", description: `The account "${accountToDelete.name}" was deleted. Its characters were moved to "Default".`, variant: "destructive" });
     } catch (error) { toast({ title: "Error Deleting Account", description: (error as Error).message, variant: 'destructive' }); }
     finally { setIsUpdating(false); }

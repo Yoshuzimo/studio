@@ -91,7 +91,7 @@ export default function CharactersPage() {
     setCharacterToDeleteId(null);
   };
 
-  const filteredCharacters = characters.filter(char => char.accountId === activeAccountId);
+  const filteredCharacters = activeAccountId ? characters.filter(char => char.accountId === activeAccountId) : [];
   
   if (authIsLoading || (!currentUser && !authIsLoading)) {
     return (
