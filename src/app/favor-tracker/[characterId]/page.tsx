@@ -188,7 +188,6 @@ export default function FavorTrackerPage() {
   const characterId = params.characterId as string;
   
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'ascending' });
-  const [sortedQuestIds, setSortedQuestIds] = useState<string[]>([]);
 
   const [showCompletedQuestsWithZeroRemainingFavor, setShowCompletedQuestsWithZeroRemainingFavor] = useState(false);
   const [onCormyr, setOnCormyr] = useState(false);
@@ -215,7 +214,6 @@ export default function FavorTrackerPage() {
   const [useLevelOffset, setUseLevelOffset] = useState(false);
   const [levelOffset, setLevelOffset] = useState(0);
   
-  const initialSortPerformed = useRef(false);
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
@@ -337,7 +335,6 @@ export default function FavorTrackerPage() {
     if (foundChar) {
       setCharacter(foundChar);
       if (characterId !== activeCharacterId) {
-        initialSortPerformed.current = false; 
         setIsLoadingCompletions(true);
         fetchQuestCompletionsForCharacter(characterId)
           .catch(err => console.error(`[FavorTrackerPage] Error fetching completions for ${characterId}:`, err))
@@ -586,6 +583,78 @@ export default function FavorTrackerPage() {
     return newMap;
   }, [quests, getQuestCompletion, calculateFavorMetrics, durationAdjustments]);
   
+  const effectiveCharacterLevel = character && useLevelOffset ? character.level + levelOffset : character?.level || 0;
+  
+  const { sortedQuestIds, areaAggregates } = useMemo(() => {
+    if (pageOverallLoading || !character) {
+      return { sortedQuestIds: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } };
+    }
+  
+    const currentAggregates = {
+      favorMap: new Map<string, number>(),
+      scoreMap: new Map<string, number>(),
+    };
+  
+    const visibleQuestData = Array.from(questDataMap.values()).filter(quest => {
+      const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
+      const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+      const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+      const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+      const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
+      const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
+      const isNotTest = !quest.name.toLowerCase().includes("test");
+      return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
+    });
+  
+    visibleQuestData.forEach(quest => {
+      const primaryLocation = getPrimaryLocation(quest.location);
+      if (primaryLocation) {
+        currentAggregates.favorMap.set(primaryLocation, (currentAggregates.favorMap.get(primaryLocation) || 0) + quest.remainingPossibleFavor);
+        currentAggregates.scoreMap.set(primaryLocation, (currentAggregates.scoreMap.get(primaryLocation) || 0) + quest.adjustedRemainingFavorScore);
+      }
+    });
+  
+    const getSortValue = (quest: QuestWithCalculatedData, config: SortConfig) => {
+      const { key } = config;
+      if (key === 'areaRemainingFavor') return currentAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0;
+      if (key === 'areaAdjustedRemainingFavorScore') return currentAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0;
+      if (key === 'name') return getSortableName(quest.name);
+      if (key === 'location') return quest.location || '';
+      return (quest as any)[key];
+    };
+  
+    const sortedIds = visibleQuestData
+      .sort((a, b) => {
+        const aValue = getSortValue(a, sortConfig);
+        const bValue = getSortValue(b, sortConfig);
+  
+        let aComparable: any = aValue === null || aValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
+        let bComparable: any = bValue === null || bValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
+  
+        let comparison = 0;
+        if (typeof aComparable === 'string' && typeof bComparable === 'string') {
+          comparison = aComparable.localeCompare(bComparable);
+        } else {
+          if (aComparable < bComparable) comparison = -1;
+          if (aComparable > bComparable) comparison = 1;
+        }
+  
+        if (comparison !== 0) return sortConfig.direction === 'ascending' ? comparison : -comparison;
+  
+        if (sortConfig.key === 'areaRemainingFavor' || sortConfig.key === 'areaAdjustedRemainingFavorScore') {
+          const aLocation = a.location || '';
+          const bLocation = b.location || '';
+          const locationComparison = aLocation.localeCompare(bLocation);
+          if (locationComparison !== 0) return locationComparison;
+        }
+        return getSortableName(a.name).localeCompare(getSortableName(b.name));
+      })
+      .map(q => q.id);
+  
+    return { sortedQuestIds: sortedIds, areaAggregates: currentAggregates };
+  }, [pageOverallLoading, character, questDataMap, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids, sortConfig]);
+  
+  
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
     
@@ -599,82 +668,10 @@ export default function FavorTrackerPage() {
     }
   
     const newSortConfig = { key, direction: newDirection };
-    const effectiveCharacterLevel = character && useLevelOffset ? character.level + levelOffset : character?.level || 0;
-
-
-    const areaAggregates = {
-      favorMap: new Map<string, number>(),
-      scoreMap: new Map<string, number>(),
-    };
-    const visibleQuestData = Array.from(questDataMap.values()).filter(quest => {
-        if (!character) return false;
-        const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
-        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-        const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
-        const isNotTest = !quest.name.toLowerCase().includes("test");
-        return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
-    });
-
-    visibleQuestData.forEach(quest => {
-        const primaryLocation = getPrimaryLocation(quest.location);
-        if(primaryLocation) {
-            areaAggregates.favorMap.set(primaryLocation, (areaAggregates.favorMap.get(primaryLocation) || 0) + quest.remainingPossibleFavor);
-            areaAggregates.scoreMap.set(primaryLocation, (areaAggregates.scoreMap.get(primaryLocation) || 0) + quest.adjustedRemainingFavorScore);
-        }
-    });
-
-    const getSortValue = (quest: QuestWithCalculatedData, config: SortConfig) => {
-      const { key } = config;
-      if (key === 'areaRemainingFavor') return areaAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0;
-      if (key === 'areaAdjustedRemainingFavorScore') return areaAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0;
-      if (key === 'name') return getSortableName(quest.name);
-      if (key === 'location') return quest.location || '';
-      return (quest as any)[key];
-    };
-    
-    const sortedIds = visibleQuestData
-      .sort((a, b) => {
-        const aValue = getSortValue(a, newSortConfig);
-        const bValue = getSortValue(b, newSortConfig);
-
-        let aComparable = aValue === null || aValue === undefined ? (newSortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
-        let bComparable = bValue === null || bValue === undefined ? (newSortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
-        
-        let comparison = 0;
-        if (typeof aComparable === 'string' && typeof bComparable === 'string') {
-          comparison = aComparable.localeCompare(bComparable);
-        } else {
-          if (aComparable < bComparable) comparison = -1;
-          if (aComparable > bComparable) comparison = 1;
-        }
-
-        if (comparison !== 0) return newSortConfig.direction === 'ascending' ? comparison : -comparison;
-        if (newSortConfig.key === 'areaRemainingFavor' || newSortConfig.key === 'areaAdjustedRemainingFavorScore') {
-          const aLocation = a.location || '';
-          const bLocation = b.location || '';
-          const locationComparison = aLocation.localeCompare(bLocation);
-          if (locationComparison !== 0) return locationComparison;
-        }
-        return getSortableName(a.name).localeCompare(getSortableName(b.name));
-      })
-      .map(q => q.id);
-
-    setSortedQuestIds(sortedIds);
     setSortConfig(newSortConfig);
     savePreferences({ sortConfig: newSortConfig });
   };
   
-  useEffect(() => {
-    if (!pageOverallLoading && !initialSortPerformed.current && quests.length > 0 && character) {
-      requestSort(sortConfig.key);
-      initialSortPerformed.current = true;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageOverallLoading, quests, character, sortConfig.key, useLevelOffset, levelOffset]);
-
   const questsToRender = useMemo(() => {
     if (pageOverallLoading || sortedQuestIds.length === 0) return [];
     
@@ -687,8 +684,6 @@ export default function FavorTrackerPage() {
       });
   }, [sortedQuestIds, questDataMap, showCompletedQuestsWithZeroRemainingFavor, isDebugMode, pageOverallLoading]);
   
-  const effectiveCharacterLevel = character && useLevelOffset ? character.level + levelOffset : character?.level || 0;
-
   const pageStats = useMemo(() => {
     if (!character || questDataMap.size === 0) {
         return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
@@ -943,18 +938,6 @@ export default function FavorTrackerPage() {
                 <TableHeader className="sticky top-0 z-10"> 
                     <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => {
-                      const quest = questsToRender[0]; // Sample quest for area value lookup
-                      const areaAggregates = {
-                          favorMap: new Map<string, number>(),
-                          scoreMap: new Map<string, number>(),
-                      };
-                      if (quest) {
-                          const primaryLocation = getPrimaryLocation(quest.location);
-                          if (primaryLocation) {
-                              areaAggregates.favorMap.set(primaryLocation, questsToRender.filter(q => getPrimaryLocation(q.location) === primaryLocation).reduce((sum, q) => sum + q.remainingPossibleFavor, 0));
-                              areaAggregates.scoreMap.set(primaryLocation, questsToRender.filter(q => getPrimaryLocation(q.location) === primaryLocation).reduce((sum, q) => sum + q.adjustedRemainingFavorScore, 0));
-                          }
-                      }
                       return (
                         <TableHead key={header.key} className={cn(header.className)}>
                         <TooltipProvider>
@@ -976,15 +959,8 @@ export default function FavorTrackerPage() {
                 <TableBody>
                     {questsToRender.map((quest) => {
                       if (!quest) return null;
-                      const areaAggregates = {
-                          favorMap: new Map<string, number>(),
-                          scoreMap: new Map<string, number>(),
-                      };
                       const primaryLocation = getPrimaryLocation(quest.location);
-                      if (primaryLocation) {
-                          areaAggregates.favorMap.set(primaryLocation, questsToRender.filter(q => getPrimaryLocation(q.location) === primaryLocation).reduce((sum, q) => sum + q.remainingPossibleFavor, 0));
-                          areaAggregates.scoreMap.set(primaryLocation, questsToRender.filter(q => getPrimaryLocation(q.location) === primaryLocation).reduce((sum, q) => sum + q.adjustedRemainingFavorScore, 0));
-                      }
+                      
                       return (
                         <TooltipProvider key={quest.id} delayDuration={0}>
                           <Tooltip>
