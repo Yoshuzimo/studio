@@ -13,13 +13,13 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, type FieldValue } from 'firebase/firestore';
 import { adminAuth } from '@/lib/firebase-admin';
 import type { SuggestionConversationItem } from '@/types';
+import { cookies } from 'next/headers';
 
 const SubmitSuggestionInputSchema = z.object({
   title: z.string().min(5, { message: "Title must be at least 5 characters."}).max(100, {message: "Title must be 100 characters or less."}).describe('The title of the user\'s suggestion.'),
   suggestionText: z.string().min(10, { message: "Suggestion must be at least 10 characters."}).max(5000, {message: "Suggestion must be 5000 characters or less."}).describe('The text of the user\'s suggestion.'),
   suggesterId: z.string().describe('The ID of the user making the suggestion.'),
   suggesterName: z.string().describe('The name/email of the user making the suggestion.'),
-  sessionCookie: z.string().optional().describe('The user\'s session cookie for authentication.'),
 });
 export type SubmitSuggestionInput = z.infer<typeof SubmitSuggestionInputSchema>;
 
@@ -40,13 +40,14 @@ type SuggestionData = {
 };
 
 export async function submitSuggestion(input: SubmitSuggestionInput): Promise<SubmitSuggestionOutput> {
-  if (!input.sessionCookie) {
+  const sessionCookie = cookies().get('__session')?.value;
+  if (!sessionCookie) {
     throw new Error('Unauthorized');
   }
 
   let decodedToken;
   try {
-    decodedToken = await adminAuth.verifySessionCookie(input.sessionCookie, true);
+    decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
   } catch (error) {
     console.error("Authentication error in submitSuggestion", error);
     throw new Error('Authentication failed');
