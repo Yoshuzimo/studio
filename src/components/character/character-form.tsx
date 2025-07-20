@@ -5,7 +5,7 @@ import React, { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import type { Character } from '@/types';
+import type { Character, Account } from '@/types';
 import { Loader2, ImagePlus } from 'lucide-react';
 import Script from 'next/script';
 
@@ -21,6 +21,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -31,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
+import { useAppData } from "@/context/app-data-context";
 
 
 const characterFormSchema = z.object({
@@ -38,6 +46,7 @@ const characterFormSchema = z.object({
     message: "Name must be at least 2 characters.",
   }),
   level: z.coerce.number().min(1, { message: "Level must be at least 1." }).max(34, { message: "Level cannot exceed 34."}),
+  accountId: z.string().min(1, { message: "An account must be selected." }),
 });
 
 export type CharacterFormData = z.infer<typeof characterFormSchema>;
@@ -59,9 +68,11 @@ declare global {
 
 export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isSubmitting: isParentSubmitting = false }: CharacterFormProps) {
   const { currentUser } = useAuth();
+  const { accounts, activeAccountId } = useAppData();
+  
   const form = useForm<CharacterFormData>({
     resolver: zodResolver(characterFormSchema),
-    defaultValues: initialData ? { name: initialData.name, level: initialData.level } : { name: "", level: 1 },
+    defaultValues: initialData ? { name: initialData.name, level: initialData.level, accountId: initialData.accountId } : { name: "", level: 1, accountId: activeAccountId || undefined },
   });
   
   const [isCloudinaryScriptLoaded, setIsCloudinaryScriptLoaded] = useState(false);
@@ -82,10 +93,10 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
   useEffect(() => {
     if (isOpen) {
-      form.reset(initialData ? { name: initialData.name, level: initialData.level } : { name: "", level: 1 });
+      form.reset(initialData ? { name: initialData.name, level: initialData.level, accountId: initialData.accountId } : { name: "", level: 1, accountId: activeAccountId || undefined });
       setUploadedImageUrl(initialData?.iconUrl || null);
     }
-  }, [initialData, form, isOpen]);
+  }, [initialData, form, isOpen, activeAccountId]);
 
   const openCloudinaryWidget = async () => {
     if (!isCloudinaryScriptLoaded || !currentUser) {
@@ -102,64 +113,65 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       return;
     }
 
-    const widget = window.cloudinary.createUploadWidget({
-      cloudName: cloudName,
-      uploadPreset: uploadPreset,
-      apiKey: apiKey, 
-      folder: "ddo_toolkit/characters",
-      cropping: true,
-      croppingAspectRatio: 4 / 3,
-      showAdvancedOptions: true,
-      sources: ['local', 'url', 'camera'],
-      uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, any>) => {
-          try {
-              if (!currentUser) throw new Error("Not authenticated.");
-              const idToken = await currentUser.getIdToken();
+    try {
+        const idToken = await currentUser.getIdToken();
+        const widget = window.cloudinary.createUploadWidget({
+        cloudName: cloudName,
+        uploadPreset: uploadPreset,
+        apiKey: apiKey, 
+        folder: "ddo_toolkit/characters",
+        cropping: true,
+        croppingAspectRatio: 4 / 3,
+        showAdvancedOptions: true,
+        sources: ['local', 'url', 'camera'],
+        uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, any>) => {
+            try {
+                const response = await fetch('/api/cloudinary/signature', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                    body: JSON.stringify(paramsToSign),
+                });
 
-              const response = await fetch('/api/cloudinary/signature', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-                  body: JSON.stringify(paramsToSign),
-              });
+                if (!response.ok) {
+                    const errorBody = await response.json();
+                    throw new Error(errorBody.error || 'Failed to fetch signature.');
+                }
 
-              if (!response.ok) {
-                  const errorBody = await response.json();
-                  throw new Error(errorBody.error || 'Failed to fetch signature.');
-              }
+                const { signature } = await response.json();
+                callback(signature);
+            } catch (error) {
+                console.error("[Cloudinary Widget] Error fetching signature:", error);
+                toast({ title: "Signature Error", description: (error as Error).message, variant: "destructive" });
+            }
+        },
+        styles: {
+            palette: {
+                window: "#283593", windowBorder: "#3F51B5", tabIcon: "#FFFFFF", menuIcons: "#FFFFFF",
+                textDark: "#000000", textLight: "#FFFFFF", link: "#FF9800", action: "#FF9800",
+                inactiveTabIcon: "#BDBDBD", error: "#F44336", inProgress: "#0078FF",
+                complete: "#4CAF50", sourceBg: "#303F9F"
+            },
+        }
+        }, (error: any, result: any) => {
+        if (error) {
+            console.error("[Cloudinary Widget] Upload Error:", error);
+            toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
+            return;
+        }
 
-              const { signature } = await response.json();
-              callback(signature);
-          } catch (error) {
-              console.error("[Cloudinary Widget] Error fetching signature:", error);
-              toast({ title: "Signature Error", description: (error as Error).message, variant: "destructive" });
-          }
-      },
-      styles: {
-          palette: {
-            window: "#283593", windowBorder: "#3F51B5", tabIcon: "#FFFFFF", menuIcons: "#FFFFFF",
-            textDark: "#000000", textLight: "#FFFFFF", link: "#FF9800", action: "#FF9800",
-            inactiveTabIcon: "#BDBDBD", error: "#F44336", inProgress: "#0078FF",
-            complete: "#4CAF50", sourceBg: "#303F9F"
-          },
-      }
-    }, (error: any, result: any) => {
-      if (error) {
-        console.error("[Cloudinary Widget] Upload Error:", error);
-        toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
-        return;
-      }
+        if (result && result.event === "success") {
+            setUploadedImageUrl(result.info.secure_url);
+            toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
+        }
+        });
 
-      if (result && result.event === "success") {
-        setUploadedImageUrl(result.info.secure_url);
-        toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
-      }
-    });
-
-    widget.open();
+        widget.open();
+    } catch(error) {
+        toast({ title: "Authentication Error", description: "Could not get authentication token for upload.", variant: "destructive" });
+    }
   };
 
   const handleSubmit = async (data: CharacterFormData) => {
-    // Pass the new URL if it exists, otherwise pass the original URL
     await onSubmit(data, initialData?.id, uploadedImageUrl);
   };
   
@@ -211,6 +223,33 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                     <FormControl>
                       <Input type="number" placeholder="Character Level" {...field} disabled={effectiveIsSubmitting} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="accountId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={effectiveIsSubmitting}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an account" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {accounts.map((account) => (
+                           <SelectItem key={account.id} value={account.id}>
+                            {account.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Assign this character to an account to track owned packs.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

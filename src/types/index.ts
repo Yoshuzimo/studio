@@ -1,5 +1,4 @@
-
-// Cache-busting comment to force rebuild of dependents: V7
+// Cache-busting comment to force rebuild of dependents: V8
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 
 export interface User {
@@ -115,6 +114,7 @@ export interface Quest {
   // Heroic Tier Availability
   casualNotAvailable?: boolean;
   normalNotAvailable?: boolean;
+  hardNotAvailable?: boolean;
   eliteNotAvailable?: boolean;
 
   // Epic Tier Details
@@ -134,7 +134,7 @@ export interface Quest {
 }
 
 export interface UserQuestCompletionData {
-  questName?: string; 
+  questId: string;
   casualCompleted?: boolean;
   normalCompleted?: boolean;
   hardCompleted?: boolean;

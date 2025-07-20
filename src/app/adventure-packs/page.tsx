@@ -1,4 +1,3 @@
-
 // src/app/adventure-packs/page.tsx
 "use client";
 
@@ -8,16 +7,23 @@ import { AdventurePackItem } from '@/components/adventure-pack/adventure-pack-it
 import type { AdventurePack, AdventurePackCsvUploadResult } from '@/types';
 import { AdventurePackCsvUploaderDialog } from '@/components/adventure-pack/adventure-pack-csv-uploader-dialog';
 import { Button } from '@/components/ui/button';
-import { Package, Info, Loader2, Upload, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
+import { Package, Info, Loader2, Upload, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useAuth } from '@/context/auth-context'; // Added
-import { useRouter } from 'next/navigation'; // Added
+import { useAuth } from '@/context/auth-context';
+import { useRouter } from 'next/navigation';
 import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from '@/components/ui/label';
 
 const CSV_HEADER_PACK_NAME = "Adventure Pack Name"; 
 const CSV_HEADER_IS_OWNED = "Owned"; 
 
-// Helper function to normalize adventure pack names for storage and comparison
 const normalizeAdventurePackNameForStorage = (name?: string | null): string | null => {
   if (!name) return null;
   const trimmedName = name.trim();
@@ -28,14 +34,22 @@ const normalizeAdventurePackNameForStorage = (name?: string | null): string | nu
 };
 
 export default function AdventurePacksPage() {
-  const { currentUser, isLoading: authIsLoading } = useAuth(); // Use auth context
-  const { adventurePacks, ownedPacks, setOwnedPacks, isDataLoaded, isLoading: isContextLoading } = useAppData();
-  const router = useRouter(); // For redirection
+  const { currentUser, isLoading: authIsLoading } = useAuth();
+  const { 
+    adventurePacks, 
+    ownedPacks, 
+    setOwnedPacks, 
+    accounts,
+    activeAccountId,
+    setActiveAccountId,
+    isDataLoaded, 
+    isLoading: isContextLoading 
+  } = useAppData();
+  const router = useRouter();
   
   const [isUploadCsvDialogOpen, setIsUploadCsvDialogOpen] = useState(false);
   const [isCsvProcessing, setIsCsvProcessing] = useState(false);
 
-  // Redirect if not authenticated and auth is not loading
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
       router.replace('/login');
@@ -43,7 +57,6 @@ export default function AdventurePacksPage() {
   }, [authIsLoading, currentUser, router]);
 
   const handleTogglePackOwnership = (packName: string, isOwned: boolean) => {
-    // setOwnedPacks from context will handle normalization
     setOwnedPacks((prevOwnedPacks) => {
       const normalizedPackName = normalizeAdventurePackNameForStorage(packName);
       if (!normalizedPackName) return prevOwnedPacks;
@@ -117,7 +130,7 @@ export default function AdventurePacksPage() {
       }
 
       const dataLines = allLines.slice(3).filter(line => line.trim() !== "");
-      const packNamesToMarkAsOwned = new Set<string>(ownedPacks.map(p => normalizeAdventurePackNameForStorage(p) || p)); // Start with current normalized owned packs
+      const packNamesToMarkAsOwned = new Set<string>();
       const notFoundPackNames: string[] = [];
       
       let csvRowsProcessedForOwnership = 0;
@@ -132,34 +145,28 @@ export default function AdventurePacksPage() {
         const ownedStatusCsv = columns[ownedStatusIndex]?.toLowerCase();
         const normalizedNameInCsv = normalizeAdventurePackNameForStorage(nameInCsvRaw);
 
-        if (!normalizedNameInCsv) return; // Skip if name is empty after normalization
-
-        if (normalizedNameInCsv.toLowerCase() === "free to play") {
-          return; // Skip "Free to play" as it's handled by context
-        }
+        if (!normalizedNameInCsv) return;
 
         csvRowsProcessedForOwnership++;
 
         if (ownedStatusCsv === "true" || ownedStatusCsv === "checked" || ownedStatusCsv === "yes" || ownedStatusCsv === "x" || ownedStatusCsv === "1") {
           csvRowsMarkedForOwnershipInFile++;
-          // Master list 'adventurePacks' already has normalized names from context
           const packExists = adventurePacks.find(p => p.name.toLowerCase() === normalizedNameInCsv.toLowerCase());
           
           if (packExists) {
-            if (!packNamesToMarkAsOwned.has(packExists.name)) { // Compare with master list's (normalized) name
-              packNamesToMarkAsOwned.add(packExists.name);
+            if (!ownedPacks.includes(packExists.name)) {
               successfullyMarkedCount++;
             }
+            packNamesToMarkAsOwned.add(packExists.name);
           } else {
             couldNotFindCount++;
-            if (!notFoundPackNames.includes(nameInCsvRaw)) { // Report original name from CSV
+            if (!notFoundPackNames.includes(nameInCsvRaw)) {
               notFoundPackNames.push(nameInCsvRaw);
             }
           }
         }
       });
       
-      // setOwnedPacks will handle normalization and adding "Free to play" if necessary
       setOwnedPacks(Array.from(packNamesToMarkAsOwned)); 
       
       return { 
@@ -206,28 +213,45 @@ export default function AdventurePacksPage() {
         <h1 className="font-headline text-3xl font-bold flex items-center">
           <Package className="mr-3 h-8 w-8 text-primary" /> Adventure Packs
         </h1>
-        <Button 
-            variant="outline" 
-            onClick={() => setIsUploadCsvDialogOpen(true)} 
-            disabled={pageIsLoading || adventurePacks.length === 0}
-            size="sm"
-        >
-          {pageIsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-          Upload CSV
-        </Button>
+        <div className="flex items-center gap-4">
+            <div className="w-48">
+              <Label htmlFor="account-select-packs" className="sr-only">Select Account</Label>
+              <Select value={activeAccountId || ''} onValueChange={(value) => setActiveAccountId(value)} disabled={pageIsLoading}>
+                    <SelectTrigger id="account-select-packs">
+                      <SelectValue placeholder="Select Account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <Button 
+                variant="outline" 
+                onClick={() => setIsUploadCsvDialogOpen(true)} 
+                disabled={pageIsLoading || adventurePacks.length === 0 || !activeAccountId}
+                size="sm"
+            >
+              {pageIsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              Upload CSV
+            </Button>
+        </div>
       </div>
 
       <Alert className="mb-6 bg-accent/10 border-accent/30">
         <Info className="h-5 w-5 text-accent" />
         <AlertTitle className="font-semibold text-accent">Manage Your Collection</AlertTitle>
         <AlertDescription className="text-accent/80">
-          Select the adventure packs you own, or upload a CSV to mark them in bulk. 
+          Select the adventure packs owned by the currently selected account, or upload a CSV to mark them in bulk. 
           Your CSV should have headers on Line 1 (e.g., '{CSV_HEADER_PACK_NAME}', '{CSV_HEADER_IS_OWNED}'). Lines 2 and 3 will be skipped. Data starts on Line 4.
-          Changes are saved automatically to your account. If you are not sure if you own a pack or expansion, open the store in game and look for it. If it shows up, you don't own it.
+          Changes are saved automatically. If you are not sure if you own a pack or expansion, open the store in game and look for it. If it shows up, you don't own it.
         </AlertDescription>
       </Alert>
       
-      {isContextLoading && adventurePacks.length === 0 && isDataLoaded && (
+      {isContextLoading && adventurePacks.length === 0 && !isDataLoaded && (
          <div className="text-center py-10"><Loader2 className="mr-2 h-8 w-8 animate-spin mx-auto" /> <p>Loading adventure packs...</p></div>
       )}
 

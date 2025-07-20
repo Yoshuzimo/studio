@@ -1,4 +1,3 @@
-
 // src/app/admin/page.tsx
 "use client";
 
@@ -8,7 +7,7 @@ import { CsvUploader } from '@/components/admin/csv-uploader';
 import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Quest, CSVQuest, Suggestion, User as AppUser, AdventurePack, CSVAdventurePack } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { collection, doc, getDocs, query, orderBy, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { collection, doc, getDocs, query, orderBy, onSnapshot, Unsubscribe, writeBatch, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -161,7 +160,6 @@ export default function AdminPage() {
   const { toast } = useToast();
 
   const {
-    setQuests, 
     quests,
     isDataLoaded: isAppDataLoaded, 
     isLoading: isInitialAppDataLoading,    
@@ -188,12 +186,8 @@ export default function AdminPage() {
   const [isDeleteQuestDialogOpen, setIsDeleteQuestDialogOpen] = useState(false);
 
   useEffect(() => {
-    console.log("[AdminPage] Auth state check: authIsLoading:", authIsLoading, "currentUser:", !!currentUser, "userData?.isAdmin:", !!userData?.isAdmin);
-    if (!authIsLoading) {
-      if (!currentUser || !userData?.isAdmin) {
-        console.log("[AdminPage] Redirecting to '/' due to no currentUser or not admin.");
-        router.replace('/');
-      }
+    if (!authIsLoading && (!currentUser || !userData?.isAdmin)) {
+      router.replace('/');
     }
   }, [currentUser, userData, authIsLoading, router]);
 
@@ -226,39 +220,22 @@ export default function AdminPage() {
 
   const fetchAllUsersList = useCallback(async () => {
     if (currentUser && userData?.isAdmin && !hasFetchedAllUsers) {
-      console.log("[AdminPage] fetchAllUsersList: Setting isLoadingAllUsers to true.");
       setIsLoadingAllUsers(true);
       try {
-        console.log("[AdminPage] fetchAllUsersList: Attempting to call getAllUsers from AuthContext.");
         const usersList = await getAllUsers();
         setAllUsers(usersList);
         setHasFetchedAllUsers(true);
-        console.log("[AdminPage] fetchAllUsersList: Successfully fetched and set all users. Count:", usersList.length);
       } catch (error) {
         console.error("[AdminPage] Failed to fetch all users on admin page:", error);
       } finally {
-        console.log("[AdminPage] fetchAllUsersList: Setting isLoadingAllUsers to false.");
         setIsLoadingAllUsers(false);
       }
-    } else if (hasFetchedAllUsers) {
-      console.log("[AdminPage] fetchAllUsersList: Already fetched all users, skipping.");
-      setIsLoadingAllUsers(false); 
-    } else {
-      console.log("[AdminPage] fetchAllUsersList: Conditions not met (currentUser/isAdmin), not fetching. Ensuring isLoadingAllUsers is false.");
-      setIsLoadingAllUsers(false); 
     }
   }, [currentUser, userData, getAllUsers, hasFetchedAllUsers]);
   
   useEffect(() => {
-    console.log("[AdminPage] Admin-specific data useEffect triggered. authIsLoading:", authIsLoading, "currentUser:", !!currentUser, "userData?.isAdmin:", !!userData?.isAdmin);
     if (!authIsLoading && currentUser && userData?.isAdmin) {
-      console.log("[AdminPage] Admin-specific data useEffect: Auth loaded, user is admin. Calling initial data fetches.");
       fetchAllUsersList();
-    } else if (!authIsLoading) {
-      console.log("[AdminPage] Admin-specific data useEffect: Auth loaded, but user not admin or no user. Resetting states.");
-      setIsLoadingAllUsers(false);
-      setAllUsers([]);
-      setHasFetchedAllUsers(false);
     }
   }, [currentUser, userData, authIsLoading, fetchAllUsersList]);
 
@@ -275,7 +252,6 @@ export default function AdminPage() {
 
   const handleFileUpload = async (dataType: 'Adventure Packs' | 'Quests', file: File) => {
     const fileText = await file.text();
-    console.log(`[AdminPage] Starting file upload for ${dataType}`);
     try {
       if (dataType === 'Adventure Packs') {
           const propNames: (keyof CSVAdventurePack)[] = ['name', 'pointsCost', 'totalFavor'];
@@ -305,7 +281,7 @@ import type { AdventurePack } from '@/types';
 // You can edit this list directly to add, remove, or modify packs.
 // The Admin Panel's CSV uploader for Adventure Packs will generate a new version of this file's contents for you to copy-paste.
 export const ADVENTURE_PACKS_DATA: AdventurePack[] = [
-${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: ${pack.pointsCost}, totalFavor: ${pack.totalFavor} }`).join(',\n')}
+${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: ${pack.pointsCost === null ? 'null' : pack.pointsCost}, totalFavor: ${pack.totalFavor === null ? 'null' : pack.totalFavor} }`).join(',\n')}
 ];
 `;
           setGeneratedCode(fileContentString);
@@ -332,21 +308,7 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
 
         const parsedQuestsFromCsv = parseCsv<CSVQuest>(fileText, propertyNames as string[], linesToSkip, columnIndices);
         
-        const questsCollectionRef = collection(db, 'quests');
-        const existingQuestsSnapshot = await getDocs(questsCollectionRef);
-        const existingQuestsMap = new Map<string, Quest>();
-        existingQuestsSnapshot.forEach(doc => {
-            const questData = { id: doc.id, ...doc.data() } as Quest;
-            const normalizedName = (questData.name || "").trim().toLowerCase();
-            if (normalizedName) {
-              existingQuestsMap.set(normalizedName, questData);
-            }
-        });
-
-        const questsToUpsert: Quest[] = parsedQuestsFromCsv.map((q) => {
-          const normalizedCsvQuestName = (q.name || "").trim().toLowerCase();
-          const existingQuest = normalizedCsvQuestName ? existingQuestsMap.get(normalizedCsvQuestName) : undefined;
-          
+        const newQuests: Quest[] = parsedQuestsFromCsv.map((q, index) => {
           const casualNotAvailable = q.casualNotAvailable?.toUpperCase() === 'TRUE';
           const normalNotAvailable = q.normalNotAvailable?.toUpperCase() === 'TRUE';
           const hardNotAvailable = q.hardNotAvailable?.toUpperCase() === 'TRUE';
@@ -383,7 +345,7 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
           
           const mapUrls = [q.mapUrl1, q.mapUrl2, q.mapUrl3, q.mapUrl4, q.mapUrl5, q.mapUrl6, q.mapUrl7].filter(url => url && url.trim() !== '');
           
-          const id = existingQuest?.id || (q.id || "").trim() || doc(collection(db, 'quests')).id;
+          const id = (q.id || "").trim() || `quest_${String(index + 1).padStart(4, '0')}`;
 
           return {
             id,
@@ -404,59 +366,82 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
             mapUrls: mapUrls,
           };
         });
-        
-        await setQuests(questsToUpsert);
+
+        const questToString = (q: Quest) => {
+            const lines = [
+                `  {`,
+                `    id: '${q.id}',`,
+                `    name: '${q.name.replace(/'/g, "\\'")}',`,
+                `    level: ${q.level},`,
+            ];
+            const addLine = (key: keyof Quest, value: any) => {
+                if (value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0)) {
+                    lines.push(`    ${key}: ${JSON.stringify(value).replace(/"/g, "'")},`);
+                }
+            };
+            
+            addLine('adventurePackName', q.adventurePackName);
+            addLine('location', q.location);
+            addLine('questGiver', q.questGiver);
+            addLine('casualExp', q.casualExp);
+            addLine('normalExp', q.normalExp);
+            addLine('hardExp', q.hardExp);
+            addLine('eliteExp', q.eliteExp);
+            addLine('duration', q.duration);
+            addLine('baseFavor', q.baseFavor);
+            addLine('patron', q.patron);
+            if(q.casualNotAvailable) addLine('casualNotAvailable', q.casualNotAvailable);
+            if(q.normalNotAvailable) addLine('normalNotAvailable', q.normalNotAvailable);
+            if(q.hardNotAvailable) addLine('hardNotAvailable', q.hardNotAvailable);
+            if(q.eliteNotAvailable) addLine('eliteNotAvailable', q.eliteNotAvailable);
+            addLine('epicBaseLevel', q.epicBaseLevel);
+            addLine('epicCasualExp', q.epicCasualExp);
+            addLine('epicNormalExp', q.epicNormalExp);
+            addLine('epicHardExp', q.epicHardExp);
+            addLine('epicEliteExp', q.epicEliteExp);
+            if(q.epicCasualNotAvailable) addLine('epicCasualNotAvailable', q.epicCasualNotAvailable);
+            if(q.epicNormalNotAvailable) addLine('epicNormalNotAvailable', q.epicNormalNotAvailable);
+            if(q.epicHardNotAvailable) addLine('epicHardNotAvailable', q.epicHardNotAvailable);
+            if(q.epicEliteNotAvailable) addLine('epicEliteNotAvailable', q.epicEliteNotAvailable);
+            addLine('wikiUrl', q.wikiUrl);
+            if(q.mapUrls && q.mapUrls.length > 0) addLine('mapUrls', q.mapUrls);
+
+            lines.push('  }');
+            return lines.join('\n');
+        };
+
+        const fileContentString = `// src/data/quests.ts
+import type { Quest } from '@/types';
+
+// This is the master list for Quests.
+// This file is generated by the Admin Panel's CSV uploader.
+// Do not edit this file directly.
+export const QUESTS_DATA: Quest[] = [
+${newQuests.map(questToString).join(',\n')}
+];
+`;
+        setGeneratedCode(fileContentString);
+        setGeneratedCodeDialogTitle('Generated Quests Code');
+        setGeneratedCodeDialogDescription('The uploaded CSV has been processed. Copy the code below and replace the entire content of the specified file to update the master list of quests.');
+        setGeneratedCodeDialogFilePath('src/data/quests.ts');
+        setIsCodeDialogOpen(true);
       }
     } catch (error) {
         console.error(`[AdminPage] CSV Parsing/Upload Error for ${dataType} in handleFileUpload:`, error);
+        toast({ title: 'Upload Failed', description: `Error generating code from CSV: ${(error as Error).message}`, variant: 'destructive' });
     }
   };
 
   const handleEditQuest = (quest: Quest) => { setEditingQuest(quest); setIsQuestFormOpen(true); };
   const handleQuestFormSubmit = async (data: QuestFormData) => {
     if (!editingQuest) return;
-
-    const mapUrls = data.mapUrls?.map(item => item.value).filter(Boolean) || [];
-
-    const updatedQuestData: Quest = {
-      id: editingQuest.id,
-      name: data.name,
-      level: data.level,
-      adventurePackName: normalizeAdventurePackNameForStorage(data.adventurePackName) || null,
-      location: data.location || null,
-      questGiver: data.questGiver || null,
-      casualExp: (data.casualExp === undefined || isNaN(data.casualExp)) ? null : data.casualExp,
-      normalExp: (data.normalExp === undefined || isNaN(data.normalExp)) ? null : data.normalExp,
-      hardExp: (data.hardExp === undefined || isNaN(data.hardExp)) ? null : data.hardExp,
-      eliteExp: (data.eliteExp === undefined || isNaN(data.eliteExp)) ? null : data.eliteExp,
-      duration: data.duration || null,
-      baseFavor: (data.baseFavor === undefined || isNaN(data.baseFavor)) ? null : data.baseFavor,
-      patron: data.patron || null,
-      casualNotAvailable: data.casualNotAvailable,
-      normalNotAvailable: data.normalNotAvailable,
-      hardNotAvailable: data.hardNotAvailable,
-      eliteNotAvailable: data.eliteNotAvailable,
-      epicBaseLevel: (data.epicBaseLevel === undefined || data.epicBaseLevel === '' || isNaN(Number(data.epicBaseLevel))) ? null : Number(data.epicBaseLevel),
-      epicCasualExp: (data.epicCasualExp === undefined || isNaN(data.epicCasualExp)) ? null : data.epicCasualExp,
-      epicNormalExp: (data.epicNormalExp === undefined || isNaN(data.epicNormalExp)) ? null : data.epicNormalExp,
-      epicHardExp: (data.epicHardExp === undefined || isNaN(data.epicHardExp)) ? null : data.epicHardExp,
-      epicEliteExp: (data.epicEliteExp === undefined || isNaN(data.epicEliteExp)) ? null : data.epicEliteExp,
-      epicCasualNotAvailable: data.epicCasualNotAvailable,
-      epicNormalNotAvailable: data.epicNormalNotAvailable,
-      epicHardNotAvailable: data.epicHardNotAvailable,
-      epicEliteNotAvailable: data.epicEliteNotAvailable,
-      wikiUrl: data.wikiUrl || null,
-      mapUrls: mapUrls,
-    };
-    await updateQuestDefinition(updatedQuestData);
+    toast({ title: 'Manual Edit Disabled', description: 'Manual quest editing is disabled. Please use the CSV upload feature to manage quest data.', variant: 'default'});
     setIsQuestFormOpen(false); setEditingQuest(null);
   };
   const openDeleteQuestDialog = (questId: string) => { setQuestToDeleteId(questId); setIsDeleteQuestDialogOpen(true); };
   const confirmDeleteQuest = async () => {
-    if (!questToDeleteId) return;
-    await deleteQuestDefinition(questToDeleteId);
+    toast({ title: 'Manual Deletion Disabled', description: 'Manual quest deletion is disabled. Please use the CSV upload feature to manage quest data.', variant: 'default'});
     setIsDeleteQuestDialogOpen(false); setQuestToDeleteId(null);
-    if (editingQuest && editingQuest.id === questToDeleteId) { setIsQuestFormOpen(false); setEditingQuest(null); }
   };
   
   const sortedQuests = useMemo(() => {
@@ -466,8 +451,6 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
   const pageOverallInitialLoad = authIsLoading || isInitialAppDataLoading;
   const pageContentLoading = isInitialAppDataLoading || isLoadingSuggestions || isLoadingAllUsers; 
   const uiDisabled = pageContentLoading || isAppContextUpdating; 
-
-  console.log("[AdminPage] Render. authIsLoading:", authIsLoading, "isInitialAppDataLoading:", isInitialAppDataLoading, "isAppContextUpdating:", isAppContextUpdating, "isLoadingSuggestions:", isLoadingSuggestions, "isLoadingAllUsers:", isLoadingAllUsers, "pageContentLoading:", pageContentLoading, "uiDisabled:", uiDisabled);
 
   if (authIsLoading) { 
     return (
@@ -542,7 +525,7 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
             <CardTitle className="font-headline flex items-center">
               <ListChecks className="mr-2 h-6 w-6 text-primary" /> Current Quests
             </CardTitle>
-            <CardDescription>Overview of loaded quests. Click a quest to edit or delete.</CardDescription>
+            <CardDescription>Overview of loaded quests from the static data file. Manual editing is disabled; use CSV upload.</CardDescription>
           </CardHeader>
           <CardContent>
             {isInitialAppDataLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <p>Total Quests: <strong>{sortedQuests.length}</strong></p>}
@@ -552,13 +535,12 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
                   {sortedQuests.map(quest => (
                     <li
                       key={quest.id}
-                      className="p-2 hover:bg-muted rounded-md cursor-pointer flex justify-between items-center group"
-                      onClick={() => !uiDisabled && handleEditQuest(quest)}
+                      className="p-2 hover:bg-muted rounded-md flex justify-between items-center group"
                     >
                       <span>{quest.name} (Lvl {quest.level})</span>
                       <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); if (!uiDisabled) handleEditQuest(quest);}} aria-label={`Edit ${quest.name}`} disabled={uiDisabled}><Edit className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); if (!uiDisabled) openDeleteQuestDialog(quest.id);}} aria-label={`Delete ${quest.name}`} disabled={uiDisabled}><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); toast({ title: 'Manual Edit Disabled', description: 'Please use the CSV upload feature.', variant: 'default'});}} aria-label={`Edit ${quest.name}`}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); toast({ title: 'Manual Deletion Disabled', description: 'Please use the CSV upload feature.', variant: 'default'});}} aria-label={`Delete ${quest.name}`}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </li>
                   ))}
@@ -569,21 +551,8 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
         </Card>
       </div>
       {editingQuest && (
-        <QuestForm isOpen={isQuestFormOpen} onOpenChange={setIsQuestFormOpen} initialData={editingQuest} onSubmit={handleQuestFormSubmit} onDelete={() => openDeleteQuestDialog(editingQuest.id)} isSubmitting={isAppContextUpdating} />
+        <QuestForm isOpen={isQuestFormOpen} onOpenChange={setIsQuestFormOpen} initialData={editingQuest} onSubmit={handleQuestFormSubmit} onDelete={confirmDeleteQuest} isSubmitting={isAppContextUpdating} />
       )}
-      <AlertDialog open={isDeleteQuestDialogOpen} onOpenChange={setIsDeleteQuestDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Quest?</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to delete the quest "{quests.find(q => q.id === questToDeleteId)?.name || ''}"? This action cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsDeleteQuestDialogOpen(false)} disabled={isAppContextUpdating}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteQuest} disabled={isAppContextUpdating} variant="destructive">
-              {isAppContextUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Delete Quest
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       <GeneratedCodeDialog
         isOpen={isCodeDialogOpen}
         onOpenChange={setIsCodeDialogOpen}

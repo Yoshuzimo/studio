@@ -13,10 +13,18 @@ import type { Character } from '@/types';
 import { useAuth, DISPLAY_NAME_PLACEHOLDER_SUFFIX } from '@/context/auth-context'; // Import placeholder suffix
 import { useRouter } from 'next/navigation';
 import { SetDisplayNameModal } from '@/components/auth/set-display-name-modal'; // Import the new modal
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from '@/components/ui/label';
 
 export default function CharactersPage() {
   const { currentUser, userData, isLoading: authIsLoading } = useAuth(); 
-  const { characters, addCharacter, updateCharacter, deleteCharacter, isDataLoaded, isLoading: appDataIsLoading } = useAppData();
+  const { characters, addCharacter, updateCharacter, deleteCharacter, accounts, activeAccountId, setActiveAccountId, isDataLoaded, isLoading: appDataIsLoading } = useAppData();
   const router = useRouter();
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -26,7 +34,7 @@ export default function CharactersPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [characterToDeleteId, setCharacterToDeleteId] = useState<string | null>(null);
 
-  const [isSetDisplayNameModalOpen, setIsSetDisplayNameModalOpen] = useState(false); // State for the new modal
+  const [isSetDisplayNameModalOpen, setIsSetDisplayNameModalOpen] = useState(false);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
 
@@ -36,17 +44,16 @@ export default function CharactersPage() {
     }
   }, [authIsLoading, currentUser, router]);
 
-  // Effect to check if display name needs to be set
   useEffect(() => {
     if (currentUser && userData && userData.displayName === currentUser.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX) {
       setIsSetDisplayNameModalOpen(true);
     } else {
-      setIsSetDisplayNameModalOpen(false); // Ensure it closes if name is subsequently set elsewhere
+      setIsSetDisplayNameModalOpen(false);
     }
   }, [currentUser, userData]);
 
 
-  const handleAddCharacterSubmit = async (data: CharacterFormData, _id?:string, iconUrl?: string) => {
+  const handleAddCharacterSubmit = async (data: CharacterFormData, _id?:string, iconUrl?: string | null) => {
     await addCharacter({ ...data, iconUrl }); 
     setIsCreateModalOpen(false);
   };
@@ -54,13 +61,11 @@ export default function CharactersPage() {
   const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string | null) => {
     if (!id || !editingCharacter) return;
     
-    // Construct the fully updated character object for optimistic update
     const updatedCharacterData: Character = {
         ...editingCharacter,
         name: data.name,
         level: data.level,
-        // Use the new iconUrl if provided, otherwise keep the existing one.
-        // The check for `undefined` handles cases where the icon was not changed.
+        accountId: data.accountId,
         iconUrl: iconUrl !== undefined ? iconUrl : editingCharacter.iconUrl,
     };
 
@@ -85,6 +90,8 @@ export default function CharactersPage() {
     setIsDeleteDialogOpen(false);
     setCharacterToDeleteId(null);
   };
+
+  const filteredCharacters = characters.filter(char => char.accountId === activeAccountId);
   
   if (authIsLoading || (!currentUser && !authIsLoading)) {
     return (
@@ -107,26 +114,43 @@ export default function CharactersPage() {
         <h1 className="font-headline text-3xl font-bold flex items-center">
           <Users className="mr-3 h-8 w-8 text-primary" /> My Characters
         </h1>
-        <Button onClick={() => setIsCreateModalOpen(true)} size="lg" disabled={pageOverallLoading || isSetDisplayNameModalOpen}>
-          {pageOverallLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlusCircle className="mr-2 h-5 w-5" />} 
-          Add New Character
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="w-48">
+             <Label htmlFor="account-select" className="sr-only">Select Account</Label>
+             <Select value={activeAccountId || ''} onValueChange={(value) => setActiveAccountId(value)} disabled={pageOverallLoading}>
+                  <SelectTrigger id="account-select">
+                    <SelectValue placeholder="Select Account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                     {accounts.map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+              </Select>
+          </div>
+          <Button onClick={() => setIsCreateModalOpen(true)} size="lg" disabled={pageOverallLoading || isSetDisplayNameModalOpen || !activeAccountId}>
+            {pageOverallLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlusCircle className="mr-2 h-5 w-5" />} 
+            Add New Character
+          </Button>
+        </div>
       </div>
 
       {pageOverallLoading && characters.length === 0 && !isDataLoaded && (
         <div className="text-center py-10"><Loader2 className="mr-2 h-8 w-8 animate-spin mx-auto" /> <p>Loading characters...</p></div>
       )}
 
-      {!pageOverallLoading && characters.length === 0 && isDataLoaded && !isSetDisplayNameModalOpen && (
+      {!pageOverallLoading && filteredCharacters.length === 0 && isDataLoaded && !isSetDisplayNameModalOpen && (
         <div className="text-center py-10">
-          <p className="text-xl text-muted-foreground mb-4">No characters yet. Start by adding one!</p>
+          <p className="text-xl text-muted-foreground mb-4">No characters for this account. Start by adding one!</p>
            <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty character list placeholder" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
         </div>
       )}
 
-      {!isSetDisplayNameModalOpen && characters.length > 0 && (
+      {!isSetDisplayNameModalOpen && filteredCharacters.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {characters.map((character) => (
+          {filteredCharacters.map((character) => (
             <CharacterCard
               key={character.id}
               character={character}
