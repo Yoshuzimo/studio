@@ -105,10 +105,13 @@ export default function CharactersPage() {
     console.log("[CharactersPage] handleEditCharacterSubmit received data:", { data, id: editingCharacter?.id });
     if (!editingCharacter) return;
     
-    // Combine existing character data with form data to create the full update payload
+    // Explicitly construct the update payload to avoid overwriting the new URL
     const updatedCharacterData: Character = {
-        ...editingCharacter, // Start with existing data
-        ...data, // Overwrite with new form data (name, level, accountId, iconUrl)
+        ...editingCharacter,
+        name: data.name,
+        level: data.level,
+        accountId: data.accountId,
+        iconUrl: data.iconUrl, // This is the crucial change
     };
     
     console.log("[CharactersPage] Calling updateCharacter with payload:", updatedCharacterData);
