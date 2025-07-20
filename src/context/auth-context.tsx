@@ -1,3 +1,4 @@
+
 // src/context/auth-context.tsx
 "use client";
 
@@ -12,6 +13,7 @@ import {
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
   updateEmail as firebaseUpdateEmail,
   updateProfile,
+  onIdTokenChanged, // Import onIdTokenChanged
 } from 'firebase/auth';
 import { auth, db, EmailAuthProvider, reauthenticateWithCredential } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, serverTimestamp, type Timestamp as FirestoreTimestampType, type FieldValue } from 'firebase/firestore'; // Removed writeBatch for now
@@ -41,39 +43,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function isFirestoreTimestamp(obj: any): obj is FirestoreTimestampType {
-    return obj && typeof obj.toDate === 'function' && typeof obj.seconds === 'number' && typeof obj.nanoseconds === 'number';
-}
-
-function deepCompareAppUserData(obj1: AppUser | null, obj2: AppUser | null): boolean {
-    if (obj1 === obj2) return true;
-    if (!obj1 || !obj2) return false;
-
-    const keys1 = Object.keys(obj1) as Array<keyof AppUser>;
-    const keys2 = Object.keys(obj2) as Array<keyof AppUser>;
-
-    if (keys1.length !== keys2.length) return false;
-
-    for (const key of keys1) {
-        if (!obj2.hasOwnProperty(key)) return false;
-        const val1 = obj1[key];
-        const val2 = obj2[key];
-
-        if (key === 'createdAt') {
-            if (val1 === val2) continue; 
-            if (isFirestoreTimestamp(val1) && isFirestoreTimestamp(val2)) {
-                if (!val1.isEqual(val2)) return false;
-            } else if (val1 !== val2) { 
-                return false;
-            }
-        } else if (val1 !== val2) {
-            return false;
-        }
-    }
-    return true;
-}
-
-
 const getPermissionLevel = (user: AppUser | null): number => {
   if (!user) return -1;
   if (user.isCreator) return 3;
@@ -92,162 +61,72 @@ const getUserTierString = (user: AppUser | null): string => {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [userDataState, setUserDataStateInternal] = useState<AppUser | null>(null);
+  const [userData, setUserData] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
-  const lastUserDataRef = useRef<AppUser | null>(null);
 
-  const setUserData = useCallback((newUserData: AppUser | null) => {
-    if (!deepCompareAppUserData(lastUserDataRef.current, newUserData)) {
-      console.log('[AuthContext] setUserData: Data changed, updating state. Prev Snapshot:', lastUserDataRef.current, 'New Snapshot:', newUserData);
-      setUserDataStateInternal(newUserData);
-      lastUserDataRef.current = newUserData ? JSON.parse(JSON.stringify(newUserData, (key, value) => {
-        if (value && typeof value === 'object' && value.hasOwnProperty('seconds') && value.hasOwnProperty('nanoseconds') && typeof (value as any).toDate === 'function') {
-            return { _firestoreTimestamp: true, seconds: value.seconds, nanoseconds: value.nanoseconds };
-        }
-        return value;
-      })) : null;
-    } else {
-      console.log('[AuthContext] setUserData: New data is same as previous, skipping state update.');
+  const fetchAndSetUserData = useCallback(async (user: FirebaseUser) => {
+    const userDocRef = doc(db, 'users', user.uid);
+    try {
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const dbData = userDocSnap.data();
+        const appUserData: AppUser = {
+          id: user.uid, email: dbData.email || user.email, displayName: dbData.displayName || (user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX),
+          isAdmin: dbData.isAdmin || false, isOwner: dbData.isOwner || false, isCreator: dbData.isCreator || false,
+          createdAt: dbData.createdAt as FirestoreTimestampType, emailVerified: user.emailVerified, iconUrl: dbData.iconUrl ?? null,
+        };
+        setUserData(appUserData);
+      } else {
+        console.log('[AuthContext] User document does not exist for UID:', user.uid, 'Attempting to create one.');
+        const placeholderDisplayName = user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
+        const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl'> & { createdAt: FieldValue, iconUrl: null } = { 
+          id: user.uid, email: user.email, displayName: placeholderDisplayName,
+          isAdmin: false, isOwner: false, isCreator: false, emailVerified: user.emailVerified, accountId: '', level: 0, name: '', preferences: {}, userId: '', 
+          createdAt: serverTimestamp(), iconUrl: null
+        };
+        const publicProfileData: PublicUserProfileFirebaseData = { displayName: placeholderDisplayName, iconUrl: null, updatedAt: serverTimestamp() };
+        await setDoc(doc(db, 'users', user.uid), mainUserDocData);
+        await setDoc(doc(db, 'publicProfiles', user.uid), publicProfileData);
+        const newUserDocSnap = await getDoc(userDocRef);
+        if (newUserDocSnap.exists()) setUserData({ ...newUserDocSnap.data(), id: user.uid } as AppUser);
+      }
+    } catch (firestoreError) {
+      console.error('[AuthContext] Error fetching/creating Firestore user document:', firestoreError);
+      setUserData(null);
+      toast({ title: "Profile Sync Issue", description: "Could not load full profile details.", variant: "default" });
     }
-  }, []);
-
-
+  }, [toast]);
+  
   useEffect(() => {
-    setIsLoading(true);
-    console.log('[AuthContext] onAuthStateChanged listener setup effect running.');
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('[AuthContext] onAuthStateChanged triggered. User:', user?.uid || null);
+    const unsubscribe = onIdTokenChanged(auth, async (user) => {
+      console.log('[AuthContext] onIdTokenChanged triggered. User:', user?.uid || null);
       if (user) {
-        try { 
-            await user.reload(); 
-            console.log('[AuthContext] User reloaded successfully.');
-            const idToken = await user.getIdToken(true);
-            
-            const response = await fetch('/api/auth/session', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ idToken }),
-            });
-
-            if(!response.ok) {
-              const errorBody = await response.text();
-              console.error(`[AuthContext] Session cookie creation API responded with ${response.status}:`, errorBody);
-              throw new Error(`Failed to create session cookie (status: ${response.status})`);
-            }
- 
-        } 
-        catch (reloadError: any) { 
-            console.error('[AuthContext] User reload or session creation failed:', reloadError);
-            if (['auth/user-token-expired', 'auth/user-disabled', 'auth/invalid-user-token', 'auth/network-request-failed'].includes(reloadError.code)) {
-                try { 
-                  await firebaseSignOut(auth); 
-                  await fetch('/api/auth/session', { method: 'DELETE' }); // Clear session cookie on sign out
-                  console.log('[AuthContext] Signed out user due to reload error.'); 
-                } catch (signOutError) { 
-                  console.error('[AuthContext] Error signing out after reload failure:', signOutError); 
-                }
-            }
-        }
-        
-        const freshUser = auth.currentUser;
-        if (!freshUser) {
-            console.log('[AuthContext] No Firebase user after reload. Clearing states.');
-            setCurrentUser(null);
-            setUserData(null);
-        } else {
-            console.log('[AuthContext] setCurrentUser called for:', freshUser.uid);
-            setCurrentUser(freshUser);
-            const userDocRef = doc(db, 'users', freshUser.uid);
-            try {
-                const userDocSnap = await getDoc(userDocRef);
-                if (userDocSnap.exists()) {
-                    const dbData = userDocSnap.data();
-                     console.log('[AuthContext] Fetched Firestore data for user:', freshUser.uid, dbData);
-                    const appUserData: AppUser = {
-                        id: freshUser.uid, 
-                        email: dbData.email || freshUser.email, 
-                        displayName: dbData.displayName || (freshUser.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX),
-                        isAdmin: dbData.isAdmin || false, 
-                        isOwner: dbData.isOwner || false, 
-                        isCreator: dbData.isCreator || false,
-                        createdAt: dbData.createdAt as FirestoreTimestampType,
-                        emailVerified: freshUser.emailVerified, 
-                        iconUrl: dbData.iconUrl === undefined ? null : dbData.iconUrl,
-                    };
-                    setUserData(appUserData);
-                } else {
-                    console.log('[AuthContext] User document does not exist for UID:', freshUser.uid, 'Attempting to create one.');
-                    const placeholderDisplayName = freshUser.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
-                    
-                    const mainUserDocData: Omit<AppUser, 'createdAt'> & { createdAt: FieldValue } = { 
-                        id: freshUser.uid, email: freshUser.email, displayName: placeholderDisplayName,
-                        isAdmin: false, isOwner: false, isCreator: false, 
-                        emailVerified: user.emailVerified, 
-                        iconUrl: null, 
-                        createdAt: serverTimestamp(),
-                    };
-                    const publicProfileData: PublicUserProfileFirebaseData = {
-                        displayName: placeholderDisplayName, 
-                        iconUrl: null, 
-                        updatedAt: serverTimestamp(),
-                    };
-
-                    try {
-                        // Using individual sets instead of batch for creation to ensure data is available immediately
-                        await setDoc(doc(db, 'users', freshUser.uid), mainUserDocData);
-                        await setDoc(doc(db, 'publicProfiles', freshUser.uid), publicProfileData);
-
-                        console.log('[AuthContext] Created Firestore user and publicProfile documents for UID:', freshUser.uid);
-                        const newUserDocSnap = await getDoc(userDocRef); 
-                        if (newUserDocSnap.exists()) {
-                            const newDbData = newUserDocSnap.data();
-                            setUserData({
-                                id: freshUser.uid, email: newDbData.email, displayName: newDbData.displayName,
-                                isAdmin: newDbData.isAdmin || false, 
-                                isOwner: newDbData.isOwner || false, 
-                                isCreator: newDbData.isCreator || false,
-                                createdAt: newDbData.createdAt as FirestoreTimestampType,
-                                emailVerified: newDbData.emailVerified || false, 
-                                iconUrl: newDbData.iconUrl === undefined ? null : newDbData.iconUrl,
-                            });
-                        } else {
-                             console.warn('[AuthContext] Firestore user doc still not found after attempting create.');
-                             setUserData(null); 
-                        }
-                    } catch (dbError) {
-                        console.error('[AuthContext] Error creating Firestore user/publicProfile documents:', dbError);
-                        setUserData(null);  
-                    }
-                }
-            } catch (firestoreError) {
-                console.error('[AuthContext] Error fetching Firestore user document:', firestoreError);
-                setUserData({ 
-                    id: freshUser.uid, email: freshUser.email, 
-                    displayName: freshUser.displayName || freshUser.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX, 
-                    isAdmin: false, isOwner: false, isCreator: false, 
-                    emailVerified: freshUser.emailVerified, 
-                    iconUrl: null, 
-                    createdAt: undefined, 
-                });
-                toast({ title: "Profile Sync Issue", description: "Could not load full profile details.", variant: "default" });
-            }
+        // User is signed in.
+        setCurrentUser(user);
+        if (!userData || user.uid !== userData.id) {
+          // Fetch data if we don't have it or if the user changed.
+           console.log('[AuthContext] Fetching user data for new or different user.');
+           await fetchAndSetUserData(user);
         }
       } else {
-        console.log('[AuthContext] No Firebase user from onAuthStateChanged. States cleared.');
-        await fetch('/api/auth/session', { method: 'DELETE' }); // Clear session cookie on sign out
+        // User is signed out.
+        if (currentUser) {
+            console.log('[AuthContext] User signed out, clearing session.');
+            await fetch('/api/auth/session', { method: 'DELETE' });
+        }
         setCurrentUser(null);
         setUserData(null);
       }
       setIsLoading(false);
-      console.log('[AuthContext] onAuthStateChanged: setIsLoading(false) at the very end.');
     });
+
     return () => {
-      console.log('[AuthContext] Unsubscribing from onAuthStateChanged.');
+      console.log('[AuthContext] Unsubscribing from onIdTokenChanged.');
       unsubscribe();
-    }
-  }, [setUserData, toast]);
+    };
+  }, [fetchAndSetUserData, userData, currentUser]);
 
   const login = useCallback(async (identifier: string, password_login: string) => {
     let emailToLogin = identifier;
@@ -276,7 +155,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailToLogin = userDocSnap.data()!.email;
         console.log('[AuthContext] Found email for display name:', emailToLogin);
       }
-      await signInWithEmailAndPassword(auth, emailToLogin, password_login);
+      const userCredential = await signInWithEmailAndPassword(auth, emailToLogin, password_login);
+      const idToken = await userCredential.user.getIdToken(true);
+      await fetch('/api/auth/session', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }),
+      });
       toast({ title: "Login Successful", description: "Welcome back!" });
       router.push('/');
     } catch (error) {
@@ -295,12 +178,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const placeholderDisplayName = user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
       
-      const mainUserDocData: Omit<AppUser, 'createdAt'> & { createdAt: FieldValue } = { 
+      const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl'> & { createdAt: FieldValue, iconUrl: null } = { 
         id: user.uid, email: user.email, displayName: placeholderDisplayName,
         isAdmin: false, isOwner: false, isCreator: false, 
-        emailVerified: user.emailVerified || false, 
-        iconUrl: null,
+        emailVerified: user.emailVerified || false,
+        accountId: '', level: 0, name: '', preferences: {}, userId: '', 
         createdAt: serverTimestamp(),
+        iconUrl: null
       };
       await setDoc(doc(db, 'users', user.uid), mainUserDocData);
 
@@ -311,10 +195,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       await setDoc(doc(db, 'publicProfiles', user.uid), publicProfileData);
       
-      console.log('[AuthContext] Firestore user and publicProfile documents created for UID:', user.uid);
-      
       await firebaseSendEmailVerification(user);
-      console.log('[AuthContext] Verification email sent to:', user.email);
+      
+      const idToken = await user.getIdToken(true);
+      await fetch('/api/auth/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) });
 
       toast({ title: "Signup Successful!", description: "Welcome! A verification email has been sent." });
     } catch (error) {
@@ -328,7 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[AuthContext] logout called.');
     try {
       await firebaseSignOut(auth);
-      await fetch('/api/auth/session', { method: 'DELETE' }); // Clear session cookie
+      // onIdTokenChanged will handle clearing the session cookie and state
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
       router.push('/login'); 
     } catch (error) {
@@ -404,28 +288,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await sendVerificationEmail(); 
       toast({ title: "Email Update Initiated", description: `Your email has been changed to ${newEmail}. Please check your new email address for a verification link.` });
       
-      const updatedUserDocSnap = await getDoc(userDocRef);
-      if (updatedUserDocSnap.exists()) {
-        const dbData = updatedUserDocSnap.data();
-        const updatedAppUserData: AppUser = {
-          id: userToUpdate.uid,
-          email: dbData.email || newEmail,
-          displayName: dbData.displayName || (userToUpdate.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX),
-          isAdmin: dbData.isAdmin || false,
-          isOwner: dbData.isOwner || false,
-          isCreator: dbData.isCreator || false,
-          createdAt: dbData.createdAt as FirestoreTimestampType,
-          emailVerified: userToUpdate.emailVerified, 
-          iconUrl: dbData.iconUrl === undefined ? null : dbData.iconUrl,
-        };
-        setUserData(updatedAppUserData);
-      }
+      // Manually update local state after successful operation
+      setUserData(prev => prev ? ({...prev, email: newEmail, emailVerified: false }) : null);
+
     } catch (error) {
       console.error('[AuthContext] Email update error:', error);
       toast({ title: "Email Update Failed", description: (error as Error).message, variant: "destructive" });
       throw error;
     }
-  }, [toast, sendVerificationEmail, setUserData]);
+  }, [toast, sendVerificationEmail]);
 
   const updateUserDisplayName = useCallback(async (newDisplayName: string, newIconUrl?: string | null): Promise<boolean> => {
     const userToUpdate = auth.currentUser;
@@ -452,16 +323,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return false;
         }
       }
-      console.log('[AuthContext] updateUserDisplayName: Display name unique or belongs to current user. Proceeding with operations.');
       
-      const userDocRef = doc(db, 'users', userToUpdate.uid);
-      const publicProfileDocRef = doc(db, 'publicProfiles', userToUpdate.uid);
-
-      // Operation 1: Update Auth Profile
       await updateProfile(userToUpdate, { displayName: newDisplayName, photoURL: newIconUrl === undefined ? userToUpdate.photoURL : newIconUrl });
-      console.log('[AuthContext] updateUserDisplayName: Firebase Auth profile updated.');
-
-      // Operation 2 & 3: Update Firestore documents
+      
       const userDocUpdatePayload: Partial<AppUser> = { displayName: newDisplayName };
       const publicProfileUpdatePayload: Partial<PublicUserProfileFirebaseData> = { displayName: newDisplayName, updatedAt: serverTimestamp() };
       
@@ -470,26 +334,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           publicProfileUpdatePayload.iconUrl = newIconUrl;
       }
       
-      await updateDoc(userDocRef, userDocUpdatePayload);
-      await setDoc(publicProfileDocRef, publicProfileUpdatePayload, { merge: true });
-      console.log('[AuthContext] updateUserDisplayName: Firestore documents updated.');
+      await updateDoc(doc(db, 'users', userToUpdate.uid), userDocUpdatePayload);
+      await setDoc(doc(db, 'publicProfiles', userToUpdate.uid), publicProfileUpdatePayload, { merge: true });
       
-      const updatedUserDocSnap = await getDoc(userDocRef); 
-      if (updatedUserDocSnap.exists()) {
-          const dbData = updatedUserDocSnap.data();
-          const updatedAppUserData: AppUser = {
-              id: userToUpdate.uid,
-              email: dbData.email,
-              displayName: newDisplayName, 
-              isAdmin: dbData.isAdmin || false,
-              isOwner: dbData.isOwner || false,
-              isCreator: dbData.isCreator || false,
-              createdAt: dbData.createdAt as FirestoreTimestampType,
-              emailVerified: userToUpdate.emailVerified,
-              iconUrl: dbData.iconUrl === undefined ? null : dbData.iconUrl,
-          };
-          setUserData(updatedAppUserData);
-      }
+      setUserData(prev => prev ? ({ ...prev, ...userDocUpdatePayload }) : null);
 
       toast({ title: "Profile Updated!", description: `Your profile has been updated.` });
       return true;
@@ -498,13 +346,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast({ title: "Profile Update Failed", description: error.message || "An unknown error occurred.", variant: "destructive" });
       return false; 
     }
-  }, [toast, setUserData]);
+  }, [toast]);
 
  const updateUserAdminStatus = useCallback(async (targetUserId: string, makeAdmin: boolean): Promise<void> => {
     const actingUser = auth.currentUser; 
-    const actingUserDataSnapshot = lastUserDataRef.current;
-
-    console.log(`[AuthContext] updateUserAdminStatus: Target UID: ${targetUserId}, Make Admin: ${makeAdmin}, Acting UID: ${actingUser?.uid}`);
+    const actingUserDataSnapshot = userData;
 
     if (!actingUserDataSnapshot || !actingUser) {
       toast({ title: "Authentication Error", description: "Current user data unavailable for permission change.", variant: "destructive" });
@@ -519,18 +365,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const targetUserSnap = await getDoc(targetUserDocRef);
       if (!targetUserSnap.exists()) throw new Error("Target user document not found.");
       const targetDbData = targetUserSnap.data();
-      targetUserDataBeforeChange = { 
-        id: targetUserSnap.id, 
-        email: targetDbData.email,
-        displayName: targetDbData.displayName,
-        isAdmin: targetDbData.isAdmin || false,
-        isOwner: targetDbData.isOwner || false,
-        isCreator: targetDbData.isCreator || false,
-        emailVerified: targetDbData.emailVerified || false,
-        iconUrl: targetDbData.iconUrl === undefined ? null : targetDbData.iconUrl, 
-        createdAt: targetDbData.createdAt as FirestoreTimestampType,
-       };
-      console.log('[AuthContext] Target user data before change:', targetUserDataBeforeChange);
+      targetUserDataBeforeChange = { ...targetDbData, id: targetUserSnap.id } as AppUser;
       
       const currentUserLevel = getPermissionLevel(actingUserDataSnapshot);
       const targetUserLvl = getPermissionLevel(targetUserDataBeforeChange);
@@ -556,47 +391,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const updatePayload: Partial<AppUser> = { isAdmin: makeAdmin };
       if (!makeAdmin && targetUserDataBeforeChange.isOwner && !targetUserDataBeforeChange.isCreator) {
-        console.log('[AuthContext] Also removing Owner status as Admin is being removed for non-Creator Owner.');
         updatePayload.isOwner = false; 
       }
       await updateDoc(targetUserDocRef, updatePayload);
-      console.log('[AuthContext] Firestore update for admin status successful.');
       
       const targetUserSnapAfter = await getDoc(targetUserDocRef);
-      const targetUserDataAfterChange = targetUserSnapAfter.exists() ? { 
-        id: targetUserSnapAfter.id, 
-        email: targetUserSnapAfter.data()?.email,
-        displayName: targetUserSnapAfter.data()?.displayName,
-        isAdmin: targetUserSnapAfter.data()?.isAdmin || false,
-        isOwner: targetUserSnapAfter.data()?.isOwner || false,
-        isCreator: targetUserSnapAfter.data()?.isCreator || false,
-        emailVerified: targetUserSnapAfter.data()?.emailVerified || false,
-        iconUrl: targetUserSnapAfter.data()?.iconUrl === undefined ? null : targetUserSnapAfter.data().iconUrl,
-        createdAt: targetUserSnapAfter.data()?.createdAt as FirestoreTimestampType,
-      } as AppUser : null;
-      console.log('[AuthContext] Target user data after change:', targetUserDataAfterChange);
+      const targetUserDataAfterChange = targetUserSnapAfter.exists() ? { ...targetUserSnapAfter.data(), id: targetUserSnapAfter.id } as AppUser : null;
       
       await updateDoc(logDocRef, { status: "successful", newRoleApplied: getUserTierString(targetUserDataAfterChange), timestampFinalized: serverTimestamp() as FieldValue });
       toast({ title: "Admin Status Updated Successfully" });
 
       if (targetUserId === actingUser.uid && targetUserDataAfterChange) {
-        console.log('[AuthContext] Current user roles changed, updating local userData.');
         setUserData(targetUserDataAfterChange); 
       }
     } catch (error) {
       const errorMessage = (error as Error).message;
-      console.error('[AuthContext] Error updating admin status:', error);
       await updateDoc(logDocRef, { status: "failed", errorDetails: errorMessage, timestampFinalized: serverTimestamp() as FieldValue }).catch(logError => console.error("Failed to update failure log:", logError));
       toast({ title: "Admin Status Update Failed", description: errorMessage, variant: "destructive" });
       throw error;
     }
-  }, [toast, setUserData]);
+  }, [toast, userData]);
 
   const updateUserOwnerStatus = useCallback(async (targetUserId: string, makeOwner: boolean): Promise<void> => {
     const actingUser = auth.currentUser;
-    const actingUserDataSnapshot = lastUserDataRef.current; 
-
-    console.log(`[AuthContext] updateUserOwnerStatus: Target UID: ${targetUserId}, Make Owner: ${makeOwner}, Acting UID: ${actingUser?.uid}`);
+    const actingUserDataSnapshot = userData; 
 
     if (!actingUserDataSnapshot || !actingUser) {
       toast({ title: "Authentication Error", description: "Current user data unavailable for permission change.", variant: "destructive" });
@@ -610,18 +428,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const targetUserSnap = await getDoc(targetUserDocRef);
       if (!targetUserSnap.exists()) throw new Error("Target user document not found.");
-      targetUserDataBeforeChange = { 
-        id: targetUserSnap.id, 
-        email: targetUserSnap.data()?.email,
-        displayName: targetUserSnap.data()?.displayName,
-        isAdmin: targetUserSnap.data()?.isAdmin || false,
-        isOwner: targetUserSnap.data()?.isOwner || false,
-        isCreator: targetUserSnap.data()?.isCreator || false,
-        emailVerified: targetUserSnap.data()?.emailVerified || false,
-        iconUrl: targetUserSnap.data()?.iconUrl === undefined ? null : targetUserSnap.data().iconUrl,
-        createdAt: targetUserSnap.data()?.createdAt as FirestoreTimestampType,
-       };
-      console.log('[AuthContext] Target user data before change (owner):', targetUserDataBeforeChange);
+      targetUserDataBeforeChange = { ...targetUserSnap.data(), id: targetUserSnap.id } as AppUser;
 
       const currentUserLevel = getPermissionLevel(actingUserDataSnapshot);
 
@@ -647,53 +454,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const updatePayload: Partial<AppUser> = { isOwner: makeOwner };
       if (makeOwner) { 
         updatePayload.isAdmin = true;
-        console.log('[AuthContext] Making user Admin because they are being made Owner.');
       } else if (!makeOwner && targetUserDataBeforeChange.isOwner && !targetUserDataBeforeChange.isCreator) {
         updatePayload.isAdmin = false;
-        console.log('[AuthContext] Removing Admin status as Owner is being removed for non-Creator.');
       } else if (!makeOwner && targetUserDataBeforeChange.isCreator) {
         updatePayload.isAdmin = true;
-        console.log('[AuthContext] Creator is losing Owner status but remains Admin.');
       }
         
       await updateDoc(targetUserDocRef, updatePayload);
-      console.log('[AuthContext] Firestore update for owner status successful.');
       
       const targetUserSnapAfter = await getDoc(targetUserDocRef);
-      const targetUserDataAfterChange = targetUserSnapAfter.exists() ? { 
-        id: targetUserSnapAfter.id, 
-        email: targetUserSnapAfter.data()?.email,
-        displayName: targetUserSnapAfter.data()?.displayName,
-        isAdmin: targetUserSnapAfter.data()?.isAdmin || false,
-        isOwner: targetUserSnapAfter.data()?.isOwner || false,
-        isCreator: targetUserSnapAfter.data()?.isCreator || false,
-        emailVerified: targetUserSnapAfter.data()?.emailVerified || false,
-        iconUrl: targetUserSnapAfter.data()?.iconUrl === undefined ? null : targetUserSnapAfter.data().iconUrl,
-        createdAt: targetUserSnapAfter.data()?.createdAt as FirestoreTimestampType,
-      } as AppUser : null;
-      console.log('[AuthContext] Target user data after change (owner):', targetUserDataAfterChange);
+      const targetUserDataAfterChange = targetUserSnapAfter.exists() ? { ...targetUserSnapAfter.data(), id: targetUserSnapAfter.id } as AppUser : null;
 
       await updateDoc(logDocRef, { status: "successful", newRoleApplied: getUserTierString(targetUserDataAfterChange), timestampFinalized: serverTimestamp() as FieldValue });
       toast({ title: "Owner Status Updated Successfully" });
 
       if (targetUserId === actingUser.uid && targetUserDataAfterChange) {
-        console.log('[AuthContext] Current user roles changed, updating local userData (owner).');
         setUserData(targetUserDataAfterChange); 
       }
     } catch (error) {
       const errorMessage = (error as Error).message;
-      console.error('[AuthContext] Error updating owner status:', error);
       await updateDoc(logDocRef, { status: "failed", errorDetails: errorMessage, timestampFinalized: serverTimestamp() as FieldValue }).catch(logError => console.error("Failed to update failure log:", logError));
       toast({ title: "Owner Status Update Failed", description: errorMessage, variant: "destructive" });
       throw error;
     }
-  }, [toast, setUserData]);
+  }, [toast, userData]);
 
 
   return (
     <AuthContext.Provider value={{
       currentUser,
-      userData: userDataState,
+      userData: userData,
       isLoading,
       login,
       signup,

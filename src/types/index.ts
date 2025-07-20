@@ -1,7 +1,8 @@
-// Cache-busting comment to force rebuild of dependents: V8
+
+// Cache-busting comment to force rebuild of dependents: V9
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 
-export interface User {
+export interface User extends Omit<Character, 'id' | 'createdAt' > {
   id: string;
   email: string | null;
   displayName?: string | null;

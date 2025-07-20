@@ -1,3 +1,4 @@
+
 // src/context/app-data-context.tsx
 "use client";
 
@@ -168,7 +169,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
         const accSnapshot = await getDocs(accQuery);
         let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
-
         let currentActiveAccountId = activeAccountId;
 
         // Ensure default account exists
