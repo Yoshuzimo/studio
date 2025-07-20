@@ -1,3 +1,4 @@
+
 // src/components/character/character-form.tsx
 "use client";
 
@@ -154,12 +155,13 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         }
         }, (error: any, result: any) => {
         if (error) {
-            console.error("[Cloudinary Widget] Upload Error:", error);
+            console.error("[CharacterForm] Cloudinary Upload Error:", error);
             toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
             return;
         }
 
         if (result && result.event === "success") {
+            console.log("[CharacterForm] Cloudinary success. Result info:", result.info);
             setUploadedImageUrl(result.info.secure_url);
             toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
         }
@@ -172,6 +174,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   };
 
   const handleSubmit = async (data: CharacterFormData) => {
+    console.log("[CharacterForm] handleSubmit triggered. Data:", data, "Uploaded Image URL:", uploadedImageUrl);
     await onSubmit(data, initialData?.id, uploadedImageUrl);
   };
   

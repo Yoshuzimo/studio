@@ -33,7 +33,7 @@ interface AppDataContextType {
   setActiveAccountId: (accountId: string | null) => void;
 
   allCharacters: Character[]; // All characters for the user
-  addCharacter: (characterData: Omit<Character, 'id' | 'userId' | 'iconUrl' | 'preferences'> & { iconUrl?: string | null }) => Promise<Character | undefined>;
+  addCharacter: (characterData: Omit<Character, 'id' | 'userId' | 'preferences'>) => Promise<Character | undefined>;
   updateCharacter: (character: Character) => Promise<void>;
   deleteCharacter: (characterId: string) => Promise<void>;
 
@@ -446,17 +446,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }
 
 
-  const addCharacter = async (characterData: Omit<Character, 'id' | 'userId' | 'iconUrl' | 'preferences'> & { iconUrl?: string | null }): Promise<Character | undefined> => {
+  const addCharacter = async (characterData: Omit<Character, 'id' | 'userId' | 'preferences'>): Promise<Character | undefined> => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return undefined; }
+    console.log("[AppDataContext] addCharacter received data:", characterData);
     setIsUpdating(true);
     try {
       const newId = doc(collection(db, CHARACTERS_COLLECTION)).id;
-      const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, iconUrl: characterData.iconUrl || null, preferences: {} };
+      const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, preferences: {} };
+      console.log("[AppDataContext] addCharacter final payload for Firestore:", newCharacter);
       await setDoc(doc(db, CHARACTERS_COLLECTION, newId), newCharacter);
       setAllCharacters(prev => [...prev, newCharacter]);
       toast({ title: "Character Added", description: `${newCharacter.name} created.` });
       return newCharacter;
-    } catch (error) { toast({ title: "Error Adding Character", description: (error as Error).message, variant: 'destructive' }); return undefined; }
+    } catch (error) { 
+      console.error("[AppDataContext] Error adding character to Firestore:", error);
+      toast({ title: "Error Adding Character", description: (error as Error).message, variant: 'destructive' }); 
+      return undefined; 
+    }
     finally { setIsUpdating(false); }
   };
 
@@ -465,7 +471,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Unauthorized", variant: "destructive" });
       return;
     }
+    console.log("[AppDataContext] updateCharacter received data:", character);
     setAllCharacters(prev => prev.map(c => c.id === character.id ? character : c));
+    
     if (characterUpdateDebounceTimers.current.has(character.id)) {
       clearTimeout(characterUpdateDebounceTimers.current.get(character.id));
     }
@@ -481,9 +489,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           preferences: character.preferences || {},
           accountId: character.accountId,
         };
+        console.log("[AppDataContext] updateCharacter final payload for Firestore:", updatePayload);
         await updateDoc(charRef, updatePayload);
         toast({ title: "Character Updated", description: `${character.name}'s details saved.` });
       } catch (error) {
+        console.error("[AppDataContext] Error updating character in Firestore:", error);
         toast({ title: "Error Updating Character", description: (error as Error).message, variant: 'destructive' });
       } finally {
         setIsUpdating(false);

@@ -97,11 +97,15 @@ export default function CharactersPage() {
   }, [currentUser, userData]);
 
   const handleAddCharacterSubmit = async (data: CharacterFormData, _id?:string, iconUrl?: string | null) => {
-    await addCharacter({ ...data, iconUrl }); 
+    console.log("[CharactersPage] handleAddCharacterSubmit received:", { data, _id, iconUrl });
+    const payload = { ...data, iconUrl: iconUrl === undefined ? null : iconUrl };
+    console.log("[CharactersPage] Calling addCharacter with payload:", payload);
+    await addCharacter(payload); 
     setIsCreateModalOpen(false);
   };
 
   const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string | null) => {
+    console.log("[CharactersPage] handleEditCharacterSubmit received:", { data, id, iconUrl });
     if (!id || !editingCharacter) return;
     
     const updatedCharacterData: Character = {
@@ -111,7 +115,8 @@ export default function CharactersPage() {
         accountId: data.accountId,
         iconUrl: iconUrl !== undefined ? iconUrl : editingCharacter.iconUrl,
     };
-
+    
+    console.log("[CharactersPage] Calling updateCharacter with payload:", updatedCharacterData);
     await updateCharacter(updatedCharacterData);
     setIsEditModalOpen(false);
     setEditingCharacter(undefined);
@@ -125,7 +130,6 @@ export default function CharactersPage() {
     });
     setCharacterToAssign(character);
     
-    // Defensive coding for setting the default selection
     const defaultAccount = accounts?.find(acc => acc.name === 'Default');
     const fallbackAccountId = accounts?.length > 0 ? accounts[0].id : '';
     
