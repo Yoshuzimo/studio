@@ -1,4 +1,3 @@
-
 // src/context/app-data-context.tsx
 "use client";
 
@@ -28,7 +27,7 @@ interface AppDataContextType {
   setAccounts: React.Dispatch<React.SetStateAction<Account[]>>;
   addAccount: (accountData: Omit<Account, 'id' | 'userId'>) => Promise<Account | undefined>;
   updateAccount: (account: Account) => Promise<void>;
-  deleteAccount: (accountId: string) => Promise<void>;
+  deleteAccount: (account: Account) => Promise<void>;
   activeAccountId: string | null;
   setActiveAccountId: (accountId: string) => void;
 
@@ -221,7 +220,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     
     loadInitialData();
 
-  }, [currentUser, toast]);
+  }, [currentUser, toast, activeAccountId]);
   
   const setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>> = useCallback((valueOrFn) => {
     setOwnedPacksInternal(prevOwnedPacks => {
@@ -311,6 +310,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Unauthorized", variant: "destructive" });
       return;
     }
+    if (account.name === 'Default') {
+      toast({ title: "Invalid Action", description: "The Default account cannot be renamed.", variant: 'default' });
+      return;
+    }
     setIsUpdating(true);
     try {
       await updateDoc(doc(db, ACCOUNTS_COLLECTION, account.id), { name: account.name });
@@ -323,36 +326,38 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const deleteAccount = async (accountId: string): Promise<void> => {
-     const accountToDelete = accounts.find(c => c.id === accountId);
-    if (!currentUser || !accountToDelete || accountToDelete.userId !== currentUser.uid || accountToDelete.name === 'Default') {
+  const deleteAccount = async (accountToDelete: Account): Promise<void> => {
+    if (!currentUser || accountToDelete.userId !== currentUser.uid || accountToDelete.name === 'Default') {
       toast({ title: "Unauthorized or Invalid Action", description: "You cannot delete this account.", variant: "destructive" }); return;
     }
     setIsUpdating(true);
     try {
-      await deleteDoc(doc(db, ACCOUNTS_COLLECTION, accountId));
+      const batch = writeBatch(db);
       
-      const remainingAccounts = accounts.filter(c => c.id !== accountId);
-      setAccounts(remainingAccounts);
-      
-      const defaultAccount = remainingAccounts.find(acc => acc.name === 'Default') || remainingAccounts[0];
-      if (defaultAccount) {
-          const charsToMove = characters.filter(c => c.accountId === accountId);
-          if (charsToMove.length > 0) {
-            const batch = writeBatch(db);
-            charsToMove.forEach(char => {
-              const charRef = doc(db, CHARACTERS_COLLECTION, char.id);
-              batch.update(charRef, { accountId: defaultAccount.id });
-            });
-            await batch.commit();
-            setCharacters(prev => prev.map(c => c.accountId === accountId ? {...c, accountId: defaultAccount.id} : c));
-          }
-           if (activeAccountId === accountId) {
-            setActiveAccountId(defaultAccount.id);
-          }
-      } else {
-         // This case should ideally not happen if a default always exists.
-         if (activeAccountId === accountId) setActiveAccountId(null);
+      // Delete the account document
+      const accountRef = doc(db, ACCOUNTS_COLLECTION, accountToDelete.id);
+      batch.delete(accountRef);
+
+      // Move characters to the default account
+      const defaultAccount = accounts.find(acc => acc.name === 'Default');
+      if (!defaultAccount) throw new Error("Could not find a Default account to move characters to.");
+
+      const charsToMove = characters.filter(c => c.accountId === accountToDelete.id);
+      if (charsToMove.length > 0) {
+        charsToMove.forEach(char => {
+          const charRef = doc(db, CHARACTERS_COLLECTION, char.id);
+          batch.update(charRef, { accountId: defaultAccount.id });
+        });
+      }
+
+      await batch.commit();
+
+      // Optimistic UI updates
+      setAccounts(prev => prev.filter(c => c.id !== accountToDelete.id));
+      setCharacters(prev => prev.map(c => c.accountId === accountToDelete.id ? {...c, accountId: defaultAccount.id} : c));
+
+      if (activeAccountId === accountToDelete.id) {
+        setActiveAccountId(defaultAccount.id);
       }
       
       toast({ title: "Account Deleted", description: `The account "${accountToDelete.name}" was deleted. Its characters were moved to "Default".`, variant: "destructive" });

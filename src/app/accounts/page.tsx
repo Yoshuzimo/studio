@@ -1,4 +1,3 @@
-
 // src/app/accounts/page.tsx
 "use client";
 
@@ -57,7 +56,7 @@ export default function AccountsPage() {
 
   const confirmDeleteAccount = async () => {
     if (!accountToDelete) return;
-    await deleteAccount(accountToDelete.id);
+    await deleteAccount(accountToDelete);
     setIsDeleteDialogOpen(false);
     setAccountToDelete(null);
   };
@@ -100,7 +99,7 @@ export default function AccountsPage() {
               account={account}
               onEdit={openEditModal}
               onDelete={() => openDeleteDialog(account)}
-              disabled={pageOverallLoading || (account.name === 'Default' && accounts.length === 1)}
+              disabled={pageOverallLoading}
             />
           ))}
         </div>

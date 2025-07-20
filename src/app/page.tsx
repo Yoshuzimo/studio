@@ -1,4 +1,3 @@
-
 // src/app/page.tsx
 "use client";
 
@@ -43,6 +42,16 @@ export default function CharactersPage() {
       router.replace('/login');
     }
   }, [authIsLoading, currentUser, router]);
+
+  useEffect(() => {
+    // If accounts are loaded but no active account is set, select the default or first one.
+    if (isDataLoaded && accounts.length > 0 && !activeAccountId) {
+      const defaultAccount = accounts.find(acc => acc.name === 'Default') || accounts[0];
+      if (defaultAccount) {
+        setActiveAccountId(defaultAccount.id);
+      }
+    }
+  }, [isDataLoaded, accounts, activeAccountId, setActiveAccountId]);
 
   useEffect(() => {
     if (currentUser && userData && userData.displayName === currentUser.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX) {
@@ -93,7 +102,7 @@ export default function CharactersPage() {
 
   const filteredCharacters = activeAccountId ? characters.filter(char => char.accountId === activeAccountId) : [];
   
-  if (authIsLoading || (!currentUser && !authIsLoading)) {
+  if (pageOverallLoading || (!currentUser && !authIsLoading)) {
     return (
       <div className="flex justify-center items-center h-screen">
         <Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" />
