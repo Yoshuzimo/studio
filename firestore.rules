@@ -3,32 +3,17 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ========================================
-    // Helper Functions
-    // ========================================
-    function isOwner() {
-      return request.auth != null &&
-             resource.data.userId == request.auth.uid;
-    }
-
-    function isCreatingOwnData() {
-      return request.auth != null &&
-             request.resource.data.userId == request.auth.uid;
-    }
-
-    // Corrected function: Checks if the query is filtering by the user's own ID.
-    // NOTE: ".exists()" is not valid here. The direct comparison is what works.
-    function isQueryingOwnData() {
-      return request.auth != null &&
-             request.query.where.userId == request.auth.uid;
-    }
-
-    // ========================================
     // Characters Collection
     // ========================================
     match /characters/{characterId} {
       allow get, update, delete: if isOwner();
       allow list: if isQueryingOwnData();
       allow create: if isCreatingOwnData();
+
+      // Quest completions are nested under a character
+      match /questCompletions/{questId} {
+        allow read, write: if isOwner();
+      }
     }
 
     // ========================================
@@ -41,22 +26,61 @@ service cloud.firestore {
     }
 
     // ========================================
-    // Users Collection (Optional Profile Storage)
+    // Users Collection (Profile Storage)
     // ========================================
     match /users/{userId} {
-      allow get, update, delete, create: if request.auth != null && request.auth.uid == userId;
+      // Users can read and update their own user document
+      allow get, update: if request.auth.uid == userId;
+      // Allow user creation
+      allow create: if request.auth.uid == userId;
     }
 
-    // --- Add other collection rules below ---
-
-    // Example for quest completions nested under characters
-    match /characters/{characterId}/questCompletions/{completionId} {
-        allow read, write: if get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
+    // ========================================
+    // Public Profiles
+    // ========================================
+    match /publicProfiles/{userId} {
+       // Anyone can read public profiles
+      allow get: if true;
+      // Only the owner can create or update their public profile
+      allow create, update: if request.auth.uid == userId;
     }
     
-    // Example for owned packs nested under a user config document
-     match /userConfiguration/{userId}/ownedPacksInfo/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // ========================================
+    // Suggestions
+    // ========================================
+    match /suggestions/{suggestionId} {
+      // Read allowed by suggester or an admin
+      allow read: if (request.auth != null && request.auth.uid == resource.data.suggesterId) || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+      // Create allowed by any authenticated user
+      allow create: if request.auth != null;
+      // Update allowed by suggester or an admin
+      allow update: if (request.auth != null && request.auth.uid == resource.data.suggesterId) || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+    }
+    
+    // ========================================
+    // User Configuration for Owned Packs
+    // ========================================
+     match /userConfiguration/{userId}/{document=**} {
+      allow read, write: if request.auth.uid == userId;
+    }
+
+
+    // ========================================
+    // Helper Functions
+    // ========================================
+    function isOwner() {
+      return request.auth != null &&
+             resource.data.userId == request.auth.uid;
+    }
+
+    function isCreatingOwnData() {
+      return request.auth != null &&
+             request.resource.data.userId == request.auth.uid;
+    }
+
+    function isQueryingOwnData() {
+      return request.auth != null &&
+             request.query.where.userId == request.auth.uid;
     }
   }
 }
