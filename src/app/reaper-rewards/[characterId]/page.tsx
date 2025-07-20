@@ -1,4 +1,3 @@
-
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
@@ -121,7 +120,7 @@ export default function ReaperRewardsPage() {
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
-  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
+  const { allCharacters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
   const { toast } = useToast();
 
   const [character, setCharacter] = useState<Character | null>(null);
@@ -260,7 +259,7 @@ export default function ReaperRewardsPage() {
 
   useEffect(() => {
     if (isDataLoaded && characterId && currentUser) {
-      const foundCharacter = characters.find(c => c.id === characterId && c.userId === currentUser.uid);
+      const foundCharacter = allCharacters.find(c => c.id === characterId && c.userId === currentUser.uid);
       if (foundCharacter) {
         setCharacter(foundCharacter);
       } else {
@@ -268,7 +267,7 @@ export default function ReaperRewardsPage() {
         router.push('/');
       }
     }
-  }, [characterId, characters, isDataLoaded, currentUser, router, toast]);
+  }, [characterId, allCharacters, isDataLoaded, currentUser, router, toast]);
 
   const handleRowClick = (quest: Quest) => {
     if (clickAction === 'wiki') {

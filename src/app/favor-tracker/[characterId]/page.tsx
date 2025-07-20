@@ -172,7 +172,7 @@ export default function FavorTrackerPage() {
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const {
-    characters, quests, ownedPacks,
+    allCharacters, quests, ownedPacks,
     batchUpdateUserQuestCompletions,
     batchResetUserQuestCompletions,
     activeCharacterQuestCompletions,
@@ -216,20 +216,6 @@ export default function FavorTrackerPage() {
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
-
-    // Enhanced Logging
-  useEffect(() => {
-    console.log('[FavorTrackerPage] Data State Update:', {
-      characterId,
-      isDataLoaded,
-      appDataIsLoading,
-      authIsLoading,
-      'currentUser exists': !!currentUser,
-      'characters exists': !!characters,
-      'characters length': characters?.length,
-    });
-  }, [characterId, isDataLoaded, appDataIsLoading, authIsLoading, currentUser, characters]);
-
 
   const savePreferences = useCallback((newPrefs: Partial<FavorTrackerPreferences>, isShared: boolean = false) => {
     if (typeof window === 'undefined' || !characterId || !isDataLoaded || !currentUser || !character) return;
@@ -343,13 +329,7 @@ export default function FavorTrackerPage() {
       return;
     }
 
-    const foundChar = characters.find(c => c.id === characterId && c.userId === currentUser.uid);
-
-    console.log('[FavorTrackerPage] Character Finding Logic:', {
-      'characters array': characters,
-      foundChar: foundChar,
-    });
-
+    const foundChar = allCharacters.find(c => c.id === characterId && c.userId === currentUser.uid);
 
     if (foundChar) {
       setCharacter(foundChar);
@@ -366,7 +346,7 @@ export default function FavorTrackerPage() {
       router.push('/');
       setIsLoadingCompletions(false);
     }
-  }, [characterId, currentUser?.uid, isDataLoaded, authIsLoading, appDataIsLoading, fetchQuestCompletionsForCharacter, activeCharacterId, characters, router, toast, isLoadingCompletions]);
+  }, [characterId, currentUser?.uid, isDataLoaded, authIsLoading, appDataIsLoading, fetchQuestCompletionsForCharacter, activeCharacterId, allCharacters, router, toast, isLoadingCompletions]);
 
   const handleCompletionChange = async (questId: string, changedDifficultyKey: DifficultyKey, isNowCompleted: boolean) => {
     if (!character) return;

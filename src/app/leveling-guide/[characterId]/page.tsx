@@ -1,4 +1,3 @@
-
 // src/app/leveling-guide/[characterId]/page.tsx
 "use client";
 
@@ -151,7 +150,7 @@ export default function LevelingGuidePage() {
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
-  const { characters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
+  const { allCharacters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
   const { toast } = useToast();
 
   const [character, setCharacter] = useState<Character | null>(null);
@@ -287,11 +286,11 @@ export default function LevelingGuidePage() {
 
   useEffect(() => {
     if (isDataLoaded && characterId && currentUser) {
-      const foundCharacter = characters.find(c => c.id === characterId && c.userId === currentUser.uid);
+      const foundCharacter = allCharacters.find(c => c.id === characterId && c.userId === currentUser.uid);
       if (foundCharacter) setCharacter(foundCharacter);
       else { toast({ title: "Character not found", description: "This character may not exist or you don't have permission.", variant: "destructive" }); router.push('/'); }
     }
-  }, [characterId, characters, isDataLoaded, currentUser, router, toast]);
+  }, [characterId, allCharacters, isDataLoaded, currentUser, router, toast]);
 
   const handleRowClick = (quest: Quest) => {
     if (clickAction === 'wiki') {
