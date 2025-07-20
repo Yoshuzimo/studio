@@ -15,7 +15,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function AccountsPage() {
   const { currentUser, isLoading: authIsLoading } = useAuth(); 
-  const { accounts, addAccount, updateAccount, deleteAccount, isDataLoaded, isLoading: appDataIsLoading } = useAppData();
+  const { accounts, addAccount, updateAccount, deleteAccount, isDataLoaded, isLoading: appDataIsLoading } from useAppData();
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -44,8 +44,9 @@ export default function AccountsPage() {
   const handleAddAccountSubmit = async (data: AccountFormData) => {
     const newAccount = await addAccount(data); 
     setIsCreateModalOpen(false);
-    if(newAccount) {
-        router.push('/'); // Redirect to home page after creating the first account
+    // After creating the very first account, redirect to the home page
+    if(newAccount && accounts.length === 0) {
+        router.push('/');
     }
   };
 
