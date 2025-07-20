@@ -51,9 +51,20 @@ export default function CharactersPage() {
     setIsCreateModalOpen(false);
   };
 
-  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string) => {
+  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string | null) => {
     if (!id || !editingCharacter) return;
-    await updateCharacter({ ...editingCharacter, name: data.name, level: data.level, iconUrl });
+    
+    // Construct the fully updated character object for optimistic update
+    const updatedCharacterData: Character = {
+        ...editingCharacter,
+        name: data.name,
+        level: data.level,
+        // Use the new iconUrl if provided, otherwise keep the existing one.
+        // The check for `undefined` handles cases where the icon was not changed.
+        iconUrl: iconUrl !== undefined ? iconUrl : editingCharacter.iconUrl,
+    };
+
+    await updateCharacter(updatedCharacterData);
     setIsEditModalOpen(false);
     setEditingCharacter(undefined);
   };
