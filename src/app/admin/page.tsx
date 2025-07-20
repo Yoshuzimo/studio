@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppData } from '@/context/app-data-context';
 import { CsvUploader } from '@/components/admin/csv-uploader';
-import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, DatabaseZap } from 'lucide-react';
+import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, DatabaseZap, FileCode2 } from 'lucide-react';
 import type { Quest, CSVQuest, Suggestion, User as AppUser, AdventurePack, CSVAdventurePack } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { collection, doc, getDocs, query, orderBy, onSnapshot, Unsubscribe, writeBatch, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
@@ -155,22 +155,72 @@ function SuggestionItem({ suggestion, onStatusToggle }: { suggestion: Suggestion
     );
 }
 
+const questToString = (q: Quest) => {
+    const lines = [
+        `  {`,
+        `    id: '${q.id.replace(/'/g, "\\'")}',`,
+        `    name: '${q.name.replace(/'/g, "\\'")}',`,
+        `    level: ${q.level},`,
+    ];
+    const addLine = (key: keyof Quest, value: any) => {
+        if (value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0)) {
+            let formattedValue = JSON.stringify(value).replace(/"/g, "'");
+            if (typeof value === 'string') {
+              formattedValue = `'${value.replace(/'/g, "\\'")}'`;
+            } else if (Array.isArray(value)) {
+              formattedValue = `[${value.map(v => typeof v === 'string' ? `'${v.replace(/'/g, "\\'")}'` : JSON.stringify(v)).join(', ')}]`;
+            }
+            lines.push(`    ${key}: ${formattedValue},`);
+        }
+    };
+    
+    addLine('adventurePackName', q.adventurePackName);
+    addLine('location', q.location);
+    addLine('questGiver', q.questGiver);
+    addLine('casualExp', q.casualExp);
+    addLine('normalExp', q.normalExp);
+    addLine('hardExp', q.hardExp);
+    addLine('eliteExp', q.eliteExp);
+    addLine('duration', q.duration);
+    addLine('baseFavor', q.baseFavor);
+    addLine('patron', q.patron);
+    if(q.casualNotAvailable) addLine('casualNotAvailable', q.casualNotAvailable);
+    if(q.normalNotAvailable) addLine('normalNotAvailable', q.normalNotAvailable);
+    if(q.hardNotAvailable) addLine('hardNotAvailable', q.hardNotAvailable);
+    if(q.eliteNotAvailable) addLine('eliteNotAvailable', q.eliteNotAvailable);
+    addLine('epicBaseLevel', q.epicBaseLevel);
+    addLine('epicCasualExp', q.epicCasualExp);
+    addLine('epicNormalExp', q.epicNormalExp);
+    addLine('epicHardExp', q.epicHardExp);
+    addLine('epicEliteExp', q.epicEliteExp);
+    if(q.epicCasualNotAvailable) addLine('epicCasualNotAvailable', q.epicCasualNotAvailable);
+    if(q.epicNormalNotAvailable) addLine('epicNormalNotAvailable', q.epicNormalNotAvailable);
+    if(q.epicHardNotAvailable) addLine('epicHardNotAvailable', q.epicHardNotAvailable);
+    if(q.epicEliteNotAvailable) addLine('epicEliteNotAvailable', q.epicEliteNotAvailable);
+    addLine('wikiUrl', q.wikiUrl);
+    if(q.mapUrls && q.mapUrls.length > 0) addLine('mapUrls', q.mapUrls);
+
+    lines.push('  }');
+    return lines.join('\n');
+};
+
 export default function AdminPage() {
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const {
-    quests,
+    quests: staticQuests, // Renamed to avoid conflict
     isDataLoaded: isAppDataLoaded, 
     isLoading: isInitialAppDataLoading,    
-    isUpdating: isAppContextUpdating, 
-    updateQuestDefinition,
-    deleteQuestDefinition
+    isUpdating: isAppContextUpdating
   } = useAppData();
 
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
+  const [firestoreQuests, setFirestoreQuests] = useState<Quest[]>([]);
+  const [isLoadingFirestoreQuests, setIsLoadingFirestoreQuests] = useState(true);
+
   const [generatedCode, setGeneratedCode] = useState('');
   const [generatedCodeDialogTitle, setGeneratedCodeDialogTitle] = useState('');
   const [generatedCodeDialogDescription, setGeneratedCodeDialogDescription] = useState('');
@@ -215,6 +265,30 @@ export default function AdminPage() {
     });
 
     return () => unsubscribe(); // Cleanup listener on component unmount
+  }, [currentUser, userData, toast]);
+
+  // Fetch quests from Firestore
+  useEffect(() => {
+      if (!currentUser || !userData?.isAdmin) {
+          setIsLoadingFirestoreQuests(false);
+          setFirestoreQuests([]);
+          return;
+      }
+      const fetchQuests = async () => {
+          setIsLoadingFirestoreQuests(true);
+          try {
+              const questsQuery = query(collection(db, 'quests'), orderBy('name'));
+              const querySnapshot = await getDocs(questsQuery);
+              const fetchedQuests = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Quest));
+              setFirestoreQuests(fetchedQuests);
+          } catch (error) {
+              console.error("[AdminPage] Error fetching quests from Firestore:", error);
+              toast({ title: "Error", description: "Could not fetch quests from database.", variant: "destructive" });
+          } finally {
+              setIsLoadingFirestoreQuests(false);
+          }
+      };
+      fetchQuests();
   }, [currentUser, userData, toast]);
 
 
@@ -362,57 +436,7 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
             mapUrls: mapUrls,
           };
         });
-
-        const questToString = (q: Quest) => {
-            const lines = [
-                `  {`,
-                `    id: '${q.id.replace(/'/g, "\\'")}',`,
-                `    name: '${q.name.replace(/'/g, "\\'")}',`,
-                `    level: ${q.level},`,
-            ];
-            const addLine = (key: keyof Quest, value: any) => {
-                if (value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0)) {
-                    // Escape single quotes in string values
-                    let formattedValue = JSON.stringify(value).replace(/"/g, "'");
-                    if (typeof value === 'string') {
-                      formattedValue = `'${value.replace(/'/g, "\\'")}'`;
-                    } else if (Array.isArray(value)) {
-                      formattedValue = `[${value.map(v => typeof v === 'string' ? `'${v.replace(/'/g, "\\'")}'` : JSON.stringify(v)).join(', ')}]`;
-                    }
-                    lines.push(`    ${key}: ${formattedValue},`);
-                }
-            };
-            
-            addLine('adventurePackName', q.adventurePackName);
-            addLine('location', q.location);
-            addLine('questGiver', q.questGiver);
-            addLine('casualExp', q.casualExp);
-            addLine('normalExp', q.normalExp);
-            addLine('hardExp', q.hardExp);
-            addLine('eliteExp', q.eliteExp);
-            addLine('duration', q.duration);
-            addLine('baseFavor', q.baseFavor);
-            addLine('patron', q.patron);
-            if(q.casualNotAvailable) addLine('casualNotAvailable', q.casualNotAvailable);
-            if(q.normalNotAvailable) addLine('normalNotAvailable', q.normalNotAvailable);
-            if(q.hardNotAvailable) addLine('hardNotAvailable', q.hardNotAvailable);
-            if(q.eliteNotAvailable) addLine('eliteNotAvailable', q.eliteNotAvailable);
-            addLine('epicBaseLevel', q.epicBaseLevel);
-            addLine('epicCasualExp', q.epicCasualExp);
-            addLine('epicNormalExp', q.epicNormalExp);
-            addLine('epicHardExp', q.epicHardExp);
-            addLine('epicEliteExp', q.epicEliteExp);
-            if(q.epicCasualNotAvailable) addLine('epicCasualNotAvailable', q.epicCasualNotAvailable);
-            if(q.epicNormalNotAvailable) addLine('epicNormalNotAvailable', q.epicNormalNotAvailable);
-            if(q.epicHardNotAvailable) addLine('epicHardNotAvailable', q.epicHardNotAvailable);
-            if(q.epicEliteNotAvailable) addLine('epicEliteNotAvailable', q.epicEliteNotAvailable);
-            addLine('wikiUrl', q.wikiUrl);
-            if(q.mapUrls && q.mapUrls.length > 0) addLine('mapUrls', q.mapUrls);
-
-            lines.push('  }');
-            return lines.join('\n');
-        };
-
+        
         const fileContentString = `// src/data/quests.ts
 import type { Quest } from '@/types';
 
@@ -435,6 +459,32 @@ ${newQuests.map(questToString).join(',\n')}
     }
   };
 
+  const handleGenerateQuestFile = () => {
+    if (firestoreQuests.length === 0) {
+      toast({ title: 'No Quests Found', description: 'No quests were found in the Firestore database to generate a file from.', variant: 'default' });
+      return;
+    }
+
+    const sortedForFile = [...firestoreQuests].sort((a,b) => a.name.localeCompare(b.name));
+
+    const fileContentString = `// src/data/quests.ts
+import type { Quest } from '@/types';
+
+// This is the master list for Quests.
+// This file was generated from the Firestore database on ${new Date().toUTCString()}
+// Do not edit this file directly.
+export const QUESTS_DATA: Quest[] = [
+${sortedForFile.map(questToString).join(',\n')}
+];
+`;
+    setGeneratedCode(fileContentString);
+    setGeneratedCodeDialogTitle('Generated Quests File from Firestore');
+    setGeneratedCodeDialogDescription('The quests from the Firestore database have been formatted. Copy the code below and replace the entire content of the specified file to align your static data with the database.');
+    setGeneratedCodeDialogFilePath('src/data/quests.ts');
+    setIsCodeDialogOpen(true);
+  };
+
+
   const handleEditQuest = (quest: Quest) => { setEditingQuest(quest); setIsQuestFormOpen(true); };
   const handleQuestFormSubmit = async (data: QuestFormData) => {
     if (!editingQuest) return;
@@ -447,12 +497,12 @@ ${newQuests.map(questToString).join(',\n')}
     setIsDeleteQuestDialogOpen(false); setQuestToDeleteId(null);
   };
   
-  const sortedQuests = useMemo(() => {
-    return [...quests].sort((a, b) => a.name.localeCompare(b.name));
-  }, [quests]);
+  const sortedStaticQuests = useMemo(() => {
+    return [...staticQuests].sort((a, b) => a.name.localeCompare(b.name));
+  }, [staticQuests]);
 
   const pageOverallInitialLoad = authIsLoading || isInitialAppDataLoading;
-  const pageContentLoading = isInitialAppDataLoading || isLoadingSuggestions; 
+  const pageContentLoading = isInitialAppDataLoading || isLoadingSuggestions || isLoadingFirestoreQuests; 
   const uiDisabled = pageContentLoading || isAppContextUpdating || isMigrationRunning; 
 
   if (authIsLoading) { 
@@ -514,6 +564,27 @@ ${newQuests.map(questToString).join(',\n')}
         <CsvUploader dataType="Quests" onFileUpload={handleFileUpload} disabled={uiDisabled} />
       </div>
 
+       <Card>
+        <CardHeader>
+            <CardTitle className="font-headline flex items-center"><FileCode2 className="mr-2 h-6 w-6 text-primary" /> Data Reconciliation</CardTitle>
+            <CardDescription>Tools to ensure data consistency between Firestore and static files.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="font-semibold">Generate Quests File</h3>
+                    <p className="text-sm text-muted-foreground">
+                        Create an up-to-date `quests.ts` file based on the current data in the Firestore 'quests' collection. This is useful for syncing IDs.
+                    </p>
+                </div>
+                <Button onClick={handleGenerateQuestFile} disabled={uiDisabled || firestoreQuests.length === 0}>
+                    {isLoadingFirestoreQuests && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Generate quests.ts
+                </Button>
+            </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
             <CardTitle className="font-headline flex items-center"><DatabaseZap className="mr-2 h-6 w-6 text-primary" /> Data Migration</CardTitle>
@@ -540,22 +611,22 @@ ${newQuests.map(questToString).join(',\n')}
         <Card>
           <CardHeader>
             <CardTitle className="font-headline flex items-center">
-              <ListChecks className="mr-2 h-6 w-6 text-primary" /> Current Quests
+              <ListChecks className="mr-2 h-6 w-6 text-primary" /> Current Quests (from Firestore)
             </CardTitle>
-            <CardDescription>Overview of loaded quests from the static data file. Manual editing is disabled; use CSV upload.</CardDescription>
+            <CardDescription>Overview of quests loaded directly from the database. Total Quests: <strong>{firestoreQuests.length}</strong></CardDescription>
           </CardHeader>
           <CardContent>
-            {isInitialAppDataLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <p>Total Quests: <strong>{sortedQuests.length}</strong></p>}
-             {!isInitialAppDataLoading && sortedQuests.length > 0 && (
+            {isLoadingFirestoreQuests ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+             {!isLoadingFirestoreQuests && firestoreQuests.length > 0 && (
               <ScrollArea className="h-48 mt-2">
                 <ul className="space-y-1 text-sm">
-                  {sortedQuests.map(quest => (
+                  {firestoreQuests.map(quest => (
                     <li
                       key={quest.id}
                       className="p-2 hover:bg-muted rounded-md flex justify-between items-center group"
                     >
                       <span>{quest.name} (Lvl {quest.level})</span>
-                      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); toast({ title: 'Manual Edit Disabled', description: 'Please use the CSV upload feature.', variant: 'default'});}} aria-label={`Edit ${quest.name}`}><Edit className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); toast({ title: 'Manual Deletion Disabled', description: 'Please use the CSV upload feature.', variant: 'default'});}} aria-label={`Delete ${quest.name}`}><Trash2 className="h-4 w-4" /></Button>
                       </div>

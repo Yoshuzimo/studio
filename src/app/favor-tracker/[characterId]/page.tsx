@@ -1,3 +1,4 @@
+
 // Favor-Tracker-V2
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -306,6 +307,7 @@ export default function FavorTrackerPage() {
       name: data.name,
       level: data.level,
       iconUrl: iconUrl === undefined ? character.iconUrl : iconUrl,
+      accountId: data.accountId,
     };
     setCharacter(updatedCharacterData);
     
@@ -557,8 +559,13 @@ export default function FavorTrackerPage() {
   const questDataMap = useMemo(() => {
     if (!quests || quests.length === 0) return new Map<string, QuestWithCalculatedData>();
     
+    console.log('[FavorTrackerPage] Re-calculating questDataMap. Static quests count:', quests.length, 'Completion data count:', activeCharacterQuestCompletions.size);
+
     const newMap = new Map<string, QuestWithCalculatedData>();
     for (const quest of quests) {
+      // Log each quest ID from the static data
+      console.log(`[FavorTrackerPage] Processing quest from static data: ${quest.name} (ID: ${quest.id})`);
+
       const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest, getQuestCompletion);
 
       const calculateAdjustedRemainingFavorScore = (q: Quest, remainingFavor: number): number => {
@@ -580,7 +587,7 @@ export default function FavorTrackerPage() {
       });
     }
     return newMap;
-  }, [quests, getQuestCompletion, calculateFavorMetrics, durationAdjustments]);
+  }, [quests, getQuestCompletion, calculateFavorMetrics, durationAdjustments, activeCharacterQuestCompletions.size]);
   
   const effectiveCharacterLevel = character && useLevelOffset ? character.level + levelOffset : character?.level || 0;
   

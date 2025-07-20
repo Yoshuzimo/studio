@@ -146,10 +146,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const completionsPath = `${CHARACTERS_COLLECTION}/${characterIdToFetch}/${QUEST_COMPLETIONS_SUBCOLLECTION}`;
       const completionsQuery = query(collection(db, completionsPath));
       const snapshot = await getDocs(completionsQuery);
+      
       const newCompletions = new Map<string, UserQuestCompletionData>();
       snapshot.docs.forEach(docSnap => {
+        // Log each fetched completion ID
+        console.log(`[AppDataProvider] Fetched completion from Firestore for quest ID: ${docSnap.id}`);
         newCompletions.set(docSnap.id, { ...docSnap.data() } as UserQuestCompletionData);
       });
+      
       setActiveCharacterQuestCompletions(newCompletions);
       setActiveCharacterIdState(characterIdToFetch);
     } catch (error) {
