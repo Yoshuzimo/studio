@@ -173,10 +173,10 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     }
   };
 
-  const handleSubmit = async (data: CharacterFormData) => {
+  const handleFormSubmit = form.handleSubmit(async (data) => {
     console.log("[CharacterForm] handleSubmit triggered. Data:", data, "Uploaded Image URL:", uploadedImageUrl);
     await onSubmit(data, initialData?.id, uploadedImageUrl);
-  };
+  });
   
   const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting;
 
@@ -203,7 +203,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8 pt-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleFormSubmit(); }} className="space-y-8 pt-4">
               <FormField
                 control={form.control}
                 name="name"

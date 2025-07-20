@@ -50,7 +50,6 @@ export default function CharactersPage() {
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
   
-  // Enhanced Logging
   useEffect(() => {
     console.log('[CharactersPage] Data State Update:', {
       isDataLoaded,
@@ -96,8 +95,8 @@ export default function CharactersPage() {
     }
   }, [currentUser, userData]);
 
-  const handleAddCharacterSubmit = async (data: CharacterFormData, _id?:string, iconUrl?: string | null) => {
-    console.log("[CharactersPage] handleAddCharacterSubmit received:", { data, _id, iconUrl });
+  const handleAddCharacterSubmit = async (data: CharacterFormData, iconUrl?: string | null) => {
+    console.log("[CharactersPage] handleAddCharacterSubmit received:", { data, iconUrl });
     const payload = { ...data, iconUrl: iconUrl === undefined ? null : iconUrl };
     console.log("[CharactersPage] Calling addCharacter with payload:", payload);
     await addCharacter(payload); 
@@ -248,7 +247,7 @@ export default function CharactersPage() {
         <CharacterForm
           isOpen={isEditModalOpen}
           onOpenChange={setIsEditModalOpen}
-          onSubmit={handleEditCharacterSubmit}
+          onSubmit={(data, _id, iconUrl) => handleEditCharacterSubmit(data, editingCharacter.id, iconUrl)}
           initialData={editingCharacter}
           isSubmitting={pageOverallLoading}
         />

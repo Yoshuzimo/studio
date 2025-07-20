@@ -453,7 +453,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     try {
       const newId = doc(collection(db, CHARACTERS_COLLECTION)).id;
       const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, preferences: {} };
-      console.log("[AppDataContext] addCharacter final payload for Firestore:", newCharacter);
+      console.log("[AppDataContext] addCharacter FINAL PAYLOAD for Firestore:", newCharacter);
       await setDoc(doc(db, CHARACTERS_COLLECTION, newId), newCharacter);
       setAllCharacters(prev => [...prev, newCharacter]);
       toast({ title: "Character Added", description: `${newCharacter.name} created.` });
@@ -489,7 +489,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           preferences: character.preferences || {},
           accountId: character.accountId,
         };
-        console.log("[AppDataContext] updateCharacter final payload for Firestore:", updatePayload);
+        console.log("[AppDataContext] updateCharacter FINAL PAYLOAD for Firestore:", updatePayload);
         await updateDoc(charRef, updatePayload);
         toast({ title: "Character Updated", description: `${character.name}'s details saved.` });
       } catch (error) {
