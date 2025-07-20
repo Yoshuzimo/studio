@@ -109,7 +109,10 @@ export default function CharactersPage() {
   
   const openAssignAccountModal = (character: Character) => {
     setCharacterToAssign(character);
-    setSelectedAccountIdForAssign(activeAccountId || '');
+    // Find the 'Default' account, or fall back to the first available account, or the active one.
+    const defaultAccount = accounts.find(acc => acc.name === 'Default');
+    const fallbackAccountId = accounts.length > 0 ? accounts[0].id : '';
+    setSelectedAccountIdForAssign(activeAccountId || defaultAccount?.id || fallbackAccountId);
     setIsAssignAccountModalOpen(true);
   };
   
