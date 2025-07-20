@@ -171,34 +171,39 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const loadInitialData = async () => {
       console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
       try {
-        let loadedAccounts: Account[] = [];
-        
         // Step 1: Fetch accounts.
+        console.log('[AppDataProvider] LOG: Querying accounts collection...');
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
         const accSnapshot = await getDocs(accQuery);
-        loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
 
+        // Step 2: If no accounts, create a "Default" one.
         if (loadedAccounts.length === 0) {
-          console.log('[AppDataProvider] LOG: No accounts found. User might need to be redirected to create one.');
+            console.log('[AppDataProvider] LOG: No accounts found. Creating default account.');
+            const newId = doc(collection(db, ACCOUNTS_COLLECTION)).id;
+            const newAccount: Account = { id: newId, userId: currentUser.uid, name: 'Default' };
+            await setDoc(doc(db, ACCOUNTS_COLLECTION, newId), newAccount);
+            loadedAccounts.push(newAccount);
         }
         setAccounts(loadedAccounts);
 
-        // Determine active account
-        const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
-        if (!activeAccountId && defaultAccount) {
-            setActiveAccountId(defaultAccount.id);
-        }
-
-        // Step 2: Fetch characters
+        // Step 3: Fetch characters.
+        console.log('[AppDataProvider] LOG: Querying characters collection...');
         const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
         const charSnapshot = await getDocs(charQuery);
         
+        // Step 4: Process characters, assigning a default accountId if missing.
+        const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
+        if (!defaultAccount) {
+          throw new Error("Critical error: Could not find or create a default account.");
+        }
+
         const finalCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
           return {
             id: docSnap.id,
             userId: data.userId,
-            accountId: data.accountId || (defaultAccount ? defaultAccount.id : ''),
+            accountId: data.accountId || defaultAccount.id, // Assign default if missing
             name: data.name,
             level: data.level,
             iconUrl: data.iconUrl || null,
@@ -207,7 +212,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         });
         setCharacters(finalCharacters);
 
-        // Step 3: Check for legacy owned packs data
+        // Determine active account
+        if (!activeAccountId) {
+            setActiveAccountId(defaultAccount.id);
+        }
+
+        // Step 5: Check for legacy owned packs data
         const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', 'packs');
         const legacyPacksSnap = await getDoc(legacyPacksDocRef);
         if (legacyPacksSnap.exists()) {
