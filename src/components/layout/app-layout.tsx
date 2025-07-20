@@ -25,6 +25,7 @@ import {
     DropdownMenuSubContent,
     DropdownMenuSubTrigger,
     DropdownMenuPortal,
+    DropdownMenuTrigger, // Added this import
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/toaster';
