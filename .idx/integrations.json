@@ -1,6 +1,5 @@
 {
   "firebase_hosting": {
     "deploymentHostingUrl": "https://ddo-toolkit.web.app"
-  },
-  "cloud_run_deploy": {}
+  }
 }
