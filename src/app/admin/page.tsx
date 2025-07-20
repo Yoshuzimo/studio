@@ -8,7 +8,7 @@ import { CsvUploader } from '@/components/admin/csv-uploader';
 import { ShieldCheck, ListChecks, Inbox, Loader2, User, Trash2, Edit, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, DatabaseZap, FileCode2 } from 'lucide-react';
 import type { Quest, CSVQuest, Suggestion, User as AppUser, AdventurePack, CSVAdventurePack } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { collection, doc, getDocs, query, orderBy, onSnapshot, Unsubscribe, writeBatch, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, orderBy, onSnapshot, Unsubscribe, writeBatch, serverTimestamp, setDoc, deleteDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
