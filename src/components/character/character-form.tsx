@@ -56,7 +56,7 @@ export type CharacterFormData = z.infer<typeof characterFormSchema>;
 interface CharacterFormProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onSubmit: (data: CharacterFormData, id?: string) => Promise<void>;
+  onSubmit: (data: CharacterFormData) => Promise<void>;
   initialData?: Character;
   isSubmitting?: boolean;
 }
@@ -197,7 +197,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
   const handleFormSubmit = form.handleSubmit(async (data) => {
     console.log("[CharacterForm] Form submitted with data:", data);
-    await onSubmit(data, initialData?.id);
+    await onSubmit(data);
   });
   
   const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting;

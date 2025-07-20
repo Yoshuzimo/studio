@@ -101,9 +101,9 @@ export default function CharactersPage() {
     setIsCreateModalOpen(false);
   };
 
-  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string) => {
-    console.log("[CharactersPage] handleEditCharacterSubmit received data:", { data, id });
-    if (!id || !editingCharacter) return;
+  const handleEditCharacterSubmit = async (data: CharacterFormData) => {
+    console.log("[CharactersPage] handleEditCharacterSubmit received data:", { data, id: editingCharacter?.id });
+    if (!editingCharacter) return;
     
     const updatedCharacterData: Character = {
         ...editingCharacter,
@@ -245,7 +245,7 @@ export default function CharactersPage() {
         <CharacterForm
           isOpen={isEditModalOpen}
           onOpenChange={setIsEditModalOpen}
-          onSubmit={(data) => handleEditCharacterSubmit(data, editingCharacter.id)}
+          onSubmit={handleEditCharacterSubmit}
           initialData={editingCharacter}
           isSubmitting={pageOverallLoading}
         />
