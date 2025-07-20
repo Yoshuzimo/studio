@@ -45,17 +45,21 @@ export function CharacterCard({ character, onEdit, onDelete, onAssignAccount, di
   const router = useRouter();
   
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    console.log(`[CharacterCard] LOG: Card clicked for character: ${character.name} (ID: ${character.id}). Account ID: ${character.accountId}`);
     if (disabled) return;
     
     // Prevent navigation if the click is on a button
     if ((e.target as HTMLElement).closest('button')) {
+      console.log('[CharacterCard] LOG: Click was on a button, stopping propagation.');
       return;
     }
 
     if (!character.accountId) {
+      console.log('[CharacterCard] LOG: No accountId found, calling onAssignAccount.');
       e.preventDefault(); // Prevent link navigation
       onAssignAccount(character);
     } else {
+      console.log(`[CharacterCard] LOG: accountId found, navigating to /favor-tracker/${character.id}`);
       router.push(`/favor-tracker/${character.id}`);
     }
   };

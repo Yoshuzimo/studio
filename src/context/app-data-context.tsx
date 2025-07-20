@@ -185,30 +185,33 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const loadInitialData = async () => {
       console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
       try {
-        // Sequentially fetch accounts, then characters
-        const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
-        const accSnapshot = await getDocs(accQuery);
+        // Fetch accounts and characters
+        const accountsQuery = query(collection(db, ACCOUNTS_COLLECTION), where("userId", "==", currentUser.uid));
+        const charactersQuery = query(collection(db, CHARACTERS_COLLECTION), where("userId", "==", currentUser.uid));
+        
+        const [accSnapshot, charSnapshot] = await Promise.all([
+            getDocs(accountsQuery),
+            getDocs(charactersQuery)
+        ]);
+
         let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        console.log(`[AppDataProvider] LOG: Fetched ${loadedAccounts.length} accounts from Firestore.`);
 
         if (loadedAccounts.length === 0) {
-            console.log('[AppDataProvider] LOG: No accounts found for user. Assuming new user and redirecting to create one.');
-            // This is handled by pages now, so we just set an empty array.
-            setAccounts([]);
-        } else {
-             setAccounts(loadedAccounts);
+            console.log('[AppDataProvider] LOG: No accounts found. Creating a "Default" account.');
+            const newAccountRef = doc(collection(db, ACCOUNTS_COLLECTION));
+            const defaultAccount: Account = { id: newAccountRef.id, userId: currentUser.uid, name: 'Default' };
+            await setDoc(newAccountRef, defaultAccount);
+            loadedAccounts.push(defaultAccount);
+            console.log('[AppDataProvider] LOG: "Default" account created and added to local state.');
         }
+        setAccounts(loadedAccounts);
         
-        const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
-        const charSnapshot = await getDocs(charQuery);
         const loadedCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
-          const char = { id: docSnap.id, ...data } as Character;
-          // Assign a default accountId if it's missing and accounts exist
-          if (!char.accountId && loadedAccounts.length > 0) {
-            char.accountId = (loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0]).id;
-          }
-          return char;
+          return { id: docSnap.id, ...data } as Character;
         });
+        console.log(`[AppDataProvider] LOG: Fetched ${loadedCharacters.length} characters from Firestore.`);
         setAllCharacters(loadedCharacters);
 
         // Determine active account from localStorage or default
@@ -217,12 +220,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             const accountExists = savedAccountId && loadedAccounts.some(acc => acc.id === savedAccountId);
 
             if (accountExists) {
+                console.log(`[AppDataProvider] LOG: Setting active account from localStorage: ${savedAccountId}`);
                 setActiveAccountId(savedAccountId);
             } else {
                 const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
+                console.log(`[AppDataProvider] LOG: Setting active account to default: ${defaultAccount.id}`);
                 setActiveAccountId(defaultAccount.id);
             }
         } else {
+            console.log('[AppDataProvider] LOG: No accounts exist, setting active account to null.');
             setActiveAccountId(null);
         }
 
@@ -232,10 +238,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         if (legacyPacksSnap.exists()) {
           const data = legacyPacksSnap.data();
           if(data && Array.isArray(data.names)) {
-            console.log('[AppDataProvider] LOG: Found legacy user-level owned packs data.');
+            console.log(`[AppDataProvider] LOG: Found ${data.names.length} legacy user-level owned packs.`);
             setLegacyOwnedPacks(data.names);
           }
         } else {
+          console.log('[AppDataProvider] LOG: No legacy pack data found.');
           setLegacyOwnedPacks(null);
         }
 
@@ -244,7 +251,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       } catch (error) {
         console.error("[AppDataProvider] LOG: Failed to load initial user-specific data:", error);
-        toast({ title: "Data Load Error", description: "Could not load your accounts and characters. Please try refreshing.", variant: 'destructive' });
+        toast({ title: "Data Load Error", description: (error as Error).message, variant: 'destructive' });
       } finally {
         setIsDataLoaded(true);
         setIsLoading(false);

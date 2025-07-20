@@ -52,6 +52,7 @@ export default function CharactersPage() {
   const pageOverallLoading = authIsLoading || appDataIsLoading;
   
   const charactersForDisplay = useMemo(() => {
+    console.log('[CharactersPage] LOG: Recalculating charactersForDisplay. allCharacters:', allCharacters, 'activeAccountId:', activeAccountId);
     // Ensure allCharacters is an array before filtering.
     if (!allCharacters) return [];
     // Show characters for the active account OR characters with no accountId
@@ -61,27 +62,30 @@ export default function CharactersPage() {
   }, [allCharacters, activeAccountId]);
 
   useEffect(() => {
+    console.log('[CharactersPage] LOG: Auth/Data loading state change. authIsLoading:', authIsLoading, 'currentUser:', !!currentUser);
     if (!authIsLoading && !currentUser) {
       router.replace('/login');
     }
   }, [authIsLoading, currentUser, router]);
 
   useEffect(() => {
+    console.log('[CharactersPage] LOG: Data loaded state change. isDataLoaded:', isDataLoaded, 'accounts.length:', accounts.length, 'appDataIsLoading:', appDataIsLoading);
     if (isDataLoaded && accounts.length === 0 && !appDataIsLoading) {
         router.push('/accounts?action=create');
     } else if (isDataLoaded && accounts.length > 0 && !activeAccountId) {
       const defaultAccount = accounts.find(acc => acc.name === 'Default') || accounts[0];
       if (defaultAccount) {
+        console.log('[CharactersPage] LOG: Setting default active account ID:', defaultAccount.id);
         setActiveAccountId(defaultAccount.id);
       }
     }
   }, [isDataLoaded, accounts, activeAccountId, setActiveAccountId, router, appDataIsLoading]);
 
   useEffect(() => {
-    if (currentUser && userData && userData.displayName === currentUser.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX) {
-      setIsSetDisplayNameModalOpen(true);
-    } else {
-      setIsSetDisplayNameModalOpen(false);
+    if (currentUser && userData) {
+      const needsDisplayName = userData.displayName === currentUser.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
+      console.log('[CharactersPage] LOG: Checking if display name needs setup. Needs setup:', needsDisplayName);
+      setIsSetDisplayNameModalOpen(needsDisplayName);
     }
   }, [currentUser, userData]);
 
@@ -108,6 +112,7 @@ export default function CharactersPage() {
   };
   
   const openAssignAccountModal = (character: Character) => {
+    console.log('[CharactersPage] LOG: Opening assign account modal for character:', character.id);
     setCharacterToAssign(character);
     setSelectedAccountIdForAssign(activeAccountId || '');
     setIsAssignAccountModalOpen(true);
@@ -115,6 +120,7 @@ export default function CharactersPage() {
   
   const handleAssignAccount = async () => {
     if (!characterToAssign || !selectedAccountIdForAssign) return;
+    console.log(`[CharactersPage] LOG: Assigning character ${characterToAssign.id} to account ${selectedAccountIdForAssign}`);
     
     const updatedCharacter = { ...characterToAssign, accountId: selectedAccountIdForAssign };
     await updateCharacter(updatedCharacter);
@@ -188,11 +194,11 @@ export default function CharactersPage() {
         </div>
       </div>
 
-      {pageOverallLoading && allCharacters.length === 0 && !isDataLoaded && (
+      {pageOverallLoading && (!allCharacters || allCharacters.length === 0) && !isDataLoaded && (
         <div className="text-center py-10"><Loader2 className="mr-2 h-8 w-8 animate-spin mx-auto" /> <p>Loading characters...</p></div>
       )}
 
-      {!pageOverallLoading && allCharacters.length === 0 && isDataLoaded && !isSetDisplayNameModalOpen && (
+      {!pageOverallLoading && allCharacters && allCharacters.length === 0 && isDataLoaded && !isSetDisplayNameModalOpen && (
         <div className="text-center py-10">
           <p className="text-xl text-muted-foreground mb-4">No characters found. Add one to get started!</p>
            <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty character list placeholder" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" />
