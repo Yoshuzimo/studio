@@ -1,0 +1,76 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Admins can read/write anything in the 'users' collection
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Users can read/write their own documents.
+    match /users/{userId} {
+      allow read, update, delete: if request.auth.uid == userId || isAdmin();
+      allow create: if request.auth.uid == userId;
+    }
+    
+    match /publicProfiles/{userId} {
+      allow get: if true;
+      allow list: if true; 
+      allow create, update: if request.auth.uid == userId;
+    }
+
+    match /accounts/{accountId} {
+      allow read, write: if request.auth.uid == resource.data.userId;
+      allow create: if request.auth.uid == request.resource.data.userId;
+      allow list: if request.auth.uid == request.query.userId;
+    }
+
+    match /characters/{characterId} {
+      allow read, write: if request.auth.uid == resource.data.userId;
+      allow create: if request.auth.uid == request.resource.data.userId;
+      // Allow list query by userId
+      allow list: if request.auth.uid == request.query.userId;
+    }
+
+    // Quest completions are subcollections of characters
+    match /characters/{characterId}/questCompletions/{questId} {
+      allow read, write: if get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
+    }
+    
+    // User-specific configuration, like owned packs
+    match /userConfiguration/{userId}/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+    }
+
+    // Suggestions can be created by any authenticated user.
+    // They can only be read by the suggester or an admin.
+    // They can only be updated/deleted by an admin.
+    match /suggestions/{suggestionId} {
+        allow create: if request.auth != null;
+        allow read: if request.auth.uid == resource.data.suggesterId || isAdmin();
+        allow update, delete: if isAdmin();
+    }
+    
+    // Static data that anyone can read
+    match /adventurePacks/{packId} {
+        allow get: if true;
+        allow list: if true;
+    }
+    
+    match /quests/{questId} {
+        allow get: if true;
+        allow list: if true;
+    }
+    
+    match /Logs/{logCollectionId}/{entry=**} {
+        allow read, write: if isAdmin();
+    }
+  }
+}
