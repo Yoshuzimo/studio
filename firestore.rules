@@ -1,94 +1,91 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user is querying their own data.
-    // This is the correct way to secure list operations.
-    function isQueryingOwnData() {
+    // ========================================
+    // Helper Functions
+    // ========================================
+    function isOwner() {
       return request.auth != null &&
-             request.query.where.userId == request.auth.uid;
+             resource.data.userId == request.auth.uid;
     }
 
-    // Helper function to check if a user is accessing a document they own.
-    // Used for get, update, delete operations on single documents.
-    function isOwner(doc) {
-      return request.auth != null && doc.userId == request.auth.uid;
-    }
-
-    // Helper function to check if a user is creating a document for themselves.
     function isCreatingOwnData() {
       return request.auth != null &&
              request.resource.data.userId == request.auth.uid;
-    }
-    
-    // ========================================
-    // Accounts Collection
-    // ========================================
-    match /accounts/{accountId} {
-      // Allow reading/updating/deleting if the user owns the document.
-      allow get, update, delete: if isOwner(resource.data);
-      // Allow creating the document if the user is setting their own userId.
-      allow create: if isCreatingOwnData();
-      // Allow listing documents only when querying for the user's own data.
-      allow list: if isQueryingOwnData();
     }
 
     // ========================================
     // Characters Collection
     // ========================================
     match /characters/{characterId} {
-      allow get, update, delete: if isOwner(resource.data);
+      allow get, update, delete: if isOwner();
+      // Allow a user to list only their own characters.
+      // The query from the app MUST include `where('userId', '==', request.auth.uid)`.
+      allow list: if request.auth != null && request.query.where.userId == request.auth.uid;
       allow create: if isCreatingOwnData();
-      allow list: if isQueryingOwnData();
-
-      // ============================
-      // Quest Completions Sub-collection
-      // ============================
-      match /questCompletions/{questCompletionId} {
-        // Allow full access if the user owns the parent character document.
-        allow read, write: if isOwner(get(/databases/$(database)/documents/characters/$(characterId)).data);
-      }
     }
-    
+
     // ========================================
-    // User Configuration (for Owned Packs)
+    // Accounts Collection
     // ========================================
-    match /userConfiguration/{userId}/{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /accounts/{accountId} {
+      allow get, update, delete: if isOwner();
+      // Allow a user to list only their own accounts.
+      // The query from the app MUST include `where('userId', '==', request.auth.uid)`.
+      allow list: if request.auth != null && request.query.where.userId == request.auth.uid;
+      allow create: if isCreatingOwnData();
+    }
+
+    // ========================================
+    // Quest Completions (Subcollection)
+    // ========================================
+    match /characters/{characterId}/questCompletions/{completionId} {
+        allow read, write: if get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
+    }
+
+    // ========================================
+    // Owned Adventure Packs (Subcollection)
+    // ========================================
+     match /userConfiguration/{userId}/ownedPacksInfo/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
     // ========================================
     // Users & Public Profiles
     // ========================================
     match /users/{userId} {
-      allow read, update, create: if request.auth != null && request.auth.uid == userId;
-      // Deleting user documents is disallowed for safety.
-      allow delete: if false; 
+      // Users can only access their own user document.
+      allow get, update, create, delete: if request.auth != null && request.auth.uid == userId;
     }
 
     match /publicProfiles/{userId} {
-      // Anyone can read public profiles (e.g., for display name lookups).
-      allow read: if true;
-      // Only the user themselves can create or update their public profile.
-      allow create, update: if request.auth != null && request.auth.uid == userId;
-      allow delete: if false;
+      allow read; // Allow public reading of profiles
+      allow update, create: if request.auth != null && request.auth.uid == userId;
     }
     
     // ============================
     // Suggestions
     // ============================
-     match /suggestions/{suggestionId} {
-      // Admins and the original suggester can read.
-      allow read: if (request.auth != null && resource.data.suggesterId == request.auth.uid) || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
-
-      // Any authenticated user can create a suggestion.
+    match /suggestions/{suggestionId} {
+      function isAdmin() {
+          return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      }
+      allow read: if isAdmin() || (request.auth != null && resource.data.suggesterId == request.auth.uid);
       allow create: if request.auth != null && request.resource.data.suggesterId == request.auth.uid;
-
-      // Allow updates for adding replies or admins changing status.
-      allow update: if request.auth != null;
-      
-      // Deletion should be restricted, e.g., to admins.
-      allow delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow update: if (isAdmin() || (request.auth != null && resource.data.suggesterId == request.auth.uid));
+      allow delete: if isAdmin();
+    }
+    
+    // ============================
+    // Static Game Data
+    // ============================
+    match /quests/{questId} {
+      allow read; // Publicly readable
+    }
+    match /adventurePacks/{packId} {
+      allow read; // Publicly readable
     }
 
   }
