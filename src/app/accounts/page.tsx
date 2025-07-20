@@ -14,15 +14,15 @@ import { useAuth } from '@/context/auth-context';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function AccountsPage() {
-  const { currentUser, isLoading: authIsLoading } = useAuth(); 
-  const { accounts, addAccount, updateAccount, deleteAccount, isDataLoaded, isLoading: appDataIsLoading } from useAppData();
+  const { currentUser, isLoading: authIsLoading } = useAuth();
+  const { accounts, addAccount, updateAccount, deleteAccount, isDataLoaded, isLoading: appDataIsLoading } = useAppData();
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | undefined>(undefined);
-  
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
 
@@ -42,7 +42,7 @@ export default function AccountsPage() {
 
 
   const handleAddAccountSubmit = async (data: AccountFormData) => {
-    const newAccount = await addAccount(data); 
+    const newAccount = await addAccount(data);
     setIsCreateModalOpen(false);
     // After creating the very first account, redirect to the home page
     if(newAccount && accounts.length === 0) {
@@ -73,7 +73,7 @@ export default function AccountsPage() {
     setIsDeleteDialogOpen(false);
     setAccountToDelete(null);
   };
-  
+
   if (pageOverallLoading || (!currentUser && !authIsLoading)) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -83,13 +83,13 @@ export default function AccountsPage() {
   }
 
   return (
-    <div className="py-8 space-y-6"> 
+    <div className="py-8 space-y-6">
       <div className="flex justify-between items-center mb-8">
         <h1 className="font-headline text-3xl font-bold flex items-center">
           <Library className="mr-3 h-8 w-8 text-primary" /> My Accounts
         </h1>
         <Button onClick={() => setIsCreateModalOpen(true)} size="lg" disabled={pageOverallLoading}>
-          {pageOverallLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlusCircle className="mr-2 h-5 w-5" />} 
+          {pageOverallLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlusCircle className="mr-2 h-5 w-5" />}
           Add New Account
         </Button>
       </div>
@@ -139,14 +139,14 @@ export default function AccountsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this account?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the "{accountToDelete?.name || ''}" account and all its associated data, including owned adventure packs. 
+              This will permanently delete the "{accountToDelete?.name || ''}" account and all its associated data, including owned adventure packs.
               Any characters assigned to this account will be moved to your "Default" account. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pageOverallLoading} onClick={() => setAccountToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDeleteAccount} 
+            <AlertDialogAction
+              onClick={confirmDeleteAccount}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               disabled={pageOverallLoading}
             >
