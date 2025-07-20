@@ -185,24 +185,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const loadInitialData = async () => {
       console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
       try {
+        // Sequentially fetch accounts, then characters
         const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
-        const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
-
-        const [accSnapshot, charSnapshot] = await Promise.all([
-            getDocs(accQuery),
-            getDocs(charQuery),
-        ]);
-        
+        const accSnapshot = await getDocs(accQuery);
         let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
-        setAccounts(loadedAccounts);
 
+        // If no accounts, create a "Default" one. This is a crucial step for new users.
+        if (loadedAccounts.length === 0) {
+            console.log('[AppDataProvider] LOG: No accounts found for user. Creating "Default" account.');
+            const newAccountData: Omit<Account, 'id' | 'userId'> = { name: 'Default' };
+            const newAccount = await addAccount(newAccountData);
+            if(newAccount) {
+              loadedAccounts.push(newAccount);
+            }
+        }
+        setAccounts(loadedAccounts);
+        
+        const charQuery = query(collection(db, CHARACTERS_COLLECTION), where('userId', '==', currentUser.uid));
+        const charSnapshot = await getDocs(charQuery);
         const loadedCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
-          const char = {
-            id: docSnap.id,
-            ...data,
-          } as Character;
-          // Assign default account ID if missing
+          const char = { id: docSnap.id, ...data } as Character;
+          // Assign a default accountId if it's missing and accounts exist
           if (!char.accountId && loadedAccounts.length > 0) {
             char.accountId = (loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0]).id;
           }
@@ -222,9 +226,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                 setActiveAccountId(defaultAccount.id);
             }
         } else {
-            setActiveAccountId(null); // No accounts, so no active account
+            setActiveAccountId(null); // Should not happen if default is created, but a safe fallback
         }
-
 
         // Check for legacy owned packs data
         const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);

@@ -3,60 +3,93 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwnerOf(userId) {
-      return request.auth.uid == userId;
-    }
-
-    function isCreatingOwnData(userId) {
-      return isSignedIn() && isOwnerOf(userId) && request.resource.data.userId == userId;
-    }
-    
-    function requestingOwnData(userId) {
+    // Helper function to check if the user owns the document
+    function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
     
+    // Helper function to check if a user is creating their own data
+    function isCreatingOwnData(userIdField) {
+      return isOwner(request.resource.data[userIdField]);
+    }
+    
+    // Helper function to get the current user's data from the 'users' collection
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Helper function to check if the user is an admin
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      return isSignedIn() && getUserData().isAdmin == true;
     }
 
-    // Collections
-    match /users/{userId} {
-      allow read: if isSignedIn() && (isOwnerOf(userId) || isAdmin());
-      allow write: if isSignedIn() && isOwnerOf(userId);
-      allow create: if isSignedIn(); // Allow any signed-in user to create their own user document
-    }
-
-    match /publicProfiles/{userId} {
-      allow read: if true;
-      allow write: if isSignedIn() && isOwnerOf(userId);
-    }
-
-    match /characters/{characterId} {
-      allow get, write, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn() && request.query.where.get("userId") == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-    }
-
+    // Accounts collection rules
     match /accounts/{accountId} {
-      allow get, write, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn() && request.query.where.get("userId") == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // A user can list their own accounts. The query must include `where('userId', '==', request.auth.uid)`.
+      allow list: if isOwner(request.query.where.userId);
+      allow get: if isOwner(resource.data.userId);
+
+      // Users can create their own accounts
+      allow create: if isCreatingOwnData('userId');
+
+      // Users can update their own accounts, except the 'Default' one
+      allow update: if isOwner(resource.data.userId) && resource.data.name != 'Default';
+      
+      // Users can delete their own accounts, except the 'Default' one
+      allow delete: if isOwner(resource.data.userId) && resource.data.name != 'Default';
     }
-    
-    match /userConfiguration/{userId}/{subcollection}/{docId} {
-       allow read, write: if isOwnerOf(userId);
+
+    // Characters collection rules
+    match /characters/{characterId} {
+      // A user can list their own characters. The query must include `where('userId', '==', request.auth.uid)`.
+      allow list: if isOwner(request.query.where.userId);
+      allow get: if isOwner(resource.data.userId);
+
+      // Users can create, update, and delete their own characters
+      allow write: if isCreatingOwnData('userId') || isOwner(resource.data.userId);
     }
-    
-    // Suggestions
+
+    // Suggestions collection rules
     match /suggestions/{suggestionId} {
-        allow read: if isAdmin() || (isSignedIn() && resource.data.suggesterId == request.auth.uid);
-        allow create: if isSignedIn() && request.resource.data.suggesterId == request.auth.uid;
-        allow update: if isAdmin() || (isSignedIn() && resource.data.suggesterId == request.auth.uid);
+      allow read, get: if isOwner(resource.data.suggesterId) || isAdmin();
+      // Allow users to list their own suggestions, or admins to list all
+      allow list: if (isOwner(request.query.where.suggesterId)) || isAdmin();
+      allow create: if isCreatingOwnData('suggesterId');
+      allow update: if isOwner(resource.data.suggesterId) || isAdmin();
+    }
+
+    // User configuration collection rules
+    match /userConfiguration/{userId}/{subcollection}/{docId} {
+      // Users can read and write to their own configuration documents
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Public Profiles
+    match /publicProfiles/{userId} {
+      allow read: if true; // Everyone can read public profiles
+      allow create, update: if isOwner(userId); // Only the owner can create/update their profile
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      // Users can read their own user document
+      allow get: if isOwner(userId) || isAdmin();
+
+      // Users can be created during signup
+      allow create: if request.resource.data.id == request.auth.uid;
+      
+      // Allow users to update their own displayName and iconUrl. Admin status can only be changed by an admin.
+      allow update: if isOwner(userId) || isAdmin();
+    }
+    
+    // Logs collection rules
+    match /Logs/{logType}/{logId} {
+        // Only admins should be able to read/write logs
+        allow read, write: if isAdmin();
     }
   }
 }
