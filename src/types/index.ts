@@ -1,5 +1,5 @@
 
-// Cache-busting comment to force rebuild of dependents: V6
+// Cache-busting comment to force rebuild of dependents: V7
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 
 export interface User {
@@ -24,6 +24,13 @@ export interface PublicUserProfileFirebaseData {
   displayName: string | null;
   iconUrl: string | null;
   updatedAt: FieldValue;
+}
+
+// --- New Account Interface ---
+export interface Account {
+  id: string;
+  userId: string;
+  name: string;
 }
 
 // --- Character Preferences Interfaces ---
@@ -64,6 +71,7 @@ interface ReaperRewardsPreferences {
 export interface Character {
   id:string;
   userId: string;
+  accountId: string; // Link to an Account
   name: string;
   level: number;
   iconUrl: string | null;
@@ -107,7 +115,6 @@ export interface Quest {
   // Heroic Tier Availability
   casualNotAvailable?: boolean;
   normalNotAvailable?: boolean;
-  hardNotAvailable?: boolean;
   eliteNotAvailable?: boolean;
 
   // Epic Tier Details

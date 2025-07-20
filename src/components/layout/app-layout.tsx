@@ -21,7 +21,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuTrigger,
     DropdownMenuSub,
     DropdownMenuSubContent,
     DropdownMenuSubTrigger,
@@ -29,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/toaster';
-import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, LogOut, MailCheck, Loader2, UserCog, Book, ListOrdered, BarChartHorizontalBig, Skull } from 'lucide-react';
+import { Users, Package, ShieldCheck, ScrollText, Sun, Moon, Link as LinkIcon, Lightbulb, LogOut, MailCheck, Loader2, UserCog, Book, ListOrdered, BarChartHorizontalBig, Skull, Library } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
 import * as React from 'react';
@@ -139,6 +138,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <SidebarContent className="p-2">
             <SidebarMenu>
                  <SidebarMenuItem>
+                    <Link href="/accounts">
+                        <SidebarMenuButton
+                        isActive={pathname === '/accounts'}
+                        tooltip="Accounts"
+                        className="justify-start"
+                        >
+                        <Library className="h-5 w-5" />
+                        <span>Accounts</span>
+                        </SidebarMenuButton>
+                    </Link>
+                 </SidebarMenuItem>
+                 <SidebarMenuItem>
                     <DropdownMenu open={isCharacterMenuOpen} onOpenChange={setIsCharacterMenuOpen}>
                       <DropdownMenuTrigger asChild>
                         <div onMouseEnter={() => setIsCharacterMenuOpen(true)} onMouseLeave={() => setIsCharacterMenuOpen(false)}>
@@ -234,7 +245,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1">
                 <h1 className="font-headline text-lg font-semibold">
-                {visibleNavItems.find(item => item.href === "/account/change-email" && isAccountPage ? true : pathname === item.href || pathname.startsWith(item.href + '/'))?.label || 'Characters'}
+                {pathname === '/accounts' ? 'Accounts' : visibleNavItems.find(item => item.href === "/account/change-email" && isAccountPage ? true : pathname === item.href || pathname.startsWith(item.href + '/'))?.label || 'Characters'}
                 </h1>
             </div>
             <div className="flex items-center gap-2">
