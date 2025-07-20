@@ -1,4 +1,5 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -6,71 +7,93 @@ service cloud.firestore {
     // Characters Collection
     // =======================
     match /characters/{characterId} {
-      // Rule is secure: requires query to filter by userId
-      allow list: if request.auth != null && request.query.where.size() > 0 && request.query.where.userId == request.auth.uid;
-
-      // Allow get/update/delete if user is the owner
-      allow get, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-
-      // Allow create if user is setting their own userId
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Allow get/update/delete if the user is the owner of the document.
+      allow get, update, delete: if isOwner();
+      // Allow a user to list characters only if their query is scoped to their own userId.
+      allow list: if isQueryingOwnData();
+      // Allow a user to create a character if the new document's userId matches their own.
+      allow create: if request.auth.uid == request.resource.data.userId;
     }
 
     // =======================
-    // Accounts Collection - TEMPORARILY OPEN FOR DEBUGGING
+    // Accounts Collection
     // =======================
     match /accounts/{accountId} {
-      // Temporarily allowing any authenticated user to read/list to diagnose the permissions error.
-      // THIS IS NOT SECURE FOR PRODUCTION.
-      allow read, list: if request.auth != null;
-
-      // Create/update/delete rules remain secure.
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Allow get/update/delete if the user is the owner of the document.
+      allow get, update, delete: if isOwner();
+      // Allow a user to list accounts only if their query is scoped to their own userId.
+      allow list: if isQueryingOwnData();
+      // Allow a user to create an account if the new document's userId matches their own.
+      // This is the key fix for new user setup.
+      allow create: if request.auth.uid == request.resource.data.userId;
     }
 
     // =======================
-    // Quest Completions Subcollection
-    // =======================
-    match /characters/{characterId}/questCompletions/{completionId} {
-        allow read, write, delete: if get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
-    }
-
-    // =======================
-    // Owned Packs Subcollection
-    // =======================
-    match /userConfiguration/{userId}/ownedPacksInfo/{accountId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // =======================
-    // Users & Profiles
-    // =======================
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    match /publicProfiles/{userId} {
-      allow get: if true; // Publicly readable
-      allow write: if request.auth != null && request.auth.uid == userId; // Only owner can write
-    }
-
-     // =======================
-    // Suggestions & Admin collections
+    // Suggestions Collection
     // =======================
     match /suggestions/{suggestionId} {
-      // Users can create suggestions for themselves.
-      allow create: if request.auth.uid == request.resource.data.suggesterId;
-      // Users can read their own suggestions. Admins can read any.
-      allow get: if resource.data.suggesterId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-      // Users can list their own suggestions. Admins can list all.
-      allow list: if (request.query.limit <= 100 && request.query.filters[0][2] == request.auth.uid) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-      // Users and Admins can update conversation. Only Admins can change status.
-      allow update: if (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true) || (resource.data.suggesterId == request.auth.uid && request.resource.data.keys().hasOnly(['conversation']));
+      // Admins can read/write/delete any suggestion.
+      allow read, write, delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      // Users can create suggestions.
+      allow create: if isCreatingOwnData();
+       // Users can read/update their own suggestions.
+      allow get, update: if isOwner();
     }
 
-    match /Logs/{logCollection}/{logId} {
-      allow read, write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    // =======================
+    // Public Profiles (Read-Only for clients)
+    // =======================
+    match /publicProfiles/{userId} {
+      allow get: if isAuthenticated();
+      // Write access is handled by server-side functions (AuthContext).
+      allow write: if false; 
+    }
+
+    // =======================
+    // User Configuration
+    // =======================
+    match /userConfiguration/{userId}/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+    }
+
+    // =======================
+    // Users Collection (Private user data)
+    // =======================
+    match /users/{userId} {
+      // A user can only read or write their own user document.
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // =======================
+    // Logs Collection (Write-only for clients, read-only for admins)
+    // =======================
+     match /Logs/{logType}/{logId=**} {
+      allow read, list: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow write: if isAuthenticated(); // For writing logs like role changes
+    }
+
+
+    // =======================
+    // Reusable Helper Functions
+    // =======================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      // Check if the user is authenticated and their UID matches the userId field in the document.
+      return isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    function isCreatingOwnData() {
+      // Check if the user is authenticated and the new document's userId field matches their UID.
+      return isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    function isQueryingOwnData() {
+      // Enforce that any 'list' operation (query) MUST include a 'where' clause
+      // that filters for the current user's ID. This prevents listing other users' documents.
+      return isAuthenticated() && request.query.where.get('userId')[2] == request.auth.uid;
     }
   }
 }
