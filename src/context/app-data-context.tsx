@@ -166,7 +166,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       try {
         console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
 
-        // Step 1: Fetch accounts, creating a default one if the query fails (likely due to new user permissions)
+        // Step 1: Fetch accounts
         try {
           console.log('[AppDataProvider] LOG: Querying accounts collection...');
           const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
@@ -176,21 +176,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
            const firebaseError = error as { code?: string };
            if (firebaseError.code === 'permission-denied' || firebaseError.code === 'failed-precondition') {
              console.warn('[AppDataProvider] LOG: Permission denied on account query, assuming new user. Creating default account.');
-             // This block is the failsafe for new users.
            } else {
-             // Re-throw other errors
              throw error;
            }
         }
 
-        // Step 2: Ensure default account exists if none are found after the attempt
+        // Step 2: Ensure default account exists if none are found.
         if (loadedAccounts.length === 0) {
-          console.log('[AppDataProvider] LOG: No accounts found or created. Explicitly creating default account.');
+          console.log('[AppDataProvider] LOG: No accounts found. Explicitly creating default account.');
           const defaultAccountData = { userId: currentUser.uid, name: "Default" };
           const defaultAccountRef = doc(collection(db, ACCOUNTS_COLLECTION));
           await setDoc(defaultAccountRef, defaultAccountData);
           const newDefaultAccount = { id: defaultAccountRef.id, ...defaultAccountData };
-          loadedAccounts.push(newDefaultAccount);
+          loadedAccounts.push(newDefaultAccount); // Add the new account to our loaded list
           toast({ title: "Account Initialized", description: `Your "Default" account has been created.` });
         }
         
