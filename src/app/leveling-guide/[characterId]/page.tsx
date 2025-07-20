@@ -73,6 +73,8 @@ interface LevelingGuidePreferences {
   onCormyr: boolean;
   showRaids: boolean;
   sortConfig?: SortConfig | null;
+  useLevelOffset?: boolean;
+  levelOffset?: number;
 }
 
 function parseDurationToMinutes(durationString?: string | null): number | null {
@@ -172,6 +174,9 @@ export default function LevelingGuidePage() {
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
+  const [useLevelOffset, setUseLevelOffset] = useState(false);
+  const [levelOffset, setLevelOffset] = useState(0);
+
   const pageOverallLoading = authIsLoading || appDataIsLoading;
 
   useEffect(() => {
@@ -225,6 +230,8 @@ export default function LevelingGuidePage() {
             setShowRaids(prefs.showRaids ?? false);
             setClickAction(prefs.clickAction ?? 'none');
             setSortConfig(prefs.sortConfig ?? { key: 'experienceScore', direction: 'descending' });
+            setUseLevelOffset(prefs.useLevelOffset ?? false);
+            setLevelOffset(prefs.levelOffset ?? 0);
             
             const defaultVis = getDefaultColumnVisibility();
             const mergedVisibility = { ...defaultVis, ...(prefs.columnVisibility || {}) };
@@ -236,6 +243,8 @@ export default function LevelingGuidePage() {
             setShowRaids(false);
             setClickAction('none');
             setSortConfig({ key: 'experienceScore', direction: 'descending' });
+            setUseLevelOffset(false);
+            setLevelOffset(0);
         }
     } catch (error) { console.error("Error loading quest guide preferences:", error); }
   }, [characterId, isDataLoaded, currentUser, character]);
@@ -305,8 +314,10 @@ export default function LevelingGuidePage() {
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
 
+    const effectiveCharacter = { ...character, level: useLevelOffset ? character.level + levelOffset : character.level };
+
     const allProcessedQuests = quests.map(quest => {
-        const adjustedExps = calculateAdjustedExp(quest, character);
+        const adjustedExps = calculateAdjustedExp(quest, effectiveCharacter);
         const allExps = Object.values(adjustedExps).filter(v => v !== null) as number[];
         const maxExp = allExps.length > 0 ? Math.max(...allExps) : null;
         const durationCategory = getDurationCategory(quest.duration);
@@ -370,7 +381,7 @@ export default function LevelingGuidePage() {
     });
 
     return { sortedQuests };
-  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig, isDebugMode]);
+  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig, isDebugMode, useLevelOffset, levelOffset]);
 
   const requestSort = (key: SortableLevelingGuideColumnKey) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -394,6 +405,8 @@ export default function LevelingGuidePage() {
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
   };
+  
+  const effectiveCharacterLevel = character ? (useLevelOffset ? character.level + levelOffset : character.level) : 0;
 
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
@@ -419,7 +432,7 @@ export default function LevelingGuidePage() {
                 <CardTitle className="font-headline text-3xl flex items-center"><UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}</CardTitle>
                 <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}><Pencil className="mr-2 h-4 w-4" /> Edit Character</Button>
             </div>
-            <CardDescription>Level {character.level}</CardDescription>
+            <CardDescription>Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}</CardDescription>
              <div className="pt-4 flex flex-col space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -439,13 +452,44 @@ export default function LevelingGuidePage() {
                     )}
                 </div>
               </div>
-              <div className="pt-2 border-t border-border mt-4">
-                <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
-                <RadioGroup value={clickAction} onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}} className="flex items-center space-x-4" disabled={pageOverallLoading}>
-                  <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-guide" /><Label htmlFor="action-none-guide" className="font-normal cursor-pointer">None</Label></div>
-                  <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-guide" /><Label htmlFor="action-wiki-guide" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
-                  <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-guide" /><Label htmlFor="action-map-guide" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
-                </RadioGroup>
+              <div className="pt-2 border-t border-border mt-4 flex justify-between items-center">
+                <div>
+                    <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
+                    <RadioGroup value={clickAction} onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}} className="flex items-center space-x-4" disabled={pageOverallLoading}>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-guide" /><Label htmlFor="action-none-guide" className="font-normal cursor-pointer">None</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-guide" /><Label htmlFor="action-wiki-guide" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-guide" /><Label htmlFor="action-map-guide" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
+                    </RadioGroup>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="use-level-offset-leveling" 
+                    checked={useLevelOffset} 
+                    onCheckedChange={(checked) => {
+                        const isChecked = !!checked;
+                        setUseLevelOffset(isChecked);
+                        savePreferences({ useLevelOffset: isChecked });
+                    }} 
+                    disabled={pageOverallLoading}
+                  />
+                  <Label htmlFor="use-level-offset-leveling" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>
+                      Use LVL Offset:
+                  </Label>
+                  <Input
+                    type="number"
+                    id="level-offset-leveling"
+                    value={levelOffset}
+                    onChange={(e) => {
+                        const newOffset = parseInt(e.target.value, 10);
+                        if (!isNaN(newOffset)) {
+                            setLevelOffset(newOffset);
+                            savePreferences({ levelOffset: newOffset });
+                        }
+                    }}
+                    className="h-8 w-20"
+                    disabled={!useLevelOffset || pageOverallLoading}
+                  />
+                </div>
               </div>
             </div>
         </CardHeader>
@@ -521,7 +565,7 @@ export default function LevelingGuidePage() {
           ) : (
             <div className="h-full overflow-y-auto">
                 <Table>
-                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest guide for {character.name} at level {character.level}.</TableCaption>
+                <TableCaption className="py-4 sticky bottom-0 bg-card z-10">End of quest guide for {character.name} at level {effectiveCharacterLevel}.</TableCaption>
                 <TableHeader className="sticky top-0 z-10">
                     <TableRow className="bg-card hover:bg-card">
                     {visibleTableHeaders.map((header) => (

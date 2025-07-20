@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { UserCircle, MapPin, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, AlertTriangle, Skull, ListOrdered, Pencil, UserSquare, TestTube2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -103,6 +104,8 @@ interface ReaperRewardsPreferences {
   showRaids: boolean;
   clickAction: 'none' | 'wiki' | 'map';
   sortConfig?: SortConfig | null;
+  useLevelOffset?: boolean;
+  levelOffset?: number;
 }
 
 const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
@@ -141,6 +144,9 @@ export default function ReaperRewardsPage() {
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
+
+  const [useLevelOffset, setUseLevelOffset] = useState(false);
+  const [levelOffset, setLevelOffset] = useState(0);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
 
@@ -190,6 +196,8 @@ export default function ReaperRewardsPage() {
           setShowRaids(prefs.showRaids ?? false);
           setClickAction(prefs.clickAction ?? 'none');
           setSortConfig(prefs.sortConfig ?? {key: 'level', direction: 'ascending'});
+          setUseLevelOffset(prefs.useLevelOffset ?? false);
+          setLevelOffset(prefs.levelOffset ?? 0);
           
           const defaultVis = getDefaultColumnVisibility();
           const mergedVisibility = { ...defaultVis, ...(prefs.columnVisibility || {}) };
@@ -200,6 +208,8 @@ export default function ReaperRewardsPage() {
           setShowRaids(false);
           setClickAction('none');
           setSortConfig({key: 'level', direction: 'ascending'});
+          setUseLevelOffset(false);
+          setLevelOffset(0);
         }
       } catch (error) {
         console.error("Error loading preferences:", error);
@@ -280,8 +290,10 @@ export default function ReaperRewardsPage() {
   
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
+    
+    const effectiveCharacterLevel = useLevelOffset ? character.level + levelOffset : character.level;
 
-    const calculateRXP = (quest: Quest, character: Character, skulls: number): number | null => {
+    const calculateRXP = (quest: Quest, charLevel: number, skulls: number): number | null => {
       let baseRXP = 50 + (3 * quest.level * skulls);
       if (quest.level >= 20) { baseRXP *= 2; }
       
@@ -289,7 +301,7 @@ export default function ReaperRewardsPage() {
       const lengthAdjustment = durationCategory ? (reaperLengthAdjustments[durationCategory] ?? 1.0) : 1.0;
       let totalRXP = baseRXP * lengthAdjustment;
 
-      if (quest.level < 20 && character.level === quest.level + 4) { totalRXP *= 0.9; }
+      if (quest.level < 20 && charLevel === quest.level + 4) { totalRXP *= 0.9; }
 
       return Math.round(totalRXP);
     };
@@ -297,18 +309,17 @@ export default function ReaperRewardsPage() {
     const allProcessedQuests = quests.map(quest => {
         const skullData: Record<string, number | null> = {};
         for(let i = 1; i <= 10; i++) {
-            skullData[`skull-${i}`] = calculateRXP(quest, character, i);
+            skullData[`skull-${i}`] = calculateRXP(quest, effectiveCharacterLevel, i);
         }
 
-        const charLvl = character.level;
+        const charLvl = effectiveCharacterLevel;
         const questLvl = quest.level;
         const hiddenReasons: string[] = [];
         
         if (charLvl < questLvl) hiddenReasons.push(`Character Level (${charLvl}) < Quest Level (${questLvl})`);
         
         if (charLvl >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
-        else if (charLvl >= 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
-        else if (questLvl >= 20 && charLvl < 30 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
+        else if (questLvl >= 20 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
         else if (questLvl < 20 && charLvl - questLvl > 4) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 4 for heroic levels.`);
 
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
@@ -324,7 +335,7 @@ export default function ReaperRewardsPage() {
 
         return {
             ...quest,
-            maxRXP: calculateRXP(quest, character, 10),
+            maxRXP: calculateRXP(quest, effectiveCharacterLevel, 10),
             ...skullData,
             hiddenReasons,
         };
@@ -370,7 +381,7 @@ export default function ReaperRewardsPage() {
     });
 
     return { sortedQuests };
-  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids, isDebugMode]);
+  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids, isDebugMode, useLevelOffset, levelOffset]);
   
   const requestSort = (key: SortableReaperColumnKey) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -397,6 +408,8 @@ export default function ReaperRewardsPage() {
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
   };
   
+  const effectiveCharacterLevel = character ? (useLevelOffset ? character.level + levelOffset : character.level) : 0;
+  
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
   }
@@ -420,7 +433,7 @@ export default function ReaperRewardsPage() {
             <CardTitle className="font-headline text-3xl flex items-center"><UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}</CardTitle>
             <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}><Pencil className="mr-2 h-4 w-4" /> Edit Character</Button>
           </div>
-          <CardDescription>Level {character.level}</CardDescription>
+          <CardDescription>Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}</CardDescription>
            <div className="pt-4 flex flex-col space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -440,13 +453,44 @@ export default function ReaperRewardsPage() {
                 )}
               </div>
             </div>
-            <div className="pt-2 border-t border-border mt-4">
-              <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
-              <RadioGroup value={clickAction} onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}} className="flex items-center space-x-4" disabled={pageOverallLoading}>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-reaper" /><Label htmlFor="action-none-reaper" className="font-normal cursor-pointer">None</Label></div>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-reaper" /><Label htmlFor="action-wiki-reaper" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-reaper" /><Label htmlFor="action-map-reaper" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
-              </RadioGroup>
+            <div className="pt-2 border-t border-border mt-4 flex justify-between items-center">
+              <div>
+                <Label className="text-sm font-medium block mb-2">On Quest Click</Label>
+                <RadioGroup value={clickAction} onValueChange={(value) => {setClickAction(value as 'none' | 'wiki' | 'map'); savePreferences({ clickAction: value as 'none' | 'wiki' | 'map' });}} className="flex items-center space-x-4" disabled={pageOverallLoading}>
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="none" id="action-none-reaper" /><Label htmlFor="action-none-reaper" className="font-normal cursor-pointer">None</Label></div>
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="wiki" id="action-wiki-reaper" /><Label htmlFor="action-wiki-reaper" className="flex items-center font-normal cursor-pointer"><BookOpen className="mr-1.5 h-4 w-4"/>Show Wiki</Label></div>
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="map" id="action-map-reaper" /><Label htmlFor="action-map-reaper" className="font-normal cursor-pointer flex items-center"><MapPin className="mr-1.5 h-4 w-4"/>Show Map</Label></div>
+                </RadioGroup>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="use-level-offset-reaper" 
+                  checked={useLevelOffset} 
+                  onCheckedChange={(checked) => {
+                      const isChecked = !!checked;
+                      setUseLevelOffset(isChecked);
+                      savePreferences({ useLevelOffset: isChecked });
+                  }} 
+                  disabled={pageOverallLoading}
+                />
+                <Label htmlFor="use-level-offset-reaper" className={cn("font-normal", pageOverallLoading && "cursor-not-allowed opacity-50")}>
+                    Use LVL Offset:
+                </Label>
+                <Input
+                  type="number"
+                  id="level-offset-reaper"
+                  value={levelOffset}
+                  onChange={(e) => {
+                      const newOffset = parseInt(e.target.value, 10);
+                      if (!isNaN(newOffset)) {
+                          setLevelOffset(newOffset);
+                          savePreferences({ levelOffset: newOffset });
+                      }
+                  }}
+                  className="h-8 w-20"
+                  disabled={!useLevelOffset || pageOverallLoading}
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
