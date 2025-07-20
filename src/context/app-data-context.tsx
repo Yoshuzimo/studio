@@ -162,23 +162,36 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     
     const loadInitialData = async () => {
+      let loadedAccounts: Account[] = [];
       try {
         console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
 
-        // Step 1: Fetch accounts
-        console.log('[AppDataProvider] LOG: Querying accounts collection...');
-        const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
-        const accSnapshot = await getDocs(accQuery);
-        let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        // Step 1: Fetch accounts, creating a default one if the query fails (likely due to new user permissions)
+        try {
+          console.log('[AppDataProvider] LOG: Querying accounts collection...');
+          const accQuery = query(collection(db, ACCOUNTS_COLLECTION), where('userId', '==', currentUser.uid));
+          const accSnapshot = await getDocs(accQuery);
+          loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        } catch (error) {
+           const firebaseError = error as { code?: string };
+           if (firebaseError.code === 'permission-denied' || firebaseError.code === 'failed-precondition') {
+             console.warn('[AppDataProvider] LOG: Permission denied on account query, assuming new user. Creating default account.');
+             // This block is the failsafe for new users.
+           } else {
+             // Re-throw other errors
+             throw error;
+           }
+        }
 
-        // Step 2: Ensure default account exists if none are found
+        // Step 2: Ensure default account exists if none are found after the attempt
         if (loadedAccounts.length === 0) {
-          console.log('[AppDataProvider] LOG: No accounts found. Creating default account.');
+          console.log('[AppDataProvider] LOG: No accounts found or created. Explicitly creating default account.');
           const defaultAccountData = { userId: currentUser.uid, name: "Default" };
           const defaultAccountRef = doc(collection(db, ACCOUNTS_COLLECTION));
           await setDoc(defaultAccountRef, defaultAccountData);
           const newDefaultAccount = { id: defaultAccountRef.id, ...defaultAccountData };
           loadedAccounts.push(newDefaultAccount);
+          toast({ title: "Account Initialized", description: `Your "Default" account has been created.` });
         }
         
         setAccounts(loadedAccounts);
@@ -563,5 +576,3 @@ export function useAppData() {
   }
   return context;
 }
-
-    
