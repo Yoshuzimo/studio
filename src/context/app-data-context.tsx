@@ -374,7 +374,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const updatePayload = {
           name: character.name,
           level: character.level,
-          iconUrl: character.iconUrl,
+          iconUrl: character.iconUrl === undefined ? null : character.iconUrl,
           preferences: character.preferences || {},
         };
         await updateDoc(charRef, updatePayload);

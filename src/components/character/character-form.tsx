@@ -92,51 +92,47 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       toast({ title: "Widget not ready", description: "The image upload widget is not loaded yet or you are not logged in.", variant: "destructive" });
       return;
     }
-
+    
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
     const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 
     if (!cloudName || !uploadPreset || !apiKey) {
       toast({ title: "Client Configuration Error", description: "Cloudinary settings are missing.", variant: "destructive" });
-      console.error("[Cloudinary Widget] Missing one of: cloudName, uploadPreset, apiKey", { cloudName, uploadPreset, apiKey });
       return;
     }
 
     const widget = window.cloudinary.createUploadWidget({
       cloudName: cloudName,
       uploadPreset: uploadPreset,
-      apiKey: apiKey, // Pass the public API key here
+      apiKey: apiKey, 
       folder: "ddo_toolkit/characters",
       cropping: true,
-      multiple: false,
-      sources: ['local'],
       croppingAspectRatio: 4 / 3,
       showAdvancedOptions: true,
+      sources: ['local', 'url', 'camera'],
       uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, any>) => {
-        console.log("[Cloudinary Widget] Requesting signature for:", paramsToSign);
-        try {
-          if (!currentUser) throw new Error("Not authenticated.");
-          const idToken = await currentUser.getIdToken();
+          try {
+              if (!currentUser) throw new Error("Not authenticated.");
+              const idToken = await currentUser.getIdToken();
 
-          const response = await fetch('/api/cloudinary/signature', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-            body: JSON.stringify(paramsToSign),
-          });
+              const response = await fetch('/api/cloudinary/signature', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                  body: JSON.stringify(paramsToSign),
+              });
 
-          if (!response.ok) {
-            const errorBody = await response.json();
-            throw new Error(errorBody.error || 'Failed to fetch signature.');
+              if (!response.ok) {
+                  const errorBody = await response.json();
+                  throw new Error(errorBody.error || 'Failed to fetch signature.');
+              }
+
+              const { signature } = await response.json();
+              callback(signature);
+          } catch (error) {
+              console.error("[Cloudinary Widget] Error fetching signature:", error);
+              toast({ title: "Signature Error", description: (error as Error).message, variant: "destructive" });
           }
-
-          const { signature } = await response.json();
-          console.log("[Cloudinary Widget] Received signature from server:", signature);
-          callback(signature);
-        } catch (error) {
-          console.error("[Cloudinary Widget] Error fetching signature:", error);
-          toast({ title: "Signature Error", description: (error as Error).message, variant: "destructive" });
-        }
       },
       styles: {
           palette: {
@@ -153,8 +149,6 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         return;
       }
 
-      console.log("[Cloudinary Widget] Upload Result:", result);
-
       if (result && result.event === "success") {
         setUploadedImageUrl(result.info.secure_url);
         toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
@@ -165,7 +159,8 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
   };
 
   const handleSubmit = async (data: CharacterFormData) => {
-    await onSubmit(data, initialData?.id, uploadedImageUrl || initialData?.iconUrl || undefined);
+    // Pass the new URL if it exists, otherwise pass the original URL
+    await onSubmit(data, initialData?.id, uploadedImageUrl !== null ? uploadedImageUrl : initialData?.iconUrl || undefined);
   };
   
   const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting;
@@ -178,7 +173,6 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         type="text/javascript"
         onLoad={() => {
           setIsCloudinaryScriptLoaded(true);
-          console.log("Cloudinary Upload Widget script loaded.");
         }}
         onError={() => {
            console.error("Failed to load Cloudinary Upload Widget script.");
