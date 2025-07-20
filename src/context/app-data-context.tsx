@@ -490,7 +490,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           accountId: character.accountId,
         };
         console.log("[AppDataContext] updateCharacter FINAL PAYLOAD for Firestore:", updatePayload);
-        await updateDoc(charRef, updatePayload);
+        await updateDoc(charRef, {
+            name: character.name,
+            level: character.level,
+            iconUrl: character.iconUrl,
+            accountId: character.accountId,
+            preferences: character.preferences || {},
+        });
         toast({ title: "Character Updated", description: `${character.name}'s details saved.` });
       } catch (error) {
         console.error("[AppDataContext] Error updating character in Firestore:", error);

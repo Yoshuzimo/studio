@@ -116,8 +116,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       form.reset(defaultValues);
       setPreviewImageUrl(defaultValues.iconUrl);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData, isOpen, activeAccountId]);
+  }, [initialData, isOpen, activeAccountId, form]);
 
   const openCloudinaryWidget = async () => {
     if (!isCloudinaryScriptLoaded || !currentUser) {
@@ -194,11 +193,6 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
         toast({ title: "Authentication Error", description: "Could not get authentication token for upload.", variant: "destructive" });
     }
   };
-
-  const handleFormSubmit = form.handleSubmit(async (data) => {
-    console.log("[CharacterForm] Form submitted with data:", data);
-    await onSubmit(data);
-  });
   
   const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting;
 
@@ -225,7 +219,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={handleFormSubmit} className="space-y-8 pt-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pt-4">
               <FormField
                 control={form.control}
                 name="name"
