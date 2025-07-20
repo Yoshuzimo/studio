@@ -1,4 +1,3 @@
-
 // src/app/page.tsx
 "use client";
 
@@ -53,6 +52,7 @@ export default function CharactersPage() {
   const pageOverallLoading = authIsLoading || appDataIsLoading;
   
   const charactersForDisplay = useMemo(() => {
+    // Ensure allCharacters is an array before filtering.
     if (!allCharacters) return [];
     // Show characters for the active account OR characters with no accountId
     return allCharacters.filter(
@@ -270,7 +270,7 @@ export default function CharactersPage() {
             <AlertDialogTitle>Are you sure you want to delete this character?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the character
-              "{allCharacters.find(c => c.id === characterToDeleteId)?.name || ''}".
+              "{allCharacters?.find(c => c.id === characterToDeleteId)?.name || ''}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
