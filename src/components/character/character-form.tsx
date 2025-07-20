@@ -45,7 +45,7 @@ export type CharacterFormData = z.infer<typeof characterFormSchema>;
 interface CharacterFormProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onSubmit: (data: CharacterFormData, id?: string, iconUrl?: string) => Promise<void>;
+  onSubmit: (data: CharacterFormData, id?: string, iconUrl?: string | null) => Promise<void>;
   initialData?: Character;
   isSubmitting?: boolean;
 }
@@ -160,7 +160,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
 
   const handleSubmit = async (data: CharacterFormData) => {
     // Pass the new URL if it exists, otherwise pass the original URL
-    await onSubmit(data, initialData?.id, uploadedImageUrl !== null ? uploadedImageUrl : initialData?.iconUrl || undefined);
+    await onSubmit(data, initialData?.id, uploadedImageUrl);
   };
   
   const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting;
