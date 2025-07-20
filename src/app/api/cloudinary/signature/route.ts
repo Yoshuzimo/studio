@@ -22,15 +22,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });
     }
 
-    // The widget sends all parameters it will use in the upload for signing.
-    // We will sign all of them except for file data.
-    const paramsToSign = await request.json();
-
-    console.log("[Cloudinary Signature] Received params for signing:", paramsToSign);
+    const body = await request.json();
+    console.log("[Cloudinary Signature] Received params for signing:", body);
 
 
     const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
-    const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
+    const cloudinaryApiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 
     if (!cloudinaryApiSecret || !cloudinaryApiKey) {
       console.error("[Cloudinary Signature] Cloudinary credentials are missing.");
@@ -40,7 +37,15 @@ export async function POST(request: Request) {
       );
     }
     
-    // The widget has already prepared the params. We just need to sort them and sign.
+    // The widget sends all parameters it will use in the upload for signing.
+    // We will sign all of them except for file data.
+    const paramsToSign: Record<string, string | number> = {};
+    for (const key in body) {
+        if (body[key] !== undefined && body[key] !== null) {
+            paramsToSign[key] = body[key];
+        }
+    }
+
     const sortedParams = Object.entries(paramsToSign)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, val]) => `${key}=${val}`)

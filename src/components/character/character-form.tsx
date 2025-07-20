@@ -103,6 +103,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
       return;
     }
 
+    // This is the correct flow: use the `uploadSignature` callback
     const widget = window.cloudinary.createUploadWidget({
       cloudName: cloudName,
       uploadPreset: uploadPreset,
