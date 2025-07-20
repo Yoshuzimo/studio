@@ -1,3 +1,4 @@
+
 // src/app/admin/page.tsx
 "use client";
 
@@ -346,13 +347,20 @@ ${newPacks.map(pack => `  { id: '${pack.id}', name: '${pack.name}', pointsCost: 
         const questToString = (q: Quest) => {
             const lines = [
                 `  {`,
-                `    id: '${q.id}',`,
+                `    id: '${q.id.replace(/'/g, "\\'")}',`,
                 `    name: '${q.name.replace(/'/g, "\\'")}',`,
                 `    level: ${q.level},`,
             ];
             const addLine = (key: keyof Quest, value: any) => {
                 if (value !== null && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0)) {
-                    lines.push(`    ${key}: ${JSON.stringify(value).replace(/"/g, "'")},`);
+                    // Escape single quotes in string values
+                    let formattedValue = JSON.stringify(value).replace(/"/g, "'");
+                    if (typeof value === 'string') {
+                      formattedValue = `'${value.replace(/'/g, "\\'")}'`;
+                    } else if (Array.isArray(value)) {
+                      formattedValue = `[${value.map(v => typeof v === 'string' ? `'${v.replace(/'/g, "\\'")}'` : JSON.stringify(v)).join(', ')}]`;
+                    }
+                    lines.push(`    ${key}: ${formattedValue},`);
                 }
             };
             
