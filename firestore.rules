@@ -4,151 +4,39 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ============================
+    // Characters Collection
+    // ============================
+    match /characters/{characterId} {
+      // Rule for single document operations (get, update, delete)
+      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+
+      // Rule for creating a new document
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // Rule for querying a list of documents
+      allow list: if request.auth != null && request.query.where.get('userId')[2] == request.auth.uid;
+    }
+
+    // ============================
+    // Accounts Collection
+    // ============================
+    match /accounts/{accountId} {
+      // Rule for single document operations (get, update, delete)
+      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Rule for creating a new document
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // Rule for querying a list of documents
+      allow list: if request.auth != null && request.query.where.get('userId')[2] == request.auth.uid;
+    }
+
+    // ============================
     // Users Collection
     // ============================
     match /users/{userId} {
-      // Only the user themselves or a creator can read the full user document.
-      allow read: if isSelf(userId) || isCreator();
-
-      // A user can update their own non-sensitive profile info.
-      allow update: if isSelf(userId) &&
-                    onlyAllowedKeysModified(['displayName', 'iconUrl', 'preferences', 'level', 'name', 'accountId']) &&
-                    sensitiveFieldsUnchanged(['id', 'email', 'isAdmin', 'isOwner', 'isCreator', 'emailVerified', 'createdAt', 'userId']);
-
-      // A new user can create their own document with specific initial values.
-      allow create: if request.auth != null &&
-                     request.auth.uid == userId &&
-                     request.resource.data.id == request.auth.uid &&
-                     request.resource.data.email == request.auth.token.email &&
-                     request.resource.data.keys().hasAll(['id', 'email', 'displayName', 'isAdmin', 'isOwner', 'isCreator', 'createdAt', 'emailVerified', 'iconUrl', 'accountId', 'level', 'name', 'preferences', 'userId']) &&
-                     request.resource.data.isAdmin == false &&
-                     request.resource.data.isOwner == false &&
-                     request.resource.data.isCreator == false &&
-                     request.resource.data.createdAt == request.time;
-
-      // Prevent listing all users or deleting accounts.
-      allow list, delete: if false;
-    }
-
-    // ============================
-    // Public Profiles Collection
-    // ============================
-    match /publicProfiles/{userId} {
-      // Any authenticated user can read public profiles (for display name lookups).
-      allow read: if request.auth != null;
-      // Users can update their own public profile.
-      allow create, update: if isSelf(userId) &&
-                    onlyAllowedKeysModified(['displayName', 'iconUrl', 'updatedAt']) &&
-                    request.resource.data.keys().hasOnly(['displayName', 'iconUrl', 'updatedAt']);
-      allow delete: if false;
-    }
-
-    // ============================
-    // Characters Collection (Root Level)
-    // ============================
-    match /characters/{characterId} {
-      // Allow read/write if the document's userId matches the authenticated user's ID.
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-
-      // Allow listing characters only via a query that filters by the user's ID.
-      allow list: if request.auth != null && request.query.where.get('userId')[2] == request.auth.uid;
-
-      // Allow access to the quest completions subcollection for the character's owner.
-      match /questCompletions/{questId} {
-        allow read, write: if request.auth != null && get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
-      }
-    }
-
-    // ============================
-    // Accounts Collection (Root Level)
-    // ============================
-    match /accounts/{accountId} {
-       // Allow read/write if the document's userId matches the authenticated user's ID.
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-
-      // Allow listing accounts only via a query that filters by the user's ID.
-      allow list: if request.auth != null && request.query.where.get('userId')[2] == request.auth.uid;
-    }
-    
-    // ============================
-    // User Configuration (for Owned Packs)
-    // ============================
-     match /userConfiguration/{userId}/ownedPacksInfo/{docId} {
-      allow read, write: if isSelf(userId);
-    }
-    
-    // ============================
-    // Suggestions
-    // ============================
-     match /suggestions/{suggestionId} {
-      allow read: if isAdmin() || (request.auth != null && resource.data.suggesterId == request.auth.uid);
-
-      allow create: if request.auth != null &&
-                     request.resource.data.suggesterId == request.auth.uid &&
-                     request.resource.data.status == 'open' &&
-                     request.resource.data.conversation.size() == 1 &&
-                     request.resource.data.conversation[0].senderId == request.auth.uid &&
-                     request.resource.data.title is string && request.resource.data.title.size() >= 5 && request.resource.data.title.size() <= 100 &&
-                     request.resource.data.conversation[0].text is string && request.resource.data.conversation[0].text.size() >= 10 && request.resource.data.conversation[0].text.size() <= 5000;
-
-      allow update: if request.auth != null &&
-        (
-          (
-            isAdmin() &&
-            (
-              (onlyAllowedKeysModified(['status']) && request.resource.data.status in ['open', 'closed']) ||
-              (
-                request.resource.data.conversation.size() == resource.data.conversation.size() + 1 &&
-                fieldsAreUnchanged(['title', 'suggesterId', 'suggesterName', 'createdAt', 'status'])
-              )
-            )
-          ) ||
-          (
-            isSelf(resource.data.suggesterId) &&
-            resource.data.status == 'open' &&
-            request.resource.data.conversation.size() == resource.data.conversation.size() + 1 &&
-            fieldsAreUnchanged(['title', 'suggesterId', 'suggesterName', 'createdAt', 'status'])
-          )
-        );
-        
-      allow delete: if isCreator();
-    }
-    
-     // ============================
-    // Helper Functions
-    // ============================
-    function getActingUserDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function isSelf(userId) {
-      return request.auth != null && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return request.auth != null && getActingUserDoc().data.isAdmin == true;
-    }
-
-    function isOwner() {
-      return request.auth != null && getActingUserDoc().data.isOwner == true;
-    }
-
-    function isCreator() {
-      return request.auth != null && getActingUserDoc().data.isCreator == true;
-    }
-
-    function onlyAllowedKeysModified(allowedKeys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
-    }
-    
-    function fieldsAreUnchanged(fieldKeys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasAny(fieldKeys) == false;
-    }
-    
-    function sensitiveFieldsUnchanged(sensitiveFields) {
-        return fieldsAreUnchanged(sensitiveFields);
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
