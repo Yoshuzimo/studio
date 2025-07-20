@@ -1,4 +1,3 @@
-
 // src/context/auth-context.tsx
 "use client";
 
@@ -17,7 +16,7 @@ import {
 } from 'firebase/auth';
 import { auth, db, EmailAuthProvider, reauthenticateWithCredential } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, serverTimestamp, type Timestamp as FirestoreTimestampType, type FieldValue } from 'firebase/firestore'; // Removed writeBatch for now
-import type { User as AppUser, PublicUserProfile, PublicUserProfileFirebaseData } from '@/types';
+import type { User as AppUser, PublicUserProfile, PublicUserProfileFirebaseData, Character } from '@/types';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -76,15 +75,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: user.uid, email: dbData.email || user.email, displayName: dbData.displayName || (user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX),
           isAdmin: dbData.isAdmin || false, isOwner: dbData.isOwner || false, isCreator: dbData.isCreator || false,
           createdAt: dbData.createdAt as FirestoreTimestampType, emailVerified: user.emailVerified, iconUrl: dbData.iconUrl ?? null,
-        };
+        } as AppUser;
         setUserData(appUserData);
       } else {
         console.log('[AuthContext] User document does not exist for UID:', user.uid, 'Attempting to create one.');
         const placeholderDisplayName = user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
-        const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl'> & { createdAt: FieldValue, iconUrl: null } = { 
+        const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl' | 'preferences'> & { createdAt: FieldValue, iconUrl: null, preferences: {} } = {
           id: user.uid, email: user.email, displayName: placeholderDisplayName,
-          isAdmin: false, isOwner: false, isCreator: false, emailVerified: user.emailVerified, accountId: '', level: 0, name: '', preferences: {}, userId: '', 
-          createdAt: serverTimestamp(), iconUrl: null
+          isAdmin: false, isOwner: false, isCreator: false, emailVerified: user.emailVerified, 
+          createdAt: serverTimestamp(), iconUrl: null,
+          // Dummy fields to satisfy the Omit<Character> portion of User type
+          accountId: '', level: 0, name: '', userId: '', preferences: {}
         };
         const publicProfileData: PublicUserProfileFirebaseData = { displayName: placeholderDisplayName, iconUrl: null, updatedAt: serverTimestamp() };
         await setDoc(doc(db, 'users', user.uid), mainUserDocData);
@@ -178,13 +179,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const placeholderDisplayName = user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
       
-      const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl'> & { createdAt: FieldValue, iconUrl: null } = { 
+      const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl' | 'preferences'> & { createdAt: FieldValue, iconUrl: null, preferences: {} } = { 
         id: user.uid, email: user.email, displayName: placeholderDisplayName,
         isAdmin: false, isOwner: false, isCreator: false, 
         emailVerified: user.emailVerified || false,
-        accountId: '', level: 0, name: '', preferences: {}, userId: '', 
+        accountId: '', level: 0, name: '', userId: '', preferences: {},
         createdAt: serverTimestamp(),
-        iconUrl: null
+        iconUrl: null,
       };
       await setDoc(doc(db, 'users', user.uid), mainUserDocData);
 
