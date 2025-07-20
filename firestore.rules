@@ -6,30 +6,18 @@ service cloud.firestore {
     // Characters Collection
     // ========================================
     match /characters/{characterId} {
-      // Allow reading/updating/deleting a single document if the user owns it
       allow get, update, delete: if isOwner();
-      
-      // Allow listing/querying documents only if the query filters by the user's own userId
-      allow list: if request.auth != null && request.query.resource.data.userId == request.auth.uid;
-      
-      // Allow creating a new document if the userId matches the user's own UID
-      allow create: if request.auth != null &&
-                    request.resource.data.userId == request.auth.uid;
+      allow list: if isQueryingOwnData();
+      allow create: if isCreatingOwnData();
     }
 
     // ========================================
     // Accounts Collection
     // ========================================
     match /accounts/{accountId} {
-      // Allow reading/updating/deleting a single document if the user owns it
       allow get, update, delete: if isOwner();
-
-      // Allow listing/querying documents only if the query filters by the user's own userId
-      allow list: if request.auth != null && request.query.resource.data.userId == request.auth.uid;
-      
-      // Allow creating a new document if the userId matches the user's own UID
-      allow create: if request.auth != null &&
-                    request.resource.data.userId == request.auth.uid;
+      allow list: if isQueryingOwnData();
+      allow create: if isCreatingOwnData();
     }
 
     // ========================================
@@ -39,12 +27,22 @@ service cloud.firestore {
       allow get, update, delete, create: if request.auth != null && request.auth.uid == userId;
     }
 
-    // ========================================
-    // Helper Function
+    // = a======================================
+    // Helper Functions
     // ========================================
     function isOwner() {
       return request.auth != null &&
              resource.data.userId == request.auth.uid;
+    }
+
+    function isCreatingOwnData() {
+      return request.auth != null &&
+             request.resource.data.userId == request.auth.uid;
+    }
+
+    function isQueryingOwnData() {
+      return request.auth != null &&
+             request.query.where('userId', '==', request.auth.uid).exists();
     }
   }
 }
