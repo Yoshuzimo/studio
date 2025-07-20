@@ -1,75 +1,82 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper function to check if a user is signed in
+    
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // users: Publicly readable for basic info, but only the user can write to their own document.
     match /users/{userId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn(); // Allow listing for admin features, queries must be secured
-      allow write: if isSignedIn() && request.auth.uid == userId;
-      // Admins can manage user roles (implemented via server-side flows/functions)
+      // Users can read their own user document.
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      // Users can update their own document, but cannot grant themselves admin/owner/creator roles.
+      allow update: if isSignedIn() 
+                    && request.auth.uid == userId
+                    && !('isAdmin' in request.resource.data && request.resource.data.isAdmin != resource.data.isAdmin)
+                    && !('isOwner' in request.resource.data && request.resource.data.isOwner != resource.data.isOwner)
+                    && !('isCreator' in request.resource.data && request.resource.data.isCreator != resource.data.isCreator);
+      // Allow creation during signup process.
+      allow create: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // publicProfiles: Publicly readable display names and icons. Only user can update their own.
     match /publicProfiles/{userId} {
-      allow get;
-      allow list; // Allow listing for features like searching for users.
+      // Anyone can read public profiles.
+      allow read: if true;
+      // Only the user can update their own public profile.
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // characters: Only the owner of the character can interact with it.
+    // Rules for user-specific data like characters, accounts, and configurations.
+    // The client MUST use a `where("userId", "==", request.auth.uid)` clause for list queries.
     match /characters/{characterId} {
-      // A user can get, update, or delete their own character document.
-      allow get, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      
-      // A user can list characters, but the query *must* be filtered by their userId.
-      // The frontend code is responsible for adding `where('userId', '==', request.auth.uid)`.
-      allow list: if isSignedIn();
-      
-      // A user can create a character if the new document's userId matches their own.
+      allow get, write, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn(); // Query must include .where('userId', '==', auth.uid)
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
-      // questCompletions: Subcollection for character-specific quest data.
+      // Rules for quest completions subcollection
       match /questCompletions/{questId} {
-        allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
+          allow read, write: if isSignedIn() && get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
       }
     }
 
-    // accounts: User-specific accounts for managing pack ownership.
     match /accounts/{accountId} {
-       // A user can get, update, or delete their own account document.
-      allow get, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-
-      // A user can list accounts, but the query *must* be filtered by their userId.
-      allow list: if isSignedIn();
-
-      // A user can create an account if the new document's userId matches their own.
+      allow get, write, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn(); // Query must include .where('userId', '==', auth.uid)
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
-    // userConfiguration: Holds user-specific settings and data like owned packs.
+    // This collection holds user-specific settings.
     match /userConfiguration/{userId}/{subcollection}/{docId} {
-        // A user can only access their own configuration documents.
-        allow read, write, delete: if isSignedIn() && userId == request.auth.uid;
-    }
-
-    // suggestions: Users can create them, and only they or an admin can read/update their own.
-    // This will be managed by server-side logic (flows) for security.
-    match /suggestions/{suggestionId} {
-      allow read, write: if isSignedIn(); // Let server-side flows handle fine-grained access control.
-      allow create: if isSignedIn();
+       allow read, write, delete: if isSignedIn() && userId == request.auth.uid;
+       allow list: if isSignedIn(); // Query must include .where('userId', '==', auth.uid) - though not used for this path structure.
+       allow create: if isSignedIn() && userId == request.auth.uid;
     }
     
-    // Logs: Writable by server-side logic only (implicitly denied to clients).
-    match /Logs/{logCollection}/{logId} {
-      allow read, write: if false; 
+    match /suggestions/{suggestionId} {
+        // Admins can read/write any suggestion.
+        // Users can read/write their own suggestions.
+        allow read, write: if isSignedIn() && (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true || resource.data.suggesterId == request.auth.uid);
+        
+        // Users can create suggestions.
+        allow create: if isSignedIn() && request.resource.data.suggesterId == request.auth.uid;
     }
+    
+    // Admin-only collections
+    match /quests/{questId} {
+      // Only admins can manage the master quest list.
+      allow read, write, delete, list: if isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    match /adventurePacks/{packId} {
+       // Only admins can manage the master adventure pack list.
+       allow read, write, delete, list: if isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    match /Logs/{logCollectionId}/{entryId} {
+        // Only admins can read/write logs
+        allow read, write: if isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
   }
 }
