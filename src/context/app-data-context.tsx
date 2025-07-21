@@ -165,8 +165,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
 
   useEffect(() => {
+    // This is the main data loading effect for a logged-in user.
+    // It now correctly waits for both `currentUser` (from Firebase Auth) and `userData` (from Firestore) to be loaded.
     if (!currentUser || !userData) {
-      setIsLoading(false);
+      // If either is missing, we are either logged out or still loading the user profile.
+      // Reset the state and wait.
+      setIsLoading(false); // No longer loading app data if no user.
       setIsDataLoaded(false);
       setAccounts([]);
       setAllCharacters([]);
@@ -178,14 +182,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Prevent re-running this expensive load if we already did it for the current user.
     if (initialDataLoadedForUserRef.current === currentUser.uid) {
-        setIsLoading(false);
-        return;
+      setIsLoading(false);
+      return;
     }
-    
-    setIsLoading(true);
-    
+
     const loadInitialData = async () => {
+      setIsLoading(true);
       try {
         const accountsQuery = query(collection(db, ACCOUNTS_COLLECTION), where("userId", "==", currentUser.uid));
         const charactersQuery = query(collection(db, CHARACTERS_COLLECTION), where("userId", "==", currentUser.uid));
@@ -198,16 +202,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         setAccounts(loadedAccounts);
         
-        const loadedCharacters = charSnapshot.docs.map(docSnap => {
-          const data = docSnap.data();
-          return { id: docSnap.id, ...data } as Character;
-        });
+        const loadedCharacters = charSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Character));
         setAllCharacters(loadedCharacters);
 
         if (loadedAccounts.length > 0) {
             const savedAccountId = localStorage.getItem(`${LOCAL_STORAGE_ACTIVE_ACCOUNT_KEY_PREFIX}${currentUser.uid}`);
             const accountExists = savedAccountId && loadedAccounts.some(acc => acc.id === savedAccountId);
-
             if (accountExists) {
                 setActiveAccountId(savedAccountId);
             } else {
@@ -225,24 +225,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             if (legacyPacksSnap.exists()) {
                 const data = legacyPacksSnap.data();
                 if(data && Array.isArray(data.names) && data.names.length > 0) {
+                    console.log("[AppDataProvider] Found legacy pack data for user. Triggering migration flow.");
                     setLegacyOwnedPacks(data.names);
                 } else {
+                    // Legacy doc exists but is empty. Mark as migrated and move on.
                     await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
                 }
             } else {
+                 // No legacy doc found. Mark as migrated so we don't check again.
                  await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
             }
         } else {
-            setLegacyOwnedPacks(null);
+            setLegacyOwnedPacks(null); // Explicitly nullify if already migrated.
         }
 
         initialDataLoadedForUserRef.current = currentUser.uid;
+        setIsDataLoaded(true);
 
       } catch (error) {
         console.error("[AppDataProvider] Failed to load initial user-specific data:", error);
         toast({ title: "Data Load Error", description: (error as Error).message, variant: 'destructive' });
       } finally {
-        setIsDataLoaded(true);
         setIsLoading(false);
       }
     };
@@ -630,3 +633,5 @@ export function useAppData() {
   }
   return context;
 }
+
+    
