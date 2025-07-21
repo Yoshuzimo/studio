@@ -4,72 +4,57 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user is an admin
-    function isAdmin(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.isAdmin == true;
-    }
-    
-    // Helper function to check if the user owns the data
-    function isOwner(userId) {
-      return request.auth.uid == userId;
+    // Helper function to check if a user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // USERS:
-    // Allow users to read their own data.
-    // Allow users to update their own non-permission fields.
+    // Allow logged-in users to read their own user data
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin(request.auth.uid);
-      allow update: if isOwner(userId);
-      // Create is handled during signup.
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
-
-    // PUBLICPROFILES:
-    // Allow anyone to read public profiles.
-    // Allow users to update their own public profile.
+    
+    // Allow any authenticated user to read public profiles
     match /publicProfiles/{userId} {
-      allow read: if request.auth != null;
-      allow update: if isOwner(userId);
-    }
-    
-    // ACCOUNTS:
-    // Allow users to create, read, update, and delete their own accounts.
-    match /accounts/{accountId} {
-       allow read, update, delete: if isOwner(resource.data.userId) || isAdmin(request.auth.uid);
-       // Allow a user to create an account if the `userId` in the new document matches their own UID.
-       allow create: if isOwner(request.resource.data.userId);
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // CHARACTERS:
-    // Allow users to create, read, update, and delete their own characters.
+    // Allow logged-in users to manage their own characters
     match /characters/{characterId} {
-      allow read, update, delete: if isOwner(resource.data.userId) || isAdmin(request.auth.uid);
-      allow create: if isOwner(request.resource.data.userId);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
-    
-    // QUEST COMPLETIONS (sub-collection of characters)
+
+    // Allow logged-in users to manage their own quest completions
     match /characters/{characterId}/questCompletions/{questId} {
-       allow read, write: if get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
+        allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/characters/$(characterId)).data.userId == request.auth.uid;
     }
 
-    // USER CONFIGURATION (for owned packs)
+    // Allow logged-in users to manage their own accounts
+    match /accounts/{accountId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Allow logged-in users to manage their own configuration, including owned packs
     match /userConfiguration/{userId}/{subcollection}/{docId} {
-        allow read, write: if isOwner(userId);
-    }
-
-    // SUGGESTIONS:
-    // Allow users to create suggestions for themselves.
-    // Allow users to read their own suggestions.
-    // Allow admins to read any suggestion.
-    // Allow the original suggester or an admin to update a suggestion (e.g., add a reply).
-    match /suggestions/{suggestionId} {
-      allow read: if isOwner(resource.data.suggesterId) || isAdmin(request.auth.uid);
-      allow create: if isOwner(request.resource.data.suggesterId);
-      allow update: if isOwner(resource.data.suggesterId) || isAdmin(request.auth.uid);
+        allow read, write, delete: if isSignedIn() && userId == request.auth.uid;
     }
     
-    // LOGS (Admin-only access)
-    match /Logs/{logCollection}/{logId=**} {
-        allow read, write: if isAdmin(request.auth.uid);
+    // Allow users to create suggestions for themselves, and allow anyone to read them.
+    // Admins will have bypass access via the Admin SDK, but this rule allows creation.
+    match /suggestions/{suggestionId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.suggesterId == request.auth.uid;
+        // Updates can only be done by server-side logic (Admin SDK) for status changes/replies
+        allow update: if false; 
+    }
+
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
