@@ -175,10 +175,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
                              <DropdownMenuSub key={char.id} open={openSubMenuId === char.id} onOpenChange={(open) => setOpenSubMenuId(open ? char.id : null)}>
                                <div onMouseEnter={() => setOpenSubMenuId(char.id)} onMouseLeave={() => setOpenSubMenuId(null)}>
                                   <DropdownMenuSubTrigger>
-                                    <Avatar className="mr-2 h-5 w-5">
-                                      <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
-                                      <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
-                                    </Avatar>
                                     <span>{char.name}</span>
                                   </DropdownMenuSubTrigger>
                                   <DropdownMenuPortal>
