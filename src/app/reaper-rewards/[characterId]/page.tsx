@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { UserCircle, MapPin, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, AlertTriangle, Skull, ListOrdered, Pencil, UserSquare, TestTube2 } from 'lucide-react';
+import { UserCircle, MapPin, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, AlertTriangle, Skull, ListOrdered, Pencil, UserSquare, TestTube2, Library } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -120,7 +120,7 @@ export default function ReaperRewardsPage() {
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
-  const { allCharacters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
+  const { accounts, allCharacters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
   const { toast } = useToast();
 
   const [character, setCharacter] = useState<Character | null>(null);
@@ -233,15 +233,16 @@ export default function ReaperRewardsPage() {
     setIsSettingsPopoverOpen(open);
   };
 
-  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string) => {
-    if (!id || !editingCharacter || !character) return;
-  
+  const handleEditCharacterSubmit = async (data: CharacterFormData) => {
+    if (!editingCharacter) return;
+    
     // Optimistic UI update
     const updatedCharacterData: Character = {
-      ...character,
-      name: data.name,
-      level: data.level,
-      iconUrl: iconUrl === undefined ? character.iconUrl : iconUrl,
+        ...editingCharacter,
+        name: data.name,
+        level: data.level,
+        accountId: data.accountId,
+        iconUrl: data.iconUrl,
     };
     setCharacter(updatedCharacterData);
     
@@ -411,6 +412,12 @@ export default function ReaperRewardsPage() {
   
   const effectiveCharacterLevel = character ? (useLevelOffset ? character.level + levelOffset : character.level) : 0;
   
+  const accountNameMap = useMemo(() => {
+    return new Map(accounts.map(acc => [acc.id, acc.name]));
+  }, [accounts]);
+  
+  const accountName = character ? accountNameMap.get(character.accountId) || 'Unknown' : '...';
+
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
   }
@@ -434,7 +441,12 @@ export default function ReaperRewardsPage() {
             <CardTitle className="font-headline text-3xl flex items-center"><UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}</CardTitle>
             <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}><Pencil className="mr-2 h-4 w-4" /> Edit Character</Button>
           </div>
-          <CardDescription>Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}</CardDescription>
+           <CardDescription>
+                Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}
+                <span className="mx-2 text-muted-foreground">|</span>
+                <Library className="inline-block h-4 w-4 mr-1.5 align-middle" />
+                Account: <span className="font-semibold">{accountName}</span>
+            </CardDescription>
            <div className="pt-4 flex flex-col space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2">

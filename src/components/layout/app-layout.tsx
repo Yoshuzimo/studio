@@ -75,6 +75,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [isProfileDialogOpen, setIsProfileDialogOpen] = React.useState(false);
 
   const [isCharacterMenuOpen, setIsCharacterMenuOpen] = React.useState(false);
+  const [openSubMenuId, setOpenSubMenuId] = React.useState<string | null>(null);
 
   const getVisibleNavItems = () => {
     let items = [...navItemsBase];
@@ -171,7 +172,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       <DropdownMenuPortal>
                         <DropdownMenuContent side="right" align="start" sideOffset={8} onMouseEnter={() => setIsCharacterMenuOpen(true)} onMouseLeave={() => setIsCharacterMenuOpen(false)}>
                            {sortedCharacters.map((char) => (
-                             <DropdownMenuSub key={char.id}>
+                             <DropdownMenuSub key={char.id} open={openSubMenuId === char.id} onOpenChange={(open) => setOpenSubMenuId(open ? char.id : null)}>
                                <DropdownMenuSubTrigger>
                                  <Avatar className="mr-2 h-5 w-5">
                                    <AvatarImage src={char.iconUrl || undefined} alt={char.name} />

@@ -6,7 +6,7 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppData } from '@/context/app-data-context';
-import type { Character, Quest, UserQuestCompletionData } from '@/types';
+import type { Character, Quest, UserQuestCompletionData, Account } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DialogFooter } from '@/components/ui/dialog';
 import { FavorTrackerCsvUploaderDialog, type QuestCompletionCsvUploadResult } from '@/components/favor-tracker/favor-tracker-csv-uploader-dialog';
 import type { QuestCompletionUpdate } from '@/context/app-data-context';
-import { Download, UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowUp, ArrowDown, Package, Loader2, RotateCcw, Upload, Award, Timer, BarChartBig, Layers, Settings, BookOpen, AlertTriangle, TrendingUp, Maximize, Pencil, Skull, TestTube2 } from 'lucide-react';
+import { Download, UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowUp, ArrowDown, Package, Loader2, RotateCcw, Upload, Award, Timer, BarChartBig, Layers, Settings, BookOpen, AlertTriangle, TrendingUp, Maximize, Pencil, Skull, TestTube2, Library } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -173,6 +173,7 @@ export default function FavorTrackerPage() {
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const {
+    accounts,
     allCharacters, quests, ownedPacks,
     batchUpdateUserQuestCompletions,
     batchResetUserQuestCompletions,
@@ -298,16 +299,16 @@ export default function FavorTrackerPage() {
   const handleResetColumnSettingsToDefault = () => { setPopoverColumnVisibility(getDefaultColumnVisibility()); };
   const handleSettingsPopoverOpenChange = (open: boolean) => { if (open) setPopoverColumnVisibility(columnVisibility); setIsSettingsPopoverOpen(open); };
 
-  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string | null) => {
-    if (!id || !editingCharacter || !character) return;
-  
+  const handleEditCharacterSubmit = async (data: CharacterFormData) => {
+    if (!editingCharacter) return;
+    
     // Optimistic UI update
     const updatedCharacterData: Character = {
-      ...character,
-      name: data.name,
-      level: data.level,
-      iconUrl: iconUrl === undefined ? character.iconUrl : iconUrl,
-      accountId: data.accountId,
+        ...editingCharacter,
+        name: data.name,
+        level: data.level,
+        accountId: data.accountId,
+        iconUrl: data.iconUrl,
     };
     setCharacter(updatedCharacterData);
     
@@ -317,6 +318,7 @@ export default function FavorTrackerPage() {
     // Debounced update to Firestore via context
     await updateCharacter(updatedCharacterData);
   };
+
 
   const openEditModal = (characterToEdit: Character) => {
     setEditingCharacter(characterToEdit);
@@ -727,6 +729,12 @@ export default function FavorTrackerPage() {
 
   const visibleTableHeaders = allTableHeaders.filter(h => columnVisibility[h.key]);
 
+  const accountNameMap = useMemo(() => {
+    return new Map(accounts.map(acc => [acc.id, acc.name]));
+  }, [accounts]);
+  
+  const accountName = character ? accountNameMap.get(character.accountId) || 'Unknown' : '...';
+
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
   }
@@ -759,7 +767,12 @@ export default function FavorTrackerPage() {
                     <Pencil className="mr-2 h-4 w-4" /> Edit Character
                 </Button>
             </div>
-            <CardDescription>Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}</CardDescription>
+            <CardDescription>
+                Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}
+                <span className="mx-2 text-muted-foreground">|</span>
+                <Library className="inline-block h-4 w-4 mr-1.5 align-middle" />
+                Account: <span className="font-semibold">{accountName}</span>
+            </CardDescription>
           </CardHeader>
            <CardContent className="pt-2">
             <div className="pt-4 border-t">
