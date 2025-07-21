@@ -166,25 +166,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!currentUser || !userData) {
-      setIsLoading(false); 
-      setIsDataLoaded(false);
-      setAccounts([]);
-      setAllCharacters([]);
-      setOwnedPacksInternal([]);
-      setLegacyOwnedPacks(null);
-      setActiveAccountId(null);
-      setActiveCharacterIdState(null);
-      initialDataLoadedForUserRef.current = null;
+      setIsLoading(false);
+      if (initialDataLoadedForUserRef.current) { // Prevent resetting state on logout
+        setAccounts([]);
+        setAllCharacters([]);
+        setOwnedPacksInternal([]);
+        setLegacyOwnedPacks(null);
+        setActiveAccountId(null);
+        setActiveCharacterIdState(null);
+        setIsDataLoaded(false);
+        initialDataLoadedForUserRef.current = null;
+      }
       return;
     }
 
-    if (initialDataLoadedForUserRef.current === currentUser.uid) {
-      setIsLoading(false);
-      return;
+    if (isDataLoaded && initialDataLoadedForUserRef.current === currentUser.uid) {
+        setIsLoading(false);
+        return;
     }
 
     const loadInitialData = async () => {
-      console.log(`[AppDataProvider] Running initial data load for user: ${currentUser.uid}. Data already loaded: ${isDataLoaded}`);
+      console.log(`[AppDataProvider] Running initial data load for user: ${currentUser.uid}.`);
       setIsLoading(true);
       try {
         const accountsQuery = query(collection(db, ACCOUNTS_COLLECTION), where("userId", "==", currentUser.uid));
