@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import type { Character } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Library } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Separator } from '../ui/separator';
 
 interface CharacterCardProps {
   character: Character;
+  accountName: string;
   onEdit: (character: Character) => void;
   onDelete: (characterId: string) => void;
   onAssignAccount: (character: Character) => void;
@@ -41,7 +43,7 @@ const getCloudinaryBgUrl = (imageUrl: string) => {
 };
 
 
-export function CharacterCard({ character, onEdit, onDelete, onAssignAccount, disabled = false }: CharacterCardProps) {
+export function CharacterCard({ character, accountName, onEdit, onDelete, onAssignAccount, disabled = false }: CharacterCardProps) {
   const router = useRouter();
   
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -83,13 +85,20 @@ export function CharacterCard({ character, onEdit, onDelete, onAssignAccount, di
               <CardDescription className="text-accent font-bold pt-1">Click to assign to an account</CardDescription>
             )}
           </CardHeader>
-        <CardFooter className="flex justify-end gap-2 p-4 pt-2 border-t border-white/20 mt-auto">
-          <Button variant="outline" size="sm" onClick={() => onEdit(character)} aria-label={`Edit ${character.name}`} disabled={disabled} className="bg-white/10 text-white border-white/30 hover:bg-white/20">
-            <Pencil className="mr-2 h-4 w-4" /> Edit
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => onDelete(character.id)} aria-label={`Delete ${character.name}`} disabled={disabled}>
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
-          </Button>
+        <CardFooter className="flex flex-col items-start gap-2 p-4 pt-2 mt-auto">
+          <Separator className="bg-white/20 mb-2"/>
+           <div className="flex items-center text-sm text-white/80">
+              <Library className="mr-2 h-4 w-4" />
+              Account: <span className="font-semibold ml-1.5">{accountName}</span>
+            </div>
+            <div className="w-full flex justify-end gap-2 mt-2">
+                <Button variant="outline" size="sm" onClick={() => onEdit(character)} aria-label={`Edit ${character.name}`} disabled={disabled} className="bg-white/10 text-white border-white/30 hover:bg-white/20">
+                  <Pencil className="mr-2 h-4 w-4" /> Edit
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => onDelete(character.id)} aria-label={`Delete ${character.name}`} disabled={disabled}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                </Button>
+            </div>
         </CardFooter>
       </div>
     </Card>

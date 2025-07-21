@@ -51,25 +51,24 @@ export default function CharactersPage() {
   const pageOverallLoading = authIsLoading || appDataIsLoading;
   
   useEffect(() => {
-    console.log('[CharactersPage] Data State Update:', {
-      isDataLoaded,
-      appDataIsLoading,
-      authIsLoading,
-      'allCharacters exists': !!allCharacters,
-      'allCharacters length': allCharacters?.length,
-      'accounts exists': !!accounts,
-      'accounts length': accounts?.length,
-      activeAccountId,
-    });
-  }, [isDataLoaded, appDataIsLoading, authIsLoading, allCharacters, accounts, activeAccountId]);
+    if (isDataLoaded && accounts.length > 0 && !activeAccountId) {
+      const defaultAccount = accounts.find(acc => acc.name === 'Default') || accounts[0];
+      if (defaultAccount) {
+        setActiveAccountId(defaultAccount.id);
+      }
+    }
+  }, [isDataLoaded, accounts, activeAccountId, setActiveAccountId, router, appDataIsLoading]);
 
-
-  const charactersForDisplay = useMemo(() => {
+  // Sort all characters alphabetically by name
+  const sortedCharacters = useMemo(() => {
     if (!allCharacters) return [];
-    return allCharacters.filter(
-      (char) => !char.accountId || char.accountId === activeAccountId
-    );
-  }, [allCharacters, activeAccountId]);
+    return [...allCharacters].sort((a, b) => a.name.localeCompare(b.name));
+  }, [allCharacters]);
+
+  // Create a map for quick account name lookups
+  const accountNameMap = useMemo(() => {
+    return new Map(accounts.map(acc => [acc.id, acc.name]));
+  }, [accounts]);
 
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
@@ -80,13 +79,8 @@ export default function CharactersPage() {
   useEffect(() => {
     if (isDataLoaded && accounts.length === 0 && !appDataIsLoading) {
         router.push('/accounts?action=create');
-    } else if (isDataLoaded && accounts.length > 0 && !activeAccountId) {
-      const defaultAccount = accounts.find(acc => acc.name === 'Default') || accounts[0];
-      if (defaultAccount) {
-        setActiveAccountId(defaultAccount.id);
-      }
     }
-  }, [isDataLoaded, accounts, activeAccountId, setActiveAccountId, router, appDataIsLoading]);
+  }, [isDataLoaded, accounts, appDataIsLoading, router]);
 
   useEffect(() => {
     if (currentUser && userData) {
@@ -96,39 +90,27 @@ export default function CharactersPage() {
   }, [currentUser, userData]);
 
   const handleAddCharacterSubmit = async (data: CharacterFormData) => {
-    console.log("[CharactersPage] LOG: handleAddCharacterSubmit received data:", data);
     await addCharacter(data); 
     setIsCreateModalOpen(false);
   };
 
   const handleEditCharacterSubmit = async (data: CharacterFormData) => {
-    console.log("[CharactersPage] LOG: handleEditCharacterSubmit received form data:", data);
-    if (!editingCharacter) {
-        console.error("[CharactersPage] ERROR: handleEditCharacterSubmit called but editingCharacter is undefined.");
-        return;
-    }
+    if (!editingCharacter) return;
     
-    // Correctly merge the form data with the existing character data
     const updatedCharacterData: Character = {
-        ...editingCharacter, // Start with the original character data
-        name: data.name,       // Update name from form
-        level: data.level,     // Update level from form
-        accountId: data.accountId, // Update accountId from form
-        iconUrl: data.iconUrl, // This is the key: use the iconUrl from the form data
+        ...editingCharacter,
+        name: data.name,
+        level: data.level,
+        accountId: data.accountId,
+        iconUrl: data.iconUrl,
     };
     
-    console.log("[CharactersPage] LOG: Constructed updatedCharacterData before sending to context:", updatedCharacterData);
     await updateCharacter(updatedCharacterData);
     setIsEditModalOpen(false);
     setEditingCharacter(undefined);
   };
   
   const openAssignAccountModal = (character: Character) => {
-    console.log('[CharactersPage] openAssignAccountModal called.', {
-      characterToAssign: character,
-      'accounts array state': accounts,
-      'activeAccountId state': activeAccountId,
-    });
     setCharacterToAssign(character);
     
     const defaultAccount = accounts?.find(acc => acc.name === 'Default');
@@ -191,22 +173,7 @@ export default function CharactersPage() {
           <Users className="mr-3 h-8 w-8 text-primary" /> My Characters
         </h1>
         <div className="flex items-center gap-4">
-          <div className="w-48">
-             <Label htmlFor="account-select" className="sr-only">Select Account for New Character</Label>
-             <Select value={activeAccountId || ''} onValueChange={(value) => setActiveAccountId(value)} disabled={pageOverallLoading}>
-                  <SelectTrigger id="account-select">
-                    <SelectValue placeholder="Select Account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                     {accounts.map(account => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-              </Select>
-          </div>
-          <Button onClick={() => setIsCreateModalOpen(true)} size="lg" disabled={pageOverallLoading || isSetDisplayNameModalOpen || !activeAccountId}>
+          <Button onClick={() => setIsCreateModalOpen(true)} size="lg" disabled={pageOverallLoading || isSetDisplayNameModalOpen || accounts.length === 0}>
             {pageOverallLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlusCircle className="mr-2 h-5 w-5" />} 
             Add New Character
           </Button>
@@ -224,12 +191,13 @@ export default function CharactersPage() {
         </div>
       )}
 
-      {!isSetDisplayNameModalOpen && charactersForDisplay.length > 0 && (
+      {!isSetDisplayNameModalOpen && sortedCharacters.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {charactersForDisplay.map((character) => (
+          {sortedCharacters.map((character) => (
             <CharacterCard
               key={character.id}
               character={character}
+              accountName={accountNameMap.get(character.accountId) || 'Unknown'}
               onEdit={openEditModal}
               onDelete={() => openDeleteDialog(character.id)}
               onAssignAccount={openAssignAccountModal}
