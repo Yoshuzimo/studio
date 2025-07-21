@@ -165,12 +165,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
 
   useEffect(() => {
-    // This is the main data loading effect for a logged-in user.
-    // It now correctly waits for both `currentUser` (from Firebase Auth) and `userData` (from Firestore) to be loaded.
     if (!currentUser || !userData) {
-      // If either is missing, we are either logged out or still loading the user profile.
-      // Reset the state and wait.
-      setIsLoading(false); // No longer loading app data if no user.
+      setIsLoading(false); 
       setIsDataLoaded(false);
       setAccounts([]);
       setAllCharacters([]);
@@ -182,13 +178,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Prevent re-running this expensive load if we already did it for the current user.
     if (initialDataLoadedForUserRef.current === currentUser.uid) {
       setIsLoading(false);
       return;
     }
 
     const loadInitialData = async () => {
+      console.log(`[AppDataProvider] Running initial data load for user: ${currentUser.uid}. Data already loaded: ${isDataLoaded}`);
       setIsLoading(true);
       try {
         const accountsQuery = query(collection(db, ACCOUNTS_COLLECTION), where("userId", "==", currentUser.uid));
@@ -218,24 +214,31 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             setActiveAccountId(null);
         }
 
-        // --- Corrected Migration Check Logic ---
+        console.log(`[AppDataProvider] User's 'hasMigratedLegacyPacks' flag is: ${userData.hasMigratedLegacyPacks}`);
         if (userData.hasMigratedLegacyPacks !== true) {
+            console.log("[AppDataProvider] User needs migration check (flag is not true).");
             const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
+            console.log("[AppDataProvider] Checking for legacy packs at path:", legacyPacksDocRef.path);
             const legacyPacksSnap = await getDoc(legacyPacksDocRef);
+            
             if (legacyPacksSnap.exists()) {
+                console.log("[AppDataProvider] Found legacy packs document.");
                 const data = legacyPacksSnap.data();
                 if(data && Array.isArray(data.names) && data.names.length > 0) {
-                    console.log("[AppDataProvider] Found legacy pack data for user. Triggering migration flow.");
+                    console.log("[AppDataProvider] Legacy pack names found. Setting state to trigger migration dialog.", data.names);
                     setLegacyOwnedPacks(data.names);
                 } else {
-                    // Legacy doc exists but is empty. Mark as migrated and move on.
+                    console.log("[AppDataProvider] Legacy document is empty. Marking user as migrated.");
                     await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
+                    setLegacyOwnedPacks(null);
                 }
             } else {
-                 // No legacy doc found. Mark as migrated so we don't check again.
+                 console.log("[AppDataProvider] No legacy packs document found. Marking user as migrated.");
                  await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
+                 setLegacyOwnedPacks(null);
             }
         } else {
+            console.log("[AppDataProvider] User already migrated. Skipping legacy check.");
             setLegacyOwnedPacks(null); // Explicitly nullify if already migrated.
         }
 
@@ -252,7 +255,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     
     loadInitialData();
 
-  }, [currentUser, userData, toast, setActiveAccountId]);
+  }, [currentUser, userData, toast, setActiveAccountId, isDataLoaded]);
   
   const setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>> = useCallback((valueOrFn) => {
     setOwnedPacksInternal(prevOwnedPacks => {
@@ -633,5 +636,3 @@ export function useAppData() {
   }
   return context;
 }
-
-    
