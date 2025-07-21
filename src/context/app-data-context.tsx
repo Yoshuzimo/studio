@@ -1,4 +1,3 @@
-
 // src/context/app-data-context.tsx
 "use client";
 
@@ -120,7 +119,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const { toast } = useToast();
   const initialDataLoadedForUserRef = useRef<string | null>(null);
-  const lastKnownOwnedPacksRef = useRef<string | null>(null);
+  const ownedPacksSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const characterUpdateDebounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const setActiveAccountId = useCallback((accountId: string | null) => {
@@ -134,7 +133,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [currentUser]);
-
 
   const fetchQuestCompletionsForCharacter = useCallback(async (characterIdToFetch: string) => {
     if (!currentUser) {
@@ -216,7 +214,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             setActiveAccountId(null);
         }
 
-        // Migration logic has been moved to adventure-packs page
         setLegacyOwnedPacks(null);
         initialDataLoadedForUserRef.current = currentUser.uid;
         setIsDataLoaded(true);
@@ -229,36 +226,60 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
     };
     
-    loadInitialData();
+    if (userData) { // Ensure userData is available before loading data
+        loadInitialData();
+    }
 
   }, [currentUser, userData, toast, setActiveAccountId, isDataLoaded]);
   
-  const setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>> = useCallback((valueOrFn) => {
-    setOwnedPacksInternal(prevOwnedPacks => {
-      const newPacksRaw = typeof valueOrFn === 'function' ? valueOrFn(prevOwnedPacks) : valueOrFn;
-      const normalizedNewPacks = newPacksRaw
+  const setOwnedPacks = useCallback<React.Dispatch<React.SetStateAction<string[]>>>((valueOrFn) => {
+    if (!currentUser || !activeAccountId) return;
+    
+    // Clear any pending save operations
+    if (ownedPacksSaveTimerRef.current) {
+      clearTimeout(ownedPacksSaveTimerRef.current);
+    }
+
+    // Update the state optimistically
+    const newPacks = typeof valueOrFn === 'function' ? valueOrFn(ownedPacks) : valueOrFn;
+    
+    // Normalize and handle composite packs before setting state
+    const normalizedNewPacks = newPacks
         .map(name => normalizeAdventurePackNameForStorage(name))
         .filter((name): name is string => name !== null);
 
-      let finalPacks = [...new Set(normalizedNewPacks)];
+    let finalPacks = [...new Set(normalizedNewPacks)];
 
-      if (SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED && finalPacks.some(p => p.toLowerCase() === SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED.toLowerCase())) {
-        SHADOWFELL_CONSPIRACY_CHILDREN_NORMALIZED.forEach(childPackName => {
-          if (!finalPacks.some(p => p.toLowerCase() === childPackName.toLowerCase())) {
-            finalPacks.push(childPackName);
-          }
-        });
+    if (SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED && finalPacks.some(p => p.toLowerCase() === SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED.toLowerCase())) {
+      SHADOWFELL_CONSPIRACY_CHILDREN_NORMALIZED.forEach(childPackName => {
+        if (!finalPacks.some(p => p.toLowerCase() === childPackName.toLowerCase())) {
+          finalPacks.push(childPackName);
+        }
+      });
+    }
+    
+    setOwnedPacksInternal([...new Set(finalPacks)]);
+
+    // Set a new timeout to save the data
+    ownedPacksSaveTimerRef.current = setTimeout(async () => {
+      setIsUpdating(true);
+      try {
+        const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, activeAccountId);
+        await setDoc(ownedPacksDocRef, { names: finalPacks }, { merge: true });
+        toast({ title: "Adventure Packs Saved", description: "Your owned packs for this account have been saved."});
+      } catch (error) {
+        console.error("Error saving owned packs: ", error);
+        toast({ title: "Error Saving Owned Packs", description: (error as Error).message, variant: "destructive" });
+      } finally {
+        setIsUpdating(false);
       }
-
-      return [...new Set(finalPacks)];
-    });
-  }, []);
+    }, 1500);
+  }, [currentUser, activeAccountId, toast, ownedPacks]);
   
   // Fetch owned packs when activeAccountId changes
   useEffect(() => {
     if (!currentUser || !activeAccountId) {
       setOwnedPacksInternal([]);
-      lastKnownOwnedPacksRef.current = JSON.stringify([]);
       return;
     };
     
@@ -268,8 +289,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, activeAccountId);
         const ownedPacksDocSnap = await getDoc(ownedPacksDocRef);
         const rawOwnedPacks = ownedPacksDocSnap.exists() ? (ownedPacksDocSnap.data()?.names || []) as string[] : [];
-        setOwnedPacks(rawOwnedPacks); // This will normalize and handle special packs
-        lastKnownOwnedPacksRef.current = JSON.stringify([...new Set(rawOwnedPacks)].sort());
+        
+        // Normalize and handle composite packs after fetching
+        const normalizedNewPacks = rawOwnedPacks
+          .map(name => normalizeAdventurePackNameForStorage(name))
+          .filter((name): name is string => name !== null);
+
+        let finalPacks = [...new Set(normalizedNewPacks)];
+        if (SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED && finalPacks.some(p => p.toLowerCase() === SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED.toLowerCase())) {
+            SHADOWFELL_CONSPIRACY_CHILDREN_NORMALIZED.forEach(childPackName => {
+            if (!finalPacks.some(p => p.toLowerCase() === childPackName.toLowerCase())) {
+                finalPacks.push(childPackName);
+            }
+            });
+        }
+        setOwnedPacksInternal([...new Set(finalPacks)]);
+
       } catch (error) {
          toast({ title: "Error Loading Packs", description: (error as Error).message, variant: "destructive" });
       } finally {
@@ -277,32 +312,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
     };
     fetchOwnedPacks();
-  }, [currentUser, activeAccountId, toast, setOwnedPacks]);
+  }, [currentUser, activeAccountId, toast]);
 
-  // Save owned packs when they change
-  useEffect(() => {
-    const currentOwnedPacksString = JSON.stringify(ownedPacks.sort());
-    if (isLoading || !currentUser || !activeAccountId || currentOwnedPacksString === lastKnownOwnedPacksRef.current) return;
-    
-    const handler = setTimeout(async () => {
-      const freshestCurrentUser = auth.currentUser;
-      if (!freshestCurrentUser || freshestCurrentUser.uid !== currentUser.uid) return;
-      
-      setIsUpdating(true);
-      try {
-        const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, freshestCurrentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, activeAccountId);
-        await setDoc(ownedPacksDocRef, { names: ownedPacks }, { merge: true });
-        lastKnownOwnedPacksRef.current = currentOwnedPacksString;
-        toast({ title: "Adventure Packs Saved", description: "Your owned packs for this account have been saved."});
-      } catch (error) {
-        toast({ title: "Error Saving Owned Packs", description: (error as Error).message, variant: "destructive" });
-      } finally {
-        setIsUpdating(false);
-      }
-    }, 1500);
-    return () => clearTimeout(handler);
-  }, [ownedPacks, currentUser, isLoading, activeAccountId, toast]);
-  
   const migrateLegacyPacksToAccount = async (accountId: string) => {
     if (!currentUser || !legacyOwnedPacks) {
         toast({ title: "Migration Error", description: "No user or legacy data found to migrate.", variant: "destructive" });
@@ -317,7 +328,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         batch.set(newPacksDocRef, { names: legacyOwnedPacks }, { merge: true });
 
         // 2. Delete the old legacy document
-        const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
+        const legacyPacksDocRef = doc(db, 'userConfiguration', currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
         batch.delete(legacyPacksDocRef);
         
         // 3. Update the user's migration flag
