@@ -255,35 +255,46 @@ export default function FavorTrackerPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && characterId && isDataLoaded && currentUser && character) {
-      try {
-        const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
-        const localPrefsString = localStorage.getItem(localKey);
-        const storedPrefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences;
-        
-        if (storedPrefs) {
-            setUseLevelOffset(storedPrefs.useLevelOffset ?? false);
-            setLevelOffset(storedPrefs.levelOffset ?? 0);
+        try {
+            const localKey = `ddoToolkit_charPrefs_${currentUser.uid}_${characterId}`;
+            const localPrefsString = localStorage.getItem(localKey);
+            const storedPrefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences;
 
-            const favorPrefs = storedPrefs.favorTracker;
-            if (favorPrefs) {
-                const mergedAdjustments = { ...durationAdjustmentDefaults };
-                if (favorPrefs.durationAdjustments) {
-                    for (const cat of DURATION_CATEGORIES) { if (favorPrefs.durationAdjustments[cat] !== undefined && typeof favorPrefs.durationAdjustments[cat] === 'number') mergedAdjustments[cat] = favorPrefs.durationAdjustments[cat]; }
+            if (storedPrefs) {
+                setUseLevelOffset(storedPrefs.useLevelOffset ?? false);
+                setLevelOffset(storedPrefs.levelOffset ?? 0);
+
+                const favorPrefs = storedPrefs.favorTracker;
+                if (favorPrefs) {
+                    const mergedAdjustments = { ...durationAdjustmentDefaults };
+                    if (favorPrefs.durationAdjustments) {
+                        for (const cat of DURATION_CATEGORIES) {
+                            if (favorPrefs.durationAdjustments[cat] !== undefined && typeof favorPrefs.durationAdjustments[cat] === 'number') {
+                                mergedAdjustments[cat] = favorPrefs.durationAdjustments[cat];
+                            }
+                        }
+                    }
+                    setDurationAdjustments(mergedAdjustments);
+                    setShowCompletedQuestsWithZeroRemainingFavor(favorPrefs.showCompletedQuestsWithZeroRemainingFavor ?? false);
+                    setOnCormyr(favorPrefs.onCormyr ?? false);
+                    setShowRaids(favorPrefs.showRaids ?? false);
+                    setClickAction(favorPrefs.clickAction ?? 'none');
+
+                    // ** THIS IS THE FIX **
+                    setSortConfig(favorPrefs.sortConfig ?? { key: 'name', direction: 'ascending' });
+                    // ** END FIX **
+                    
+                    const defaultVis = getDefaultColumnVisibility();
+                    const mergedVisibility = { ...defaultVis, ...(favorPrefs.columnVisibility || {}) };
+                    setColumnVisibility(mergedVisibility);
                 }
-                setDurationAdjustments(mergedAdjustments);
-                setShowCompletedQuestsWithZeroRemainingFavor(favorPrefs.showCompletedQuestsWithZeroRemainingFavor ?? false);
-                setOnCormyr(favorPrefs.onCormyr ?? false);
-                setShowRaids(favorPrefs.showRaids ?? false);
-                setClickAction(favorPrefs.clickAction ?? 'none');
-                setSortConfig(favorPrefs.sortConfig ?? { key: 'name', direction: 'ascending' });
-                const defaultVis = getDefaultColumnVisibility();
-                const mergedVisibility = { ...defaultVis, ...(favorPrefs.columnVisibility || {}) };
-                setColumnVisibility(mergedVisibility);
             }
+        } catch (error) {
+            console.error("Error loading preferences:", error);
+            setColumnVisibility(getDefaultColumnVisibility());
         }
-      } catch (error) { console.error("Error loading preferences:", error); setColumnVisibility(getDefaultColumnVisibility()); }
     }
-  }, [characterId, isDataLoaded, currentUser, character]);
+}, [characterId, isDataLoaded, currentUser, character]);
 
   const handleDurationChange = (newAdjustments: Record<DurationCategory, number>) => {
     setDurationAdjustments(newAdjustments);
