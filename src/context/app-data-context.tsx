@@ -1,4 +1,3 @@
-
 // src/context/app-data-context.tsx
 "use client";
 
@@ -102,7 +101,7 @@ const quests: Quest[] = QUESTS_DATA.map(q => ({
 }));
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccountId, _setActiveAccountId] = useState<string | null>(null);
   const [allCharacters, setAllCharacters] = useState<Character[]>([]);
@@ -165,7 +164,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
 
   useEffect(() => {
-    if (!currentUser) {
+    if (!currentUser || !userData) {
       setIsLoading(false);
       setIsDataLoaded(false);
       setAccounts([]);
@@ -204,7 +203,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         });
         setAllCharacters(loadedCharacters);
 
-        // Determine active account from localStorage or default
         if (loadedAccounts.length > 0) {
             const savedAccountId = localStorage.getItem(`${LOCAL_STORAGE_ACTIVE_ACCOUNT_KEY_PREFIX}${currentUser.uid}`);
             const accountExists = savedAccountId && loadedAccounts.some(acc => acc.id === savedAccountId);
@@ -213,21 +211,30 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                 setActiveAccountId(savedAccountId);
             } else {
                 const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
-                setActiveAccountId(defaultAccount.id);
+                setActiveAccountId(defaultAccount?.id || null);
             }
         } else {
             setActiveAccountId(null);
         }
 
-        const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
-        const legacyPacksSnap = await getDoc(legacyPacksDocRef);
-        if (legacyPacksSnap.exists()) {
-          const data = legacyPacksSnap.data();
-          if(data && Array.isArray(data.names)) {
-            setLegacyOwnedPacks(data.names);
-          }
+        // --- New Migration Check Logic ---
+        if (!userData.hasMigratedLegacyPacks) {
+            const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
+            const legacyPacksSnap = await getDoc(legacyPacksDocRef);
+            if (legacyPacksSnap.exists()) {
+                const data = legacyPacksSnap.data();
+                if(data && Array.isArray(data.names) && data.names.length > 0) {
+                    setLegacyOwnedPacks(data.names);
+                } else {
+                    // No data, so mark as migrated
+                    await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
+                }
+            } else {
+                 // No doc, so mark as migrated
+                await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
+            }
         } else {
-          setLegacyOwnedPacks(null);
+            setLegacyOwnedPacks(null);
         }
 
         initialDataLoadedForUserRef.current = currentUser.uid;
@@ -243,7 +250,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     
     loadInitialData();
 
-  }, [currentUser, toast, setActiveAccountId]);
+  }, [currentUser, userData, toast, setActiveAccountId]);
   
   const setOwnedPacks: React.Dispatch<React.SetStateAction<string[]>> = useCallback((valueOrFn) => {
     setOwnedPacksInternal(prevOwnedPacks => {
@@ -322,31 +329,35 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
     setIsUpdating(true);
     try {
-      const batch = writeBatch(db);
+        const batch = writeBatch(db);
 
-      // 1. Set the new account-specific pack data
-      const newPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, accountId);
-      batch.set(newPacksDocRef, { names: legacyOwnedPacks }, { merge: true });
+        // 1. Set the new account-specific pack data
+        const newPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, accountId);
+        batch.set(newPacksDocRef, { names: legacyOwnedPacks }, { merge: true });
 
-      // 2. Delete the old legacy document
-      const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
-      batch.delete(legacyPacksDocRef);
+        // 2. Delete the old legacy document
+        const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
+        batch.delete(legacyPacksDocRef);
+        
+        // 3. Update the user's migration flag
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        batch.update(userDocRef, { hasMigratedLegacyPacks: true });
 
-      await batch.commit();
+        await batch.commit();
 
-      // 3. Update local state to reflect changes
-      if (accountId === activeAccountId) {
-        setOwnedPacks(legacyOwnedPacks);
-      }
-      setLegacyOwnedPacks(null); // Clear legacy data from state
+        // 4. Update local state to reflect changes
+        if (accountId === activeAccountId) {
+            setOwnedPacks(legacyOwnedPacks);
+        }
+        setLegacyOwnedPacks(null);
 
-      toast({ title: "Packs Migrated!", description: "Your old pack list has been moved to the selected account."});
+        toast({ title: "Packs Migrated!", description: "Your old pack list has been moved to the selected account."});
 
     } catch (error) {
-      toast({ title: "Migration Failed", description: (error as Error).message, variant: "destructive" });
-      console.error("[migrateLegacyPacksToAccount] Error:", error);
+        toast({ title: "Migration Failed", description: (error as Error).message, variant: "destructive" });
+        console.error("[migrateLegacyPacksToAccount] Error:", error);
     } finally {
-      setIsUpdating(false);
+        setIsUpdating(false);
     }
   };
 

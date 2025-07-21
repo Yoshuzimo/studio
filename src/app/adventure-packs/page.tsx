@@ -1,4 +1,3 @@
-
 // src/app/adventure-packs/page.tsx
 "use client";
 
