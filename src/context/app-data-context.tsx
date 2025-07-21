@@ -186,9 +186,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     
     const loadInitialData = async () => {
-      console.log('[AppDataProvider] LOG: Starting initial data load for user:', currentUser.uid);
       try {
-        // Fetch accounts and characters
         const accountsQuery = query(collection(db, ACCOUNTS_COLLECTION), where("userId", "==", currentUser.uid));
         const charactersQuery = query(collection(db, CHARACTERS_COLLECTION), where("userId", "==", currentUser.uid));
         
@@ -197,24 +195,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             getDocs(charactersQuery)
         ]);
 
-        let loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
-        console.log(`[AppDataProvider] LOG: Fetched ${loadedAccounts.length} accounts from Firestore.`);
-
-        if (loadedAccounts.length === 0) {
-            console.log('[AppDataProvider] LOG: No accounts found. Creating a "Default" account.');
-            const newAccountRef = doc(collection(db, ACCOUNTS_COLLECTION));
-            const defaultAccount: Account = { id: newAccountRef.id, userId: currentUser.uid, name: 'Default' };
-            await setDoc(newAccountRef, defaultAccount);
-            loadedAccounts.push(defaultAccount);
-            console.log('[AppDataProvider] LOG: "Default" account created and added to local state.');
-        }
+        const loadedAccounts = accSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         setAccounts(loadedAccounts);
         
         const loadedCharacters = charSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
           return { id: docSnap.id, ...data } as Character;
         });
-        console.log(`[AppDataProvider] LOG: Fetched ${loadedCharacters.length} characters from Firestore.`);
         setAllCharacters(loadedCharacters);
 
         // Determine active account from localStorage or default
@@ -223,37 +210,30 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             const accountExists = savedAccountId && loadedAccounts.some(acc => acc.id === savedAccountId);
 
             if (accountExists) {
-                console.log(`[AppDataProvider] LOG: Setting active account from localStorage: ${savedAccountId}`);
                 setActiveAccountId(savedAccountId);
             } else {
                 const defaultAccount = loadedAccounts.find(acc => acc.name === 'Default') || loadedAccounts[0];
-                console.log(`[AppDataProvider] LOG: Setting active account to default: ${defaultAccount.id}`);
                 setActiveAccountId(defaultAccount.id);
             }
         } else {
-            console.log('[AppDataProvider] LOG: No accounts exist, setting active account to null.');
             setActiveAccountId(null);
         }
 
-        // Check for legacy owned packs data
         const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
         const legacyPacksSnap = await getDoc(legacyPacksDocRef);
         if (legacyPacksSnap.exists()) {
           const data = legacyPacksSnap.data();
           if(data && Array.isArray(data.names)) {
-            console.log(`[AppDataProvider] LOG: Found ${data.names.length} legacy user-level owned packs.`);
             setLegacyOwnedPacks(data.names);
           }
         } else {
-          console.log('[AppDataProvider] LOG: No legacy pack data found.');
           setLegacyOwnedPacks(null);
         }
 
         initialDataLoadedForUserRef.current = currentUser.uid;
-        console.log('[AppDataProvider] LOG: Initial data load complete.');
 
       } catch (error) {
-        console.error("[AppDataProvider] LOG: Failed to load initial user-specific data:", error);
+        console.error("[AppDataProvider] Failed to load initial user-specific data:", error);
         toast({ title: "Data Load Error", description: (error as Error).message, variant: 'destructive' });
       } finally {
         setIsDataLoaded(true);
@@ -448,12 +428,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const addCharacter = async (characterData: CharacterFormData): Promise<Character | undefined> => {
     if (!currentUser) { toast({ title: "Not Authenticated", variant: "destructive" }); return undefined; }
-    console.log("[AppDataContext] LOG: addCharacter received data:", characterData);
+    
     setIsUpdating(true);
     try {
       const newId = doc(collection(db, CHARACTERS_COLLECTION)).id;
-      const newCharacter: Character = { ...characterData, id: newId, userId: currentUser.uid, iconUrl: characterData.iconUrl || null, preferences: {} };
-      console.log("[AppDataContext] LOG: addCharacter FINAL PAYLOAD for Firestore:", newCharacter);
+      const newCharacter: Character = { 
+        ...characterData,
+        id: newId, 
+        userId: currentUser.uid, 
+        iconUrl: characterData.iconUrl || null,
+        preferences: {} 
+      };
+      
       await setDoc(doc(db, CHARACTERS_COLLECTION, newId), newCharacter);
       setAllCharacters(prev => [...prev, newCharacter]);
       toast({ title: "Character Added", description: `${newCharacter.name} created.` });
@@ -471,7 +457,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toast({ title: "Unauthorized", variant: "destructive" });
       return;
     }
-    console.log("[AppDataContext] LOG: updateCharacter received character object:", character);
+    
     setAllCharacters(prev => prev.map(c => c.id === character.id ? character : c));
     
     if (characterUpdateDebounceTimers.current.has(character.id)) {
@@ -489,7 +475,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             accountId: character.accountId,
             preferences: character.preferences || {},
         };
-        console.log("[AppDataContext] LOG: Debounced updateCharacter FINAL PAYLOAD for Firestore:", updatePayload);
+        
         await updateDoc(charRef, updatePayload);
         toast({ title: "Character Updated", description: `${character.name}'s details saved.` });
       } catch (error) {
