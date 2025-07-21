@@ -1,4 +1,3 @@
-
 // src/app/api/cloudinary/signature/route.ts
 import { NextResponse } from 'next/server';
 import * as crypto from 'crypto';
