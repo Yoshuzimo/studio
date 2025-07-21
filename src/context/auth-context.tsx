@@ -163,9 +163,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       toast({ title: "Login Successful", description: "Welcome back!" });
       router.push('/');
-    } catch (error) {
+    } catch (error: any) {
       console.error('[AuthContext] Login error:', error);
-      toast({ title: "Login Failed", description: (error as Error).message, variant: "destructive" });
+      let title = "Login Failed";
+      let description = "An unknown error occurred. Please try again.";
+
+      switch (error.code) {
+        case 'auth/user-not-found':
+        case 'auth/invalid-email':
+          description = "No account found with that email or display name.";
+          break;
+        case 'auth/wrong-password':
+          description = "Incorrect password. Please try again.";
+          break;
+        case 'auth/too-many-requests':
+          description = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
+          break;
+        default:
+          description = error.message;
+          break;
+      }
+      toast({ title, description, variant: "destructive" });
       throw error;
     }
   }, [router, toast]);
