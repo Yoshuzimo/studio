@@ -189,7 +189,7 @@ export default function FavorTrackerPage() {
   const [character, setCharacter] = useState<Character | null>(null);
   const characterId = params.characterId as string;
   
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'ascending' });
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   const [showCompletedQuestsWithZeroRemainingFavor, setShowCompletedQuestsWithZeroRemainingFavor] = useState(false);
   const [onCormyr, setOnCormyr] = useState(false);
@@ -572,13 +572,8 @@ export default function FavorTrackerPage() {
   const questDataMap = useMemo(() => {
     if (!quests || quests.length === 0) return new Map<string, QuestWithCalculatedData>();
     
-    console.log('[FavorTrackerPage] Re-calculating questDataMap. Static quests count:', quests.length, 'Completion data count:', activeCharacterQuestCompletions.size);
-
     const newMap = new Map<string, QuestWithCalculatedData>();
     for (const quest of quests) {
-      // Log each quest ID from the static data
-      console.log(`[FavorTrackerPage] Processing quest from static data: ${quest.name} (ID: ${quest.id})`);
-
       const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest, getQuestCompletion);
 
       const calculateAdjustedRemainingFavorScore = (q: Quest, remainingFavor: number): number => {
@@ -600,90 +595,99 @@ export default function FavorTrackerPage() {
       });
     }
     return newMap;
-  }, [quests, getQuestCompletion, calculateFavorMetrics, durationAdjustments, activeCharacterQuestCompletions.size]);
+  }, [quests, getQuestCompletion, calculateFavorMetrics, durationAdjustments, activeCharacterQuestCompletions]);
   
   const effectiveCharacterLevel = character && useLevelOffset ? character.level + levelOffset : character?.level || 0;
-  
-  const { sortedQuestIds, areaAggregates } = useMemo(() => {
-    if (pageOverallLoading || !character) {
-      return { sortedQuestIds: [], areaAggregates: { favorMap: new Map(), scoreMap: new Map() } };
-    }
-  
-    const currentAggregates = {
-      favorMap: new Map<string, number>(),
-      scoreMap: new Map<string, number>(),
-    };
-  
-    const visibleQuestData = Array.from(questDataMap.values()).filter(quest => {
-      const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
-      const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-      const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-      const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-      const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-      const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
-      const isNotTest = !quest.name.toLowerCase().includes("test");
-      return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
+
+  const filteredQuests = useMemo(() => {
+    if (pageOverallLoading || !character) return [];
+
+    return Array.from(questDataMap.values()).filter(quest => {
+        const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+        const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
+        const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
+        const isNotTest = !quest.name.toLowerCase().includes("test");
+        return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
     });
+  }, [pageOverallLoading, character, questDataMap, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids]);
+
+  const areaAggregates = useMemo(() => {
+    const favorMap = new Map<string, number>();
+    const scoreMap = new Map<string, number>();
+
+    filteredQuests.forEach(quest => {
+        const primaryLocation = getPrimaryLocation(quest.location);
+        if (primaryLocation) {
+            favorMap.set(primaryLocation, (favorMap.get(primaryLocation) || 0) + quest.remainingPossibleFavor);
+            scoreMap.set(primaryLocation, (scoreMap.get(primaryLocation) || 0) + quest.adjustedRemainingFavorScore);
+        }
+    });
+
+    return { favorMap, scoreMap };
+  }, [filteredQuests]);
+
+  const sortedQuests = useMemo(() => {
+    if (!sortConfig) return filteredQuests;
   
-    visibleQuestData.forEach(quest => {
-      const primaryLocation = getPrimaryLocation(quest.location);
-      if (primaryLocation) {
-        currentAggregates.favorMap.set(primaryLocation, (currentAggregates.favorMap.get(primaryLocation) || 0) + quest.remainingPossibleFavor);
-        currentAggregates.scoreMap.set(primaryLocation, (currentAggregates.scoreMap.get(primaryLocation) || 0) + quest.adjustedRemainingFavorScore);
+    return [...filteredQuests].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+  
+      if (sortConfig.key === 'name') {
+        aValue = getSortableName(a.name);
+        bValue = getSortableName(b.name);
+      } else if (sortConfig.key === 'location') {
+        aValue = a.location || '';
+        bValue = b.location || '';
+      } else if (sortConfig.key === 'areaRemainingFavor') {
+        aValue = areaAggregates.favorMap.get(getPrimaryLocation(a.location) || '') ?? 0;
+        bValue = areaAggregates.favorMap.get(getPrimaryLocation(b.location) || '') ?? 0;
+      } else if (sortConfig.key === 'areaAdjustedRemainingFavorScore') {
+        aValue = areaAggregates.scoreMap.get(getPrimaryLocation(a.location) || '') ?? 0;
+        bValue = areaAggregates.scoreMap.get(getPrimaryLocation(b.location) || '') ?? 0;
+      } else {
+        aValue = (a as any)[sortConfig.key];
+        bValue = (b as any)[sortConfig.key];
       }
+  
+      if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+      if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+  
+      let comparison = 0;
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        comparison = aValue.localeCompare(bValue);
+      } else {
+        if (aValue < bValue) comparison = -1;
+        if (aValue > bValue) comparison = 1;
+      }
+  
+      if (comparison !== 0) return sortConfig.direction === 'ascending' ? comparison : -comparison;
+      
+      // Secondary sort logic for area columns
+      if (sortConfig.key === 'areaRemainingFavor' || sortConfig.key === 'areaAdjustedRemainingFavorScore') {
+        const aLocation = a.location || '';
+        const bLocation = b.location || '';
+        const locationComparison = aLocation.localeCompare(bLocation);
+        if (locationComparison !== 0) return locationComparison;
+      }
+
+      return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
-  
-    const getSortValue = (quest: QuestWithCalculatedData, config: SortConfig) => {
-      const { key } = config;
-      if (key === 'areaRemainingFavor') return currentAggregates.favorMap.get(getPrimaryLocation(quest.location) || '') ?? 0;
-      if (key === 'areaAdjustedRemainingFavorScore') return currentAggregates.scoreMap.get(getPrimaryLocation(quest.location) || '') ?? 0;
-      if (key === 'name') return getSortableName(quest.name);
-      if (key === 'location') return quest.location || '';
-      return (quest as any)[key];
-    };
-  
-    const sortedIds = visibleQuestData
-      .sort((a, b) => {
-        const aValue = getSortValue(a, sortConfig);
-        const bValue = getSortValue(b, sortConfig);
-  
-        let aComparable: any = aValue === null || aValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : aValue;
-        let bComparable: any = bValue === null || bValue === undefined ? (sortConfig.direction === 'ascending' ? Infinity : -Infinity) : bValue;
-  
-        let comparison = 0;
-        if (typeof aComparable === 'string' && typeof bComparable === 'string') {
-          comparison = aComparable.localeCompare(bComparable);
-        } else {
-          if (aComparable < bComparable) comparison = -1;
-          if (aComparable > bComparable) comparison = 1;
-        }
-  
-        if (comparison !== 0) return sortConfig.direction === 'ascending' ? comparison : -comparison;
-  
-        if (sortConfig.key === 'areaRemainingFavor' || sortConfig.key === 'areaAdjustedRemainingFavorScore') {
-          const aLocation = a.location || '';
-          const bLocation = b.location || '';
-          const locationComparison = aLocation.localeCompare(bLocation);
-          if (locationComparison !== 0) return locationComparison;
-        }
-        return getSortableName(a.name).localeCompare(getSortableName(b.name));
-      })
-      .map(q => q.id);
-  
-    return { sortedQuestIds: sortedIds, areaAggregates: currentAggregates };
-  }, [pageOverallLoading, character, questDataMap, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids, sortConfig]);
-  
+  }, [filteredQuests, sortConfig, areaAggregates]);
   
   const requestSort = (key: SortableColumnKey) => {
     let newDirection: 'ascending' | 'descending' = 'ascending';
     
-    // One-way descending sort for specific columns
+    // Default to descending for specific numeric columns
     if (['remainingPossibleFavor', 'adjustedRemainingFavorScore', 'areaRemainingFavor', 'areaAdjustedRemainingFavorScore', 'maxPotentialFavorSingleQuest'].includes(key)) {
       newDirection = 'descending';
-    } else if (sortConfig && sortConfig.key === key) {
+    }
+  
+    if (sortConfig && sortConfig.key === key) {
       newDirection = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
-    } else if (['level'].includes(key)) {
-      newDirection = 'ascending';
     }
   
     const newSortConfig = { key, direction: newDirection };
@@ -692,16 +696,12 @@ export default function FavorTrackerPage() {
   };
   
   const questsToRender = useMemo(() => {
-    if (pageOverallLoading || sortedQuestIds.length === 0) return [];
-    
-    return sortedQuestIds.map(id => questDataMap.get(id))
-      .filter((quest): quest is QuestWithCalculatedData => {
-        if (!quest) return false;
-        if (isDebugMode) return true; // Show all sorted quests in debug mode
+    return sortedQuests.filter(quest => {
+        if (isDebugMode) return true;
         if (!showCompletedQuestsWithZeroRemainingFavor && quest.remainingPossibleFavor <= 0) return false;
         return true;
-      });
-  }, [sortedQuestIds, questDataMap, showCompletedQuestsWithZeroRemainingFavor, isDebugMode, pageOverallLoading]);
+    });
+  }, [sortedQuests, showCompletedQuestsWithZeroRemainingFavor, isDebugMode]);
   
   const pageStats = useMemo(() => {
     if (!character || questDataMap.size === 0) {
