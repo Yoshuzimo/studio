@@ -280,9 +280,7 @@ export default function FavorTrackerPage() {
                     setShowRaids(favorPrefs.showRaids ?? false);
                     setClickAction(favorPrefs.clickAction ?? 'none');
 
-                    // ** THIS IS THE FIX **
                     setSortConfig(favorPrefs.sortConfig ?? { key: 'name', direction: 'ascending' });
-                    // ** END FIX **
                     
                     const defaultVis = getDefaultColumnVisibility();
                     const mergedVisibility = { ...defaultVis, ...(favorPrefs.columnVisibility || {}) };
@@ -292,6 +290,7 @@ export default function FavorTrackerPage() {
         } catch (error) {
             console.error("Error loading preferences:", error);
             setColumnVisibility(getDefaultColumnVisibility());
+            setSortConfig({ key: 'name', direction: 'ascending' });
         }
     }
 }, [characterId, isDataLoaded, currentUser, character]);
