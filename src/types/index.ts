@@ -1,5 +1,5 @@
 
-// Cache-busting comment to force rebuild of dependents: V9
+// Cache-busting comment to force rebuild of dependents: V10
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 import type { z } from 'zod';
 import type { characterFormSchema } from '@/components/character/character-form';
@@ -16,6 +16,7 @@ export interface User extends Omit<Character, 'id' | 'createdAt' > {
   createdAt?: FirestoreTimestampType | FieldValue;
   emailVerified: boolean;
   iconUrl: string | null;
+  hasMigratedLegacyPacks?: boolean; // New flag for one-time migration check
 }
 
 export interface PublicUserProfile {

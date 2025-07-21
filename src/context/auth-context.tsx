@@ -75,16 +75,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: user.uid, email: dbData.email || user.email, displayName: dbData.displayName || (user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX),
           isAdmin: dbData.isAdmin || false, isOwner: dbData.isOwner || false, isCreator: dbData.isCreator || false,
           createdAt: dbData.createdAt as FirestoreTimestampType, emailVerified: user.emailVerified, iconUrl: dbData.iconUrl ?? null,
+          hasMigratedLegacyPacks: dbData.hasMigratedLegacyPacks || false,
         } as AppUser;
         setUserData(appUserData);
       } else {
         console.log('[AuthContext] User document does not exist for UID:', user.uid, 'Attempting to create one.');
         const placeholderDisplayName = user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
-        const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl' | 'preferences'> & { createdAt: FieldValue, iconUrl: null, preferences: {} } = {
+        const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl' | 'preferences'> & { createdAt: FieldValue, iconUrl: null, preferences: {}, hasMigratedLegacyPacks: boolean } = {
           id: user.uid, email: user.email, displayName: placeholderDisplayName,
           isAdmin: false, isOwner: false, isCreator: false, emailVerified: user.emailVerified, 
           accountId: '', level: 0, name: '', userId: '', preferences: {},
-          createdAt: serverTimestamp(), iconUrl: null,
+          createdAt: serverTimestamp(), iconUrl: null, hasMigratedLegacyPacks: true, // New users don't need migration
         };
         const publicProfileData: PublicUserProfileFirebaseData = { displayName: placeholderDisplayName, iconUrl: null, updatedAt: serverTimestamp() };
         await setDoc(doc(db, 'users', user.uid), mainUserDocData);
@@ -181,13 +182,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const placeholderDisplayName = user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
       
-      const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl' | 'preferences'> & { createdAt: FieldValue, iconUrl: null, preferences: {} } = { 
+      const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl' | 'preferences'> & { createdAt: FieldValue, iconUrl: null, preferences: {}, hasMigratedLegacyPacks: boolean } = { 
         id: user.uid, email: user.email, displayName: placeholderDisplayName,
         isAdmin: false, isOwner: false, isCreator: false, 
         emailVerified: user.emailVerified || false,
         accountId: '', level: 0, name: '', userId: '', preferences: {},
         createdAt: serverTimestamp(),
         iconUrl: null,
+        hasMigratedLegacyPacks: true, // New users don't need migration
       };
       await setDoc(doc(db, 'users', user.uid), mainUserDocData);
 
