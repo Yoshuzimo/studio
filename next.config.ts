@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -28,13 +29,13 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-      { // Added for Cloudinary
+      {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
         port: '',
         pathname: '/**',
       },
-      { // Added for i.imgflip.com
+      {
         protocol: 'https',
         hostname: 'i.imgflip.com',
         port: '',

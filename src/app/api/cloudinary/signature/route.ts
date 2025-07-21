@@ -1,3 +1,4 @@
+
 // src/app/api/cloudinary/signature/route.ts
 import { NextResponse } from 'next/server';
 import * as crypto from 'crypto';
@@ -15,21 +16,18 @@ export async function POST(request: Request) {
 
     try {
       await adminAuth.verifyIdToken(idToken);
-      console.log("[Cloudinary Signature] Firebase ID token verified successfully.");
     } catch (error) {
       console.error("[Cloudinary Signature] Firebase Auth Error:", error);
       return NextResponse.json({ error: 'Invalid authentication token.' }, { status: 401 });
     }
 
     const body = await request.json();
-    console.log("[Cloudinary Signature] Received params for signing:", body);
-
+    const paramsToSign = body;
 
     const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
-    const cloudinaryApiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 
-    if (!cloudinaryApiSecret || !cloudinaryApiKey) {
-      console.error("[Cloudinary Signature] Cloudinary credentials are missing.");
+    if (!cloudinaryApiSecret) {
+      console.error("[Cloudinary Signature] Cloudinary API secret is missing.");
       return NextResponse.json(
         { error: 'Server configuration error: Cloudinary credentials missing.' },
         { status: 500 }
@@ -37,29 +35,17 @@ export async function POST(request: Request) {
     }
     
     // The widget sends all parameters it will use in the upload for signing.
-    // We will sign all of them except for file data.
-    const paramsToSign: Record<string, string | number> = {};
-    for (const key in body) {
-        if (body[key] !== undefined && body[key] !== null) {
-            paramsToSign[key] = body[key];
-        }
-    }
-
-    const sortedParams = Object.entries(paramsToSign)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, val]) => `${key}=${val}`)
+    // We must sign all of them except for file data and api_key which are excluded by the widget.
+    const sortedParams = Object.keys(paramsToSign)
+      .sort()
+      .map(key => `${key}=${paramsToSign[key]}`)
       .join('&');
 
     const stringToSign = `${sortedParams}${cloudinaryApiSecret}`;
 
     const signature = crypto.createHash('sha256').update(stringToSign).digest('hex');
 
-    console.log("[Cloudinary Signature] Generated signature details:", {
-      sortedParams,
-      signature,
-    });
-
-    // The widget only needs the signature itself in the response to the uploadSignature function.
+    // The widget only needs the signature itself in the response.
     return NextResponse.json({
       signature: signature
     });

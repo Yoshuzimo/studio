@@ -1,3 +1,4 @@
+
 // src/components/auth/user-profile-dialog.tsx
 "use client";
 
@@ -104,7 +105,6 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
             sources: ['local', 'url', 'camera'],
             uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, any>) => {
                 try {
-                    console.log("[Cloudinary Widget] Requesting signature for params:", paramsToSign);
                     const response = await fetch('/api/cloudinary/signature', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
