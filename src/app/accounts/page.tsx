@@ -7,11 +7,12 @@ import { useAppData } from '@/context/app-data-context';
 import { AccountCard } from '@/components/account/account-card';
 import { AccountForm, type AccountFormData } from '@/components/account/account-form';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Loader2, Library } from 'lucide-react';
+import { PlusCircle, Loader2, Library, Info } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Account } from '@/types';
 import { useAuth } from '@/context/auth-context';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function AccountsPage() {
   const { currentUser, isLoading: authIsLoading } = useAuth();
@@ -93,6 +94,14 @@ export default function AccountsPage() {
           Add New Account
         </Button>
       </div>
+
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertTitle>What Are Accounts For?</AlertTitle>
+        <AlertDescription>
+          Accounts allow you to manage separate collections of owned Adventure Packs. Each character must be linked to an account, which determines which quests are shown as available in their trackers. This is useful if you have multiple DDO accounts with different expansion purchases.
+        </AlertDescription>
+      </Alert>
 
       {pageOverallLoading && accounts.length === 0 && !isDataLoaded && (
         <div className="text-center py-10"><Loader2 className="mr-2 h-8 w-8 animate-spin mx-auto" /> <p>Loading accounts...</p></div>
