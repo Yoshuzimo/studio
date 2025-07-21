@@ -25,7 +25,7 @@ import {
     DropdownMenuSubContent,
     DropdownMenuSubTrigger,
     DropdownMenuPortal,
-    DropdownMenuTrigger, // Added this import
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/toaster';
@@ -173,26 +173,28 @@ export function AppLayout({ children }: { children: ReactNode }) {
                         <DropdownMenuContent side="right" align="start" sideOffset={8} onMouseEnter={() => setIsCharacterMenuOpen(true)} onMouseLeave={() => setIsCharacterMenuOpen(false)}>
                            {sortedCharacters.map((char) => (
                              <DropdownMenuSub key={char.id} open={openSubMenuId === char.id} onOpenChange={(open) => setOpenSubMenuId(open ? char.id : null)}>
-                               <DropdownMenuSubTrigger>
-                                 <Avatar className="mr-2 h-5 w-5">
-                                   <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
-                                   <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
-                                 </Avatar>
-                                 <span>{char.name}</span>
-                               </DropdownMenuSubTrigger>
-                               <DropdownMenuPortal>
-                                 <DropdownMenuSubContent sideOffset={8}>
-                                   <Link href={`/favor-tracker/${char.id}`} passHref>
-                                     <DropdownMenuItem asChild><Link href={`/favor-tracker/${char.id}`} className="w-full h-full flex items-center"><ListOrdered className="mr-2 h-4 w-4"/>Favor Tracker</Link></DropdownMenuItem>
-                                   </Link>
-                                    <Link href={`/leveling-guide/${char.id}`} passHref>
-                                     <DropdownMenuItem asChild><Link href={`/leveling-guide/${char.id}`} className="w-full h-full flex items-center"><BarChartHorizontalBig className="mr-2 h-4 w-4"/>Leveling Guide</Link></DropdownMenuItem>
-                                   </Link>
-                                   <Link href={`/reaper-rewards/${char.id}`} passHref>
-                                     <DropdownMenuItem asChild><Link href={`/reaper-rewards/${char.id}`} className="w-full h-full flex items-center"><Skull className="mr-2 h-4 w-4"/>Reaper Rewards</Link></DropdownMenuItem>
-                                   </Link>
-                                 </DropdownMenuSubContent>
-                               </DropdownMenuPortal>
+                               <div onMouseEnter={() => setOpenSubMenuId(char.id)} onMouseLeave={() => setOpenSubMenuId(null)}>
+                                  <DropdownMenuSubTrigger>
+                                    <Avatar className="mr-2 h-5 w-5">
+                                      <AvatarImage src={char.iconUrl || undefined} alt={char.name} />
+                                      <AvatarFallback>{char.name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <span>{char.name}</span>
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuPortal>
+                                    <DropdownMenuSubContent sideOffset={8}>
+                                      <Link href={`/favor-tracker/${char.id}`} passHref>
+                                        <DropdownMenuItem asChild><Link href={`/favor-tracker/${char.id}`} className="w-full h-full flex items-center"><ListOrdered className="mr-2 h-4 w-4"/>Favor Tracker</Link></DropdownMenuItem>
+                                      </Link>
+                                      <Link href={`/leveling-guide/${char.id}`} passHref>
+                                        <DropdownMenuItem asChild><Link href={`/leveling-guide/${char.id}`} className="w-full h-full flex items-center"><BarChartHorizontalBig className="mr-2 h-4 w-4"/>Leveling Guide</Link></DropdownMenuItem>
+                                      </Link>
+                                      <Link href={`/reaper-rewards/${char.id}`} passHref>
+                                        <DropdownMenuItem asChild><Link href={`/reaper-rewards/${char.id}`} className="w-full h-full flex items-center"><Skull className="mr-2 h-4 w-4"/>Reaper Rewards</Link></DropdownMenuItem>
+                                      </Link>
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuPortal>
+                                </div>
                              </DropdownMenuSub>
                            ))}
                         </DropdownMenuContent>
