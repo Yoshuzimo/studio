@@ -1,8 +1,7 @@
-
 // src/components/auth/user-profile-dialog.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,10 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, User, Mail, Image as ImageIcon, KeyRound, CheckCircle } from 'lucide-react';
+import { Loader2, User, Image as ImageIcon, KeyRound, CheckCircle, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import Script from 'next/script';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(3, "Must be 3-30 characters.").max(30, "Must be 3-30 characters."),
@@ -30,12 +28,6 @@ interface UserProfileDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   user: AppUser;
-}
-
-declare global {
-    interface Window {
-        cloudinary: any;
-    }
 }
 
 export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDialogProps) {
@@ -54,7 +46,6 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isCloudinaryScriptLoaded, setIsCloudinaryScriptLoaded] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(user.iconUrl);
   
   const [reauthStep, setReauthStep] = useState(false);
@@ -62,11 +53,11 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
   const [newEmailToConfirm, setNewEmailToConfirm] = useState('');
   const [emailChangeSuccess, setEmailChangeSuccess] = useState(false);
   const [confirmEmailChangeOpen, setConfirmEmailChangeOpen] = useState(false);
-  const uniqueId = React.useId();
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      if (window.cloudinary) setIsCloudinaryScriptLoaded(true);
       reset({ displayName: user.displayName || '', email: user.email || '', iconUrl: user.iconUrl || null });
       setPreviewUrl(user.iconUrl);
       setReauthStep(false);
@@ -76,77 +67,41 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
     }
   }, [isOpen, user, reset]);
 
-  const openCloudinaryWidget = async () => {
-    if (!isCloudinaryScriptLoaded || !currentUser) {
-      toast({ title: "Widget not ready", description: "The image upload widget is not loaded yet or you are not logged in.", variant: "destructive" });
-      return;
-    }
-    
+  const handleIconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 
-    if (!cloudName || !uploadPreset || !apiKey) {
+    if (!cloudName || !uploadPreset) {
       toast({ title: "Client Configuration Error", description: "Cloudinary settings are missing.", variant: "destructive" });
       return;
     }
-
+    
+    setIsProcessing(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+    
     try {
-        const idToken = await currentUser.getIdToken();
-        const widget = window.cloudinary.createUploadWidget({
-            cloudName: cloudName,
-            uploadPreset: uploadPreset,
-            apiKey: apiKey,
-            folder: "ddo_toolkit/users",
-            cropping: true,
-            croppingAspectRatio: 1,
-            showAdvancedOptions: true,
-            sources: ['local', 'url', 'camera'],
-            uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, any>) => {
-                try {
-                    const response = await fetch('/api/cloudinary/signature', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-                        body: JSON.stringify(paramsToSign),
-                    });
-
-                    if (!response.ok) {
-                        const errorBody = await response.json();
-                        throw new Error(errorBody.error || 'Failed to fetch signature.');
-                    }
-
-                    const { signature } = await response.json();
-                    callback(signature);
-                } catch (error) {
-                    console.error("[Cloudinary Widget] Error fetching signature:", error);
-                    toast({ title: "Signature Error", description: (error as Error).message, variant: "destructive" });
-                }
-            },
-            styles: {
-                palette: {
-                    window: "#283593", windowBorder: "#3F51B5", tabIcon: "#FFFFFF", menuIcons: "#FFFFFF",
-                    textDark: "#000000", textLight: "#FFFFFF", link: "#FF9800", action: "#FF9800",
-                    inactiveTabIcon: "#BDBDBD", error: "#F44336", inProgress: "#0078FF",
-                    complete: "#4CAF50", sourceBg: "#303F9F"
-                },
-            }
-        }, (error: any, result: any) => {
-            if (error) {
-                console.error("[UserProfileDialog] Cloudinary Upload Error:", error);
-                toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
-                return;
-            }
-
-            if (result && result.event === "success") {
-                const secureUrl = result.info.secure_url;
-                setValue('iconUrl', secureUrl, { shouldValidate: true });
-                setPreviewUrl(secureUrl);
-                toast({ title: "Image Ready", description: "Your new image is ready to be saved with your profile." });
-            }
-        });
-        widget.open();
-    } catch(error) {
-        toast({ title: "Authentication Error", description: "Could not get authentication token for upload.", variant: "destructive" });
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      
+      if (data.secure_url) {
+        setValue('iconUrl', data.secure_url, { shouldValidate: true });
+        setPreviewUrl(data.secure_url);
+        toast({ title: "Image Uploaded", description: "Your new icon is ready to be saved." });
+      } else {
+        throw new Error(data.error?.message || "Unknown Cloudinary error");
+      }
+    } catch (error) {
+      toast({ title: "Upload Failed", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -156,17 +111,14 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
     let changesMade = false;
     let success = false;
     
-    // Handle Display Name and Icon Change together
     if (data.displayName !== user.displayName || data.iconUrl !== user.iconUrl) {
       success = await updateUserDisplayName(data.displayName, data.iconUrl);
       if(success) changesMade = true;
     }
 
-    // Handle Email Change
     if (data.email !== user.email) {
       setNewEmailToConfirm(data.email);
       setConfirmEmailChangeOpen(true);
-      // The rest is handled by confirmation dialogs, so we don't close the main dialog yet.
     } else if (changesMade) {
       onOpenChange(false);
     } else {
@@ -251,8 +203,17 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
                   <AvatarImage src={previewUrl || undefined} alt="User Avatar Preview"/>
                   <AvatarFallback><User className="h-12 w-12 text-muted-foreground" /></AvatarFallback>
               </Avatar>
-              <Button type="button" variant="outline" onClick={openCloudinaryWidget} disabled={!isCloudinaryScriptLoaded || pageOverallLoading}>
-                <ImageIcon className="mr-2 h-4 w-4"/> Upload New Avatar
+               <Input
+                    id="icon-upload"
+                    type="file"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handleIconUpload}
+                    accept="image/png, image/jpeg, image/gif"
+                    disabled={pageOverallLoading}
+                />
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={pageOverallLoading}>
+                <ImageIcon className="mr-2 h-4 w-4"/> {previewUrl ? "Change Avatar" : "Upload Avatar"}
               </Button>
           </div>
           <div className="space-y-2">
@@ -276,18 +237,6 @@ export function UserProfileDialog({ isOpen, onOpenChange, user }: UserProfileDia
 
   return (
     <>
-      <Script
-        id={`cloudinary-widget-script-${uniqueId}`}
-        src="https://upload-widget.cloudinary.com/global/all.js"
-        type="text/javascript"
-        onLoad={() => {
-          setIsCloudinaryScriptLoaded(true);
-        }}
-        onError={() => {
-           console.error("Failed to load Cloudinary Upload Widget script.");
-           toast({ title: "Error", description: "Could not load image uploader. Please refresh the page.", variant: "destructive" });
-        }}
-      />
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
           {renderContent()}

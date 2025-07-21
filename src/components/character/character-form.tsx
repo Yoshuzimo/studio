@@ -1,14 +1,12 @@
-
 // src/components/character/character-form.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import type { Character, Account } from '@/types';
 import { Loader2, ImagePlus } from 'lucide-react';
-import Script from 'next/script';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,16 +59,10 @@ interface CharacterFormProps {
   isSubmitting?: boolean;
 }
 
-declare global {
-    interface Window {
-        cloudinary: any;
-    }
-}
-
-
 export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isSubmitting: isParentSubmitting = false }: CharacterFormProps) {
   const { currentUser } = useAuth();
   const { accounts, activeAccountId } = useAppData();
+  const { toast } = useToast();
   
   const form = useForm<CharacterFormData>({
     resolver: zodResolver(characterFormSchema),
@@ -82,21 +74,9 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     },
   });
   
-  const [isCloudinaryScriptLoaded, setIsCloudinaryScriptLoaded] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-
-  const { toast } = useToast();
-  
-  const uniqueId = React.useId();
-  const imageUploadButtonId = `image-upload-button-${uniqueId}`;
-
-  useEffect(() => {
-    if (isOpen) {
-      if (window.cloudinary) {
-        setIsCloudinaryScriptLoaded(true);
-      }
-    }
-  }, [isOpen]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -118,103 +98,51 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
     }
   }, [initialData, isOpen, activeAccountId, form]);
 
-  const openCloudinaryWidget = async () => {
-    if (!isCloudinaryScriptLoaded || !currentUser) {
-      toast({ title: "Widget not ready", description: "The image upload widget is not loaded yet or you are not logged in.", variant: "destructive" });
-      return;
-    }
-    
+ const handleIconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 
-    if (!cloudName || !uploadPreset || !apiKey) {
+    if (!cloudName || !uploadPreset) {
       toast({ title: "Client Configuration Error", description: "Cloudinary settings are missing.", variant: "destructive" });
       return;
     }
-
+    
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+    
     try {
-        const idToken = await currentUser.getIdToken();
-        const widget = window.cloudinary.createUploadWidget({
-        cloudName: cloudName,
-        uploadPreset: uploadPreset,
-        apiKey: apiKey, 
-        folder: "ddo_toolkit/characters",
-        cropping: true,
-        croppingAspectRatio: 4 / 3,
-        showAdvancedOptions: true,
-        sources: ['local', 'url', 'camera'],
-        uploadSignature: async (callback: (signature: string) => void, paramsToSign: Record<string, any>) => {
-            try {
-                const response = await fetch('/api/cloudinary/signature', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-                    body: JSON.stringify(paramsToSign),
-                });
-
-                if (!response.ok) {
-                    const errorBody = await response.json();
-                    throw new Error(errorBody.error || 'Failed to fetch signature.');
-                }
-
-                const { signature } = await response.json();
-                callback(signature);
-            } catch (error) {
-                console.error("[Cloudinary Widget] Error fetching signature:", error);
-                toast({ title: "Signature Error", description: (error as Error).message, variant: "destructive" });
-            }
-        },
-        styles: {
-            palette: {
-                window: "#283593", windowBorder: "#3F51B5", tabIcon: "#FFFFFF", menuIcons: "#FFFFFF",
-                textDark: "#000000", textLight: "#FFFFFF", link: "#FF9800", action: "#FF9800",
-                inactiveTabIcon: "#BDBDBD", error: "#F44336", inProgress: "#0078FF",
-                complete: "#4CAF50", sourceBg: "#303F9F"
-            },
-        }
-        }, (error: any, result: any) => {
-        if (error) {
-            console.error("[CharacterForm] Cloudinary Upload Error:", error);
-            toast({ title: "Image Upload Error", description: error.message || "An unknown error occurred.", variant: "destructive" });
-            return;
-        }
-
-        if (result && result.event === "success") {
-            const secureUrl = result.info.secure_url;
-            console.log("[CharacterForm] LOG: Cloudinary success. URL:", secureUrl);
-            form.setValue('iconUrl', secureUrl, { shouldValidate: true });
-            setPreviewImageUrl(secureUrl);
-            toast({ title: "Image Ready", description: "Your new image is ready to be saved with the character." });
-        }
-        });
-
-        widget.open();
-    } catch(error) {
-        toast({ title: "Authentication Error", description: "Could not get authentication token for upload.", variant: "destructive" });
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      
+      if (data.secure_url) {
+        form.setValue('iconUrl', data.secure_url, { shouldValidate: true });
+        setPreviewImageUrl(data.secure_url);
+        toast({ title: "Image Uploaded", description: "Your new icon is ready to be saved." });
+      } else {
+        throw new Error(data.error?.message || "Unknown Cloudinary error");
+      }
+    } catch (error) {
+      toast({ title: "Upload Failed", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
     }
   };
-  
+
   const handleSubmission = (data: CharacterFormData) => {
-    console.log("[CharacterForm] LOG: handleSubmission received data from react-hook-form:", data);
     onSubmit(data);
   };
   
-  const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting;
+  const effectiveIsSubmitting = isParentSubmitting || form.formState.isSubmitting || isUploading;
 
   return (
-    <>
-     <Script
-        id={`cloudinary-widget-script-${uniqueId}`}
-        src="https://upload-widget.cloudinary.com/global/all.js"
-        type="text/javascript"
-        onLoad={() => {
-          setIsCloudinaryScriptLoaded(true);
-        }}
-        onError={() => {
-           console.error("Failed to load Cloudinary Upload Widget script.");
-           toast({ title: "Error", description: "Could not load image uploader. Please refresh the page.", variant: "destructive" });
-        }}
-      />
       <Dialog open={isOpen} onOpenChange={(open) => { if (!effectiveIsSubmitting) onOpenChange(open); }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -279,24 +207,33 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                 )}
               />
               <FormItem>
-                <FormLabel htmlFor={imageUploadButtonId}>Card Background Image</FormLabel>
+                <FormLabel htmlFor="icon-upload-button">Card Background Image (Optional)</FormLabel>
                 <div className="flex items-center gap-4">
+                  <Input
+                    id="icon-upload-input"
+                    type="file"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handleIconUpload}
+                    accept="image/png, image/jpeg, image/gif"
+                    disabled={effectiveIsSubmitting}
+                  />
                   <Button
-                    id={imageUploadButtonId}
+                    id="icon-upload-button"
                     type="button"
                     variant="outline"
-                    onClick={openCloudinaryWidget}
-                    disabled={!isCloudinaryScriptLoaded || effectiveIsSubmitting}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={effectiveIsSubmitting}
                   >
                      <ImagePlus className="mr-2 h-4 w-4" />
-                    Upload & Edit Image
+                    {isUploading ? "Uploading..." : "Upload Image"}
                   </Button>
                   {previewImageUrl && (
                       <img src={previewImageUrl} alt="Thumbnail preview" className="h-10 w-10 rounded-md object-cover border" />
                   )}
                 </div>
                  <FormDescription>
-                    Click to open the uploader. You can crop, resize, and edit your image before saving.
+                    Choose an image for the character card's background.
                 </FormDescription>
               </FormItem>
 
@@ -305,7 +242,7 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
                   <Button type="button" variant="outline" disabled={effectiveIsSubmitting}>Cancel</Button>
                 </DialogClose>
                 <Button type="submit" disabled={effectiveIsSubmitting}>
-                  {isParentSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {(isParentSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {initialData ? "Save Changes" : "Create Character"}
                 </Button>
               </DialogFooter>
@@ -313,6 +250,5 @@ export function CharacterForm({ isOpen, onOpenChange, onSubmit, initialData, isS
           </Form>
         </DialogContent>
       </Dialog>
-    </>
   );
 }

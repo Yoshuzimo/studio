@@ -83,9 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const mainUserDocData: Omit<AppUser, 'createdAt' | 'iconUrl' | 'preferences'> & { createdAt: FieldValue, iconUrl: null, preferences: {} } = {
           id: user.uid, email: user.email, displayName: placeholderDisplayName,
           isAdmin: false, isOwner: false, isCreator: false, emailVerified: user.emailVerified, 
+          accountId: '', level: 0, name: '', userId: '', preferences: {},
           createdAt: serverTimestamp(), iconUrl: null,
-          // Dummy fields to satisfy the Omit<Character> portion of User type
-          accountId: '', level: 0, name: '', userId: '', preferences: {}
         };
         const publicProfileData: PublicUserProfileFirebaseData = { displayName: placeholderDisplayName, iconUrl: null, updatedAt: serverTimestamp() };
         await setDoc(doc(db, 'users', user.uid), mainUserDocData);
@@ -102,19 +101,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   useEffect(() => {
     const unsubscribe = onIdTokenChanged(auth, async (user) => {
-      console.log('[AuthContext] onIdTokenChanged triggered. User:', user?.uid || null);
       if (user) {
-        // User is signed in.
         setCurrentUser(user);
         if (!userData || user.uid !== userData.id) {
-          // Fetch data if we don't have it or if the user changed.
-           console.log('[AuthContext] Fetching user data for new or different user.');
            await fetchAndSetUserData(user);
         }
       } else {
-        // User is signed out.
         if (currentUser) {
-            console.log('[AuthContext] User signed out, clearing session.');
             await fetch('/api/auth/session', { method: 'DELETE' });
         }
         setCurrentUser(null);
@@ -124,37 +117,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      console.log('[AuthContext] Unsubscribing from onIdTokenChanged.');
       unsubscribe();
     };
   }, [fetchAndSetUserData, userData, currentUser]);
 
   const login = useCallback(async (identifier: string, password_login: string) => {
     let emailToLogin = identifier;
-    console.log('[AuthContext] login attempt for identifier:', identifier);
     try {
       if (!EMAIL_REGEX.test(identifier)) {
-        console.log('[AuthContext] Identifier is not email, querying publicProfiles for display name:', identifier);
         const publicProfilesRef = collection(db, 'publicProfiles');
         const q = query(publicProfilesRef, where("displayName", "==", identifier));
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) {
-          console.warn('[AuthContext] Display name not found in publicProfiles:', identifier);
           throw new Error("User not found with that display name.");
         }
         if (querySnapshot.size > 1) {
-          console.warn('[AuthContext] Multiple users found for display name in publicProfiles:', identifier);
           throw new Error("Multiple users found with that display name. Please use email to log in.");
         }
         const publicProfileDoc = querySnapshot.docs[0];
         const userDocRef = doc(db, 'users', publicProfileDoc.id);
         const userDocSnap = await getDoc(userDocRef);
         if (!userDocSnap.exists() || !userDocSnap.data()?.email) {
-          console.error('[AuthContext] publicProfile found, but main user doc or email is missing for ID:', publicProfileDoc.id);
           throw new Error("User account issue. Please contact support.");
         }
         emailToLogin = userDocSnap.data()!.email;
-        console.log('[AuthContext] Found email for display name:', emailToLogin);
       }
       const userCredential = await signInWithEmailAndPassword(auth, emailToLogin, password_login);
       const idToken = await userCredential.user.getIdToken(true);
@@ -189,11 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router, toast]);
 
   const signup = useCallback(async (email_signup: string, password_signup: string) => {
-    console.log('[AuthContext] signup attempt for email:', email_signup);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email_signup, password_signup);
       const user = userCredential.user;
-      console.log('[AuthContext] Firebase user created:', user.uid);
       
       const placeholderDisplayName = user.uid + DISPLAY_NAME_PLACEHOLDER_SUFFIX;
       
@@ -234,10 +218,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [toast]);
   
   const logout = useCallback(async () => {
-    console.log('[AuthContext] logout called.');
     try {
       await firebaseSignOut(auth);
-      // onIdTokenChanged will handle clearing the session cookie and state
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
       router.push('/login'); 
     } catch (error) {
@@ -249,7 +231,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendVerificationEmail = useCallback(async () => {
     const userToVerify = auth.currentUser;
     if (userToVerify) {
-      console.log('[AuthContext] Sending verification email to:', userToVerify.email);
       try {
         await firebaseSendEmailVerification(userToVerify);
         toast({ title: "Verification Email Sent", description: "Please check your inbox." });
@@ -259,19 +240,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     } else {
-        console.warn('[AuthContext] sendVerificationEmail called but no user is logged in.');
         toast({ title: "Not Logged In", description: "Cannot send verification email.", variant: "destructive" });
         throw new Error("User is not logged in.");
     }
   }, [toast]);
   
   const sendPasswordReset = useCallback(async (email: string) => {
-    console.log('[AuthContext] Password reset attempt for:', email);
     try {
       await firebaseSendPasswordResetEmail(auth, email);
       toast({ title: "Password Reset Email Sent", description: "If an account exists for this email, a password reset link was sent." });
     } catch (error) {
-      console.error('[AuthContext] Password reset error:', error);
       toast({ title: "Request Processed", description: "If an account exists for this email, a password reset link has been sent.", variant: "default" });
     }
   }, [toast]);
@@ -279,17 +257,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const reauthenticateWithPassword = useCallback(async (password: string) => {
     const userToReauth = auth.currentUser;
     if (!userToReauth || !userToReauth.email) {
-      console.error('[AuthContext] reauthenticateWithPassword: User not found or email missing.');
       toast({ title: "Re-authentication Error", description: "User not found or email missing. Please log in again.", variant: "destructive" });
       throw new Error("User not found or email is missing for re-authentication.");
     }
-    console.log('[AuthContext] Re-authentication attempt for:', userToReauth.email);
     try {
       const credential = EmailAuthProvider.credential(userToReauth.email, password);
       await reauthenticateWithCredential(userToReauth, credential);
       toast({ title: "Re-authentication Successful" });
     } catch (error) {
-      console.error('[AuthContext] Re-authentication error:', error);
       toast({ title: "Re-authentication Failed", description: (error as Error).message, variant: "destructive" });
       throw error;
     }
@@ -298,11 +273,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUserEmail = useCallback(async (newEmail: string) => {
     const userToUpdate = auth.currentUser;
     if (!userToUpdate) {
-      console.error('[AuthContext] updateUserEmail: User not logged in.');
       toast({ title: "Update Error", description: "You must be logged in to update your email.", variant: "destructive" });
       throw new Error("User not logged in.");
     }
-    console.log('[AuthContext] Attempting to update email for', userToUpdate.uid, 'to', newEmail);
     try {
       await firebaseUpdateEmail(userToUpdate, newEmail); 
       
@@ -313,7 +286,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await sendVerificationEmail(); 
       toast({ title: "Email Update Initiated", description: `Your email has been changed to ${newEmail}. Please check your new email address for a verification link.` });
       
-      // Manually update local state after successful operation
       setUserData(prev => prev ? ({...prev, email: newEmail, emailVerified: false }) : null);
 
     } catch (error) {
@@ -325,8 +297,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUserDisplayName = useCallback(async (newDisplayName: string, newIconUrl?: string | null): Promise<boolean> => {
     const userToUpdate = auth.currentUser;
-    console.log('[AuthContext] updateUserDisplayName: Attempting for user:', userToUpdate?.uid, 'to:', newDisplayName);
-
     if (!userToUpdate) {
       toast({ title: "Update Error", description: "User not logged in.", variant: "destructive" });
       return false;
@@ -337,7 +307,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      console.log('[AuthContext] updateUserDisplayName: Checking uniqueness for:', newDisplayName, 'in publicProfiles. Current user ID:', userToUpdate.uid);
       const displayNameQuery = query(collection(db, "publicProfiles"), where("displayName", "==", newDisplayName));
       const displayNameSnapshot = await getDocs(displayNameQuery);
       
