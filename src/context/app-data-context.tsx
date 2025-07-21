@@ -54,6 +54,7 @@ interface AppDataContextType {
   
   // New properties for legacy pack migration
   legacyOwnedPacks: string[] | null;
+  setLegacyOwnedPacks: React.Dispatch<React.SetStateAction<string[] | null>>;
   migrateLegacyPacksToAccount: (accountId: string) => Promise<void>;
 
   isDataLoaded: boolean;
@@ -68,7 +69,7 @@ const OWNED_PACKS_INFO_SUBCOLLECTION = 'ownedPacksInfo';
 const CHARACTERS_COLLECTION = 'characters';
 const ACCOUNTS_COLLECTION = 'accounts';
 const QUEST_COMPLETIONS_SUBCOLLECTION = 'questCompletions';
-const LEGACY_OWNED_PACKS_DOC_ID = 'packs'; // ID for old user-level pack data document
+export const LEGACY_OWNED_PACKS_DOC_ID = 'packs'; // Export for use in page
 
 const BATCH_OPERATION_LIMIT = 490;
 const LOCAL_STORAGE_ACTIVE_ACCOUNT_KEY_PREFIX = 'ddoToolkit_activeAccountId_';
@@ -186,7 +187,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
 
     const loadInitialData = async () => {
-      console.log(`[AppDataProvider] Running initial data load for user: ${currentUser.uid}.`);
       setIsLoading(true);
       try {
         const accountsQuery = query(collection(db, ACCOUNTS_COLLECTION), where("userId", "==", currentUser.uid));
@@ -216,34 +216,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             setActiveAccountId(null);
         }
 
-        console.log(`[AppDataProvider] User's 'hasMigratedLegacyPacks' flag is: ${userData.hasMigratedLegacyPacks}`);
-        if (userData.hasMigratedLegacyPacks !== true) {
-            console.log("[AppDataProvider] User needs migration check (flag is not true).");
-            const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
-            console.log("[AppDataProvider] Checking for legacy packs at path:", legacyPacksDocRef.path);
-            const legacyPacksSnap = await getDoc(legacyPacksDocRef);
-            
-            if (legacyPacksSnap.exists()) {
-                console.log("[AppDataProvider] Found legacy packs document.");
-                const data = legacyPacksSnap.data();
-                if(data && Array.isArray(data.names) && data.names.length > 0) {
-                    console.log("[AppDataProvider] Legacy pack names found. Setting state to trigger migration dialog.", data.names);
-                    setLegacyOwnedPacks(data.names);
-                } else {
-                    console.log("[AppDataProvider] Legacy document is empty. Marking user as migrated.");
-                    await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
-                    setLegacyOwnedPacks(null);
-                }
-            } else {
-                 console.log("[AppDataProvider] No legacy packs document found. Marking user as migrated.");
-                 await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
-                 setLegacyOwnedPacks(null);
-            }
-        } else {
-            console.log("[AppDataProvider] User already migrated. Skipping legacy check.");
-            setLegacyOwnedPacks(null); // Explicitly nullify if already migrated.
-        }
-
+        // Migration logic has been moved to adventure-packs page
+        setLegacyOwnedPacks(null);
         initialDataLoadedForUserRef.current = currentUser.uid;
         setIsDataLoaded(true);
 
@@ -621,7 +595,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       batchUpdateUserQuestCompletions, batchResetUserQuestCompletions,
       activeCharacterId, activeCharacterQuestCompletions,
       ownedPacks, setOwnedPacks,
-      legacyOwnedPacks, migrateLegacyPacksToAccount,
+      legacyOwnedPacks, setLegacyOwnedPacks, migrateLegacyPacksToAccount,
       isDataLoaded,
       isLoading,
       isUpdating,

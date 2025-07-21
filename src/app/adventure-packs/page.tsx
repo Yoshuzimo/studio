@@ -1,8 +1,9 @@
+
 // src/app/adventure-packs/page.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAppData } from '@/context/app-data-context';
+import { useAppData, LEGACY_OWNED_PACKS_DOC_ID } from '@/context/app-data-context';
 import { AdventurePackItem } from '@/components/adventure-pack/adventure-pack-item';
 import type { AdventurePack, AdventurePackCsvUploadResult, Account } from '@/types';
 import { AdventurePackCsvUploaderDialog } from '@/components/adventure-pack/adventure-pack-csv-uploader-dialog';
@@ -28,6 +29,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from '@/components/ui/label';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 const CSV_HEADER_PACK_NAME = "Adventure Pack Name"; 
 const CSV_HEADER_IS_OWNED = "Owned"; 
@@ -105,7 +109,7 @@ function LegacyPacksMigrationDialog({
 
 
 export default function AdventurePacksPage() {
-  const { currentUser, isLoading: authIsLoading } = useAuth();
+  const { currentUser, userData, isLoading: authIsLoading } = useAuth();
   const { 
     adventurePacks, 
     ownedPacks, 
@@ -114,12 +118,14 @@ export default function AdventurePacksPage() {
     activeAccountId,
     setActiveAccountId,
     legacyOwnedPacks,
+    setLegacyOwnedPacks,
     migrateLegacyPacksToAccount,
     isDataLoaded, 
     isLoading: isContextLoading,
     isUpdating
   } = useAppData();
   const router = useRouter();
+  const { toast } = useToast();
   
   const [isUploadCsvDialogOpen, setIsUploadCsvDialogOpen] = useState(false);
   const [isCsvProcessing, setIsCsvProcessing] = useState(false);
@@ -131,6 +137,40 @@ export default function AdventurePacksPage() {
       router.replace('/login');
     }
   }, [authIsLoading, currentUser, router]);
+  
+  // This effect runs the one-time migration check
+  useEffect(() => {
+    if (!currentUser || !userData || authIsLoading || isContextLoading) return;
+
+    const runMigrationCheck = async () => {
+        if (userData.hasMigratedLegacyPacks) {
+            return; // Already migrated, do nothing.
+        }
+
+        try {
+            const legacyPacksDocRef = doc(db, 'userConfiguration', currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
+            const legacyPacksSnap = await getDoc(legacyPacksDocRef);
+
+            if (legacyPacksSnap.exists()) {
+                const data = legacyPacksSnap.data();
+                if(data && Array.isArray(data.names) && data.names.length > 0) {
+                    setLegacyOwnedPacks(data.names); // Triggers the migration dialog
+                } else {
+                    // Legacy doc exists but is empty, just mark as migrated.
+                    await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
+                }
+            } else {
+                // No legacy doc, so mark as migrated.
+                await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
+            }
+        } catch (error) {
+            console.error("Failed to run migration check:", error);
+            toast({ title: "Migration Check Failed", description: "Could not check for old data.", variant: "destructive" });
+        }
+    };
+
+    runMigrationCheck();
+  }, [currentUser, userData, authIsLoading, isContextLoading, setLegacyOwnedPacks, toast]);
   
   useEffect(() => {
     if (isDataLoaded && accounts.length === 0 && !isContextLoading && !isUpdating) {
