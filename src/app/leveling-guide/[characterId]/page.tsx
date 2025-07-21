@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, BarChartHorizontalBig, Timer, Activity, AlertTriangle, Pencil, Skull, TestTube2 } from 'lucide-react';
+import { UserCircle, ListOrdered, MapPin, UserSquare, ArrowUpDown, ArrowDown, ArrowUp, Package, Loader2, Settings, BookOpen, BarChartHorizontalBig, Timer, Activity, AlertTriangle, Pencil, Skull, TestTube2, Library } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -24,6 +24,7 @@ import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
 import { QuestMapViewer } from '@/components/shared/quest-map-viewer';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type SortableLevelingGuideColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'maxExp' | 'experienceScore';
 
@@ -408,6 +409,12 @@ export default function LevelingGuidePage() {
   };
   
   const effectiveCharacterLevel = character ? (useLevelOffset ? character.level + levelOffset : character.level) : 0;
+  
+  const accountNameMap = useMemo(() => {
+    return new Map(accounts.map(acc => [acc.id, acc.name]));
+  }, [accounts]);
+  
+  const accountName = character ? accountNameMap.get(character.accountId) || 'Unknown' : '...';
 
   if (pageOverallLoading || !isDataLoaded || !character) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="mr-2 h-12 w-12 animate-spin text-primary" /></div>;
@@ -430,10 +437,21 @@ export default function LevelingGuidePage() {
       <Card className="mb-8">
         <CardHeader>
             <div className="flex justify-between items-center">
-                <CardTitle className="font-headline text-3xl flex items-center"><UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}</CardTitle>
+                <CardTitle className="font-headline text-3xl flex items-center">
+                  <Avatar className="mr-3 h-10 w-10 border-2 border-primary">
+                      <AvatarImage src={character.iconUrl || undefined} alt={character.name} />
+                      <AvatarFallback>{character.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  {character.name}
+                </CardTitle>
                 <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}><Pencil className="mr-2 h-4 w-4" /> Edit Character</Button>
             </div>
-            <CardDescription>Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}</CardDescription>
+            <CardDescription>
+                Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}
+                <span className="mx-2 text-muted-foreground">|</span>
+                <Library className="inline-block h-4 w-4 mr-1.5 align-middle" />
+                Account: <span className="font-semibold">{accountName}</span>
+            </CardDescription>
              <div className="pt-4 flex flex-col space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">

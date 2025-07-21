@@ -29,6 +29,7 @@ import { CharacterForm, type CharacterFormData } from '@/components/character/ch
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
 import { QuestMapViewer } from '@/components/shared/quest-map-viewer';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 
 type DifficultyKey = 'casualCompleted' | 'normalCompleted' | 'hardCompleted' | 'eliteCompleted';
@@ -761,7 +762,11 @@ export default function FavorTrackerPage() {
           <CardHeader>
             <div className="flex justify-between items-center">
                 <CardTitle className="font-headline text-3xl flex items-center">
-                <UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}
+                  <Avatar className="mr-3 h-10 w-10 border-2 border-primary">
+                    <AvatarImage src={character.iconUrl || undefined} alt={character.name} />
+                    <AvatarFallback>{character.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  {character.name}
                 </CardTitle>
                 <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}>
                     <Pencil className="mr-2 h-4 w-4" /> Edit Character

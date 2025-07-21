@@ -23,6 +23,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { QuestWikiPopover } from '@/components/shared/quest-wiki-popover';
 import { QuestMapViewer } from '@/components/shared/quest-map-viewer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type SortableReaperColumnKey = 'name' | 'level' | 'adventurePackName' | 'location' | 'questGiver' | 'maxRXP' | `skull-${number}`;
 
@@ -438,7 +439,13 @@ export default function ReaperRewardsPage() {
       <Card className="mb-8">
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle className="font-headline text-3xl flex items-center"><UserCircle className="mr-3 h-8 w-8 text-primary" /> {character.name}</CardTitle>
+            <CardTitle className="font-headline text-3xl flex items-center">
+              <Avatar className="mr-3 h-10 w-10 border-2 border-primary">
+                <AvatarImage src={character.iconUrl || undefined} alt={character.name} />
+                <AvatarFallback>{character.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              {character.name}
+            </CardTitle>
             <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}><Pencil className="mr-2 h-4 w-4" /> Edit Character</Button>
           </div>
            <CardDescription>
