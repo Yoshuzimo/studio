@@ -442,7 +442,7 @@ export default function ReaperRewardsPage() {
             <CardTitle className="font-headline text-3xl flex items-center">
               <Avatar className="mr-3 h-10 w-10 border-2 border-primary">
                 <AvatarImage src={character.iconUrl || undefined} alt={character.name} />
-                <AvatarFallback>{character.name.charAt(0)}</AvatarFallback>
+                <AvatarFallback><UserCircle className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
               </Avatar>
               {character.name}
             </CardTitle>
