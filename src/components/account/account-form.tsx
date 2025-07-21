@@ -71,7 +71,7 @@ export function AccountForm({ isOpen, onOpenChange, onSubmit, initialData, isSub
         <DialogHeader>
           <DialogTitle className="font-headline">{initialData ? "Edit Account" : "Create Account"}</DialogTitle>
           <DialogDescription>
-            {initialData ? "Update this account's name." : "Create a new account to manage a separate collection of adventure packs."}
+            {initialData ? "Update this account's name." : "Create a new account to manage a separate collection of adventure packs. The name is only for you to distinguish between your accounts and is not visible to other users."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
