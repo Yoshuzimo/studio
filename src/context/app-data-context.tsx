@@ -1,9 +1,10 @@
+
 // src/context/app-data-context.tsx
 "use client";
 
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import type { Character, Account, AdventurePack, Quest, UserQuestCompletionData, CharacterFormData } from '@/types';
+import type { Character, Account, AdventurePack, Quest, UserQuestCompletionData, CharacterFormData, User } from '@/types';
 import { db, auth } from '@/lib/firebase';
 import {
   collection, getDocs, doc, writeBatch, setDoc, deleteDoc, query,
@@ -217,8 +218,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             setActiveAccountId(null);
         }
 
-        // --- New Migration Check Logic ---
-        if (!userData.hasMigratedLegacyPacks) {
+        // --- Corrected Migration Check Logic ---
+        if (userData.hasMigratedLegacyPacks !== true) {
             const legacyPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, 'ownedPacks', LEGACY_OWNED_PACKS_DOC_ID);
             const legacyPacksSnap = await getDoc(legacyPacksDocRef);
             if (legacyPacksSnap.exists()) {
@@ -226,12 +227,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                 if(data && Array.isArray(data.names) && data.names.length > 0) {
                     setLegacyOwnedPacks(data.names);
                 } else {
-                    // No data, so mark as migrated
                     await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
                 }
             } else {
-                 // No doc, so mark as migrated
-                await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
+                 await updateDoc(doc(db, 'users', currentUser.uid), { hasMigratedLegacyPacks: true });
             }
         } else {
             setLegacyOwnedPacks(null);
