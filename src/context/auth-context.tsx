@@ -202,9 +202,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await fetch('/api/auth/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) });
 
       toast({ title: "Signup Successful!", description: "Welcome! A verification email has been sent." });
-    } catch (error) {
+    } catch (error: any) {
       console.error('[AuthContext] Signup error:', error);
-      toast({ title: "Signup Failed", description: (error as Error).message, variant: "destructive" });
+      let errorMessage = "An unknown error occurred.";
+      if (error.code === 'auth/email-already-in-use') {
+          errorMessage = "This email is already registered. Please log in or use a different email.";
+      } else if (error instanceof Error) {
+          errorMessage = error.message;
+      }
+      toast({ title: "Signup Failed", description: errorMessage, variant: "destructive" });
       throw error;
     }
   }, [toast]);
