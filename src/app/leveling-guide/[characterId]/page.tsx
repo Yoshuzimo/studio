@@ -151,7 +151,7 @@ export default function LevelingGuidePage() {
   const params = useParams();
   const router = useRouter();
   const { currentUser, userData, isLoading: authIsLoading } = useAuth();
-  const { allCharacters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
+  const { accounts, allCharacters, quests, ownedPacks, isDataLoaded, isLoading: appDataIsLoading, updateCharacter } = useAppData();
   const { toast } = useToast();
 
   const [character, setCharacter] = useState<Character | null>(null);
@@ -379,7 +379,7 @@ export default function LevelingGuidePage() {
         return sortConfig.direction === 'ascending' ? comparison : -comparison;
       }
 
-      return getSortableName(a.name).localeCompare(getSortableName(b.name));
+      return getSortableName(a.name).localeCompare(b.name);
     });
 
     return { sortedQuests };
