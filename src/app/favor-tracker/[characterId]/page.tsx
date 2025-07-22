@@ -214,11 +214,11 @@ export default function FavorTrackerPage() {
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
-
-  const [useLevelOffset, setUseLevelOffset] = useState(false);
-  const [levelOffset, setLevelOffset] = useState(0);
   
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
+  
+  const useLevelOffset = character?.preferences?.useLevelOffset ?? false;
+  const levelOffset = character?.preferences?.levelOffset ?? 0;
 
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
 
@@ -263,9 +263,6 @@ export default function FavorTrackerPage() {
             const storedPrefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences;
 
             if (storedPrefs) {
-                setUseLevelOffset(storedPrefs.useLevelOffset ?? false);
-                setLevelOffset(storedPrefs.levelOffset ?? 0);
-
                 const favorPrefs = storedPrefs.favorTracker;
                 if (favorPrefs) {
                     const mergedAdjustments = { ...durationAdjustmentDefaults };
@@ -887,9 +884,7 @@ export default function FavorTrackerPage() {
                             id="use-level-offset" 
                             checked={useLevelOffset} 
                             onCheckedChange={(checked) => {
-                                const isChecked = !!checked;
-                                setUseLevelOffset(isChecked);
-                                saveSharedLevelOffset(isChecked, levelOffset);
+                                saveSharedLevelOffset(!!checked, levelOffset);
                             }} 
                             disabled={pageOverallLoading}
                         />
@@ -903,7 +898,6 @@ export default function FavorTrackerPage() {
                             onChange={(e) => {
                                 const newOffset = parseInt(e.target.value, 10);
                                 if (!isNaN(newOffset)) {
-                                    setLevelOffset(newOffset);
                                     saveSharedLevelOffset(useLevelOffset, newOffset);
                                 }
                             }}

@@ -173,10 +173,10 @@ export default function LevelingGuidePage() {
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
-  const [useLevelOffset, setUseLevelOffset] = useState(false);
-  const [levelOffset, setLevelOffset] = useState(0);
-
   const pageOverallLoading = authIsLoading || appDataIsLoading;
+
+  const useLevelOffset = character?.preferences?.useLevelOffset ?? false;
+  const levelOffset = character?.preferences?.levelOffset ?? 0;
 
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
@@ -226,9 +226,6 @@ export default function LevelingGuidePage() {
         const storedPrefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences;
 
         if (storedPrefs) {
-            setUseLevelOffset(storedPrefs.useLevelOffset ?? false);
-            setLevelOffset(storedPrefs.levelOffset ?? 0);
-            
             const levelingPrefs = storedPrefs.levelingGuide;
             if (levelingPrefs) {
                 const mergedAdjustments = { ...durationAdjustmentDefaults };
@@ -489,9 +486,7 @@ export default function LevelingGuidePage() {
                     id="use-level-offset-leveling" 
                     checked={useLevelOffset} 
                     onCheckedChange={(checked) => {
-                        const isChecked = !!checked;
-                        setUseLevelOffset(isChecked);
-                        saveSharedLevelOffset(isChecked, levelOffset);
+                        saveSharedLevelOffset(!!checked, levelOffset);
                     }} 
                     disabled={pageOverallLoading}
                   />
@@ -505,7 +500,6 @@ export default function LevelingGuidePage() {
                     onChange={(e) => {
                         const newOffset = parseInt(e.target.value, 10);
                         if (!isNaN(newOffset)) {
-                            setLevelOffset(newOffset);
                             saveSharedLevelOffset(useLevelOffset, newOffset);
                         }
                     }}

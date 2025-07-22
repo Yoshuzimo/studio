@@ -144,10 +144,10 @@ export default function ReaperRewardsPage() {
   const [isMapViewerOpen, setIsMapViewerOpen] = useState(false);
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
-  const [useLevelOffset, setUseLevelOffset] = useState(false);
-  const [levelOffset, setLevelOffset] = useState(0);
-
   const pageOverallLoading = authIsLoading || appDataIsLoading;
+
+  const useLevelOffset = character?.preferences?.useLevelOffset ?? false;
+  const levelOffset = character?.preferences?.levelOffset ?? 0;
 
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
@@ -198,9 +198,6 @@ export default function ReaperRewardsPage() {
         const storedPrefs = localPrefsString ? JSON.parse(localPrefsString) : character.preferences;
         
         if (storedPrefs) {
-            setUseLevelOffset(storedPrefs.useLevelOffset ?? false);
-            setLevelOffset(storedPrefs.levelOffset ?? 0);
-
             const reaperPrefs = storedPrefs.reaperRewards;
             if (reaperPrefs) {
               setOnCormyr(reaperPrefs.onCormyr ?? false);
@@ -487,9 +484,7 @@ export default function ReaperRewardsPage() {
                   id="use-level-offset-reaper" 
                   checked={useLevelOffset} 
                   onCheckedChange={(checked) => {
-                      const isChecked = !!checked;
-                      setUseLevelOffset(isChecked);
-                      saveSharedLevelOffset(isChecked, levelOffset);
+                      saveSharedLevelOffset(!!checked, levelOffset);
                   }} 
                   disabled={pageOverallLoading}
                 />
@@ -503,7 +498,6 @@ export default function ReaperRewardsPage() {
                   onChange={(e) => {
                       const newOffset = parseInt(e.target.value, 10);
                       if (!isNaN(newOffset)) {
-                          setLevelOffset(newOffset);
                           saveSharedLevelOffset(useLevelOffset, newOffset);
                       }
                   }}
