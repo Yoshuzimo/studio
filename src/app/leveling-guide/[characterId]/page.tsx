@@ -316,10 +316,11 @@ export default function LevelingGuidePage() {
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
 
-    const effectiveCharacter = { ...character, level: useLevelOffset ? character.level + levelOffset : character.level };
+    const effectiveCharacterLevelForFilter = useLevelOffset ? character.level + levelOffset : character.level;
 
     const allProcessedQuests = quests.map(quest => {
-        const adjustedExps = calculateAdjustedExp(quest, effectiveCharacter);
+        // Calculations always use the real character, NOT the one with the effective level.
+        const adjustedExps = calculateAdjustedExp(quest, character);
         const allExps = Object.values(adjustedExps).filter(v => v !== null) as number[];
         const maxExp = allExps.length > 0 ? Math.max(...allExps) : null;
         const durationCategory = getDurationCategory(quest.duration);
@@ -327,7 +328,10 @@ export default function LevelingGuidePage() {
         const experienceScore = maxExp !== null ? Math.round(maxExp * adjustmentFactor) : null;
 
         const hiddenReasons: string[] = [];
-        if (maxExp === null || maxExp <= 0) hiddenReasons.push('No eligible EXP for character level.');
+        // Filtering is now done separately after all calculations.
+        const isEligibleForFilter = quest.level > 0 && quest.level <= effectiveCharacterLevelForFilter;
+        if (!isEligibleForFilter) hiddenReasons.push('Level out of range (with offset).');
+        if (maxExp === null || maxExp <= 0) hiddenReasons.push('No eligible EXP for character\'s actual level.');
 
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
         const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
@@ -335,17 +339,17 @@ export default function LevelingGuidePage() {
         if (!isOwned) hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
 
         if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
-
         if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
-
         if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
 
-        return { ...quest, ...adjustedExps, maxExp, experienceScore, hiddenReasons };
+        return { ...quest, ...adjustedExps, maxExp, experienceScore, hiddenReasons, isEligibleForFilter };
     });
-
-    const filteredQuests = isDebugMode
-      ? allProcessedQuests
-      : allProcessedQuests.filter(quest => quest.hiddenReasons.length === 0);
+    
+    // Perform filtering after calculations
+    const filteredQuests = allProcessedQuests.filter(quest => {
+        if (isDebugMode) return true; // Show all for debug
+        return quest.isEligibleForFilter && quest.hiddenReasons.length === 0;
+    });
 
     const sortedQuests = [...filteredQuests].sort((a, b) => {
       if (!sortConfig || !character) return 0;
@@ -379,7 +383,7 @@ export default function LevelingGuidePage() {
         return sortConfig.direction === 'ascending' ? comparison : -comparison;
       }
 
-      return getSortableName(a.name).localeCompare(b.name);
+      return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
 
     return { sortedQuests };

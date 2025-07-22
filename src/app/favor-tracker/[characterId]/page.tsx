@@ -1,4 +1,3 @@
-
 // Favor-Tracker-V2
 // src/app/favor-tracker/[characterId]/page.tsx
 "use client";
@@ -728,7 +727,8 @@ export default function FavorTrackerPage() {
     let questsCompleted = 0;
     
     questDataMap.forEach(quest => {
-        if (quest.level > 0 && quest.level <= effectiveCharacterLevel) {
+        // Use actual character level for calculations, not effective level
+        if (quest.level > 0 && quest.level <= character.level) {
             const metrics = calculateFavorMetrics(quest, getQuestCompletion);
             favorEarned += metrics.earned;
             if (quest.baseFavor && quest.baseFavor > 0 && metrics.remaining <= 0 && (quest.casualCompleted || quest.normalCompleted || quest.hardCompleted || quest.eliteCompleted)) {
@@ -744,7 +744,7 @@ export default function FavorTrackerPage() {
         favorEarned: Math.round(favorEarned),
         favorRemaining: Math.round(favorRemaining)
     };
-  }, [character, questDataMap, questsToRender, calculateFavorMetrics, getQuestCompletion, effectiveCharacterLevel]);
+  }, [character, questDataMap, questsToRender, calculateFavorMetrics, getQuestCompletion]);
 
   const getSortIndicator = (columnKey: SortableColumnKey) => {
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
