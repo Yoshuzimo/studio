@@ -1,3 +1,4 @@
+
 // src/app/reaper-rewards/[characterId]/page.tsx
 "use client";
 
@@ -41,6 +42,7 @@ const reaperLengthAdjustments: Record<DurationCategory, number> = {
   "Long": 1.2,
   "Very Long": 1.4,
 };
+
 
 const getPrimaryLocation = (location?: string | null): string | null => {
   if (!location) return null;
@@ -120,17 +122,19 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 const calculateRXP = (quest: Quest, charLevel: number, skulls: number): number | null => {
     const isEpic = quest.epicBaseLevel != null && charLevel >= 20;
     const questLevel = isEpic ? quest.epicBaseLevel! : quest.level;
-    const baseXP = isEpic ? quest.epicNormalExp : quest.normalExp;
 
-    if (baseXP === null || baseXP === undefined) return null; // Cannot calculate without base XP
-
-    // Formula: ((Base Quest XP * 0.2) + (Quest Level * 3)) * Skulls * Length_Modifier
-    let rxpBeforeModifiers = ((baseXP * 0.2) + (questLevel * 3)) * skulls;
+    let baseRXP = 50 + 3 * questLevel * skulls;
+    
+    if (questLevel >= 30) {
+        baseRXP *= 2;
+    }
     
     const durationCategory = getDurationCategory(quest.duration);
-    const lengthAdjustment = durationCategory ? (reaperLengthAdjustments[durationCategory] ?? 1.0) : 1.0;
+    if (!durationCategory) return Math.round(baseRXP);
+
+    const lengthAdjustment = reaperLengthAdjustments[durationCategory] ?? 1.0;
     
-    let totalRXP = rxpBeforeModifiers * lengthAdjustment;
+    let totalRXP = baseRXP * lengthAdjustment;
 
     return Math.round(totalRXP);
 };
@@ -352,7 +356,7 @@ export default function ReaperRewardsPage() {
         const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
         if (!isOwned) hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
 
-        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
+        if (onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
         
         if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
 
