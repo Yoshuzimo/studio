@@ -126,8 +126,22 @@ export default function ReaperRewardsPage() {
 
   const [character, setCharacter] = useState<Character | null>(null);
   const characterId = params.characterId as string;
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'level', direction: 'ascending' });
   
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(() => {
+    if (typeof window === 'undefined') return { key: 'level', direction: 'ascending' };
+    try {
+        const localKey = `ddoToolkit_charPrefs_${currentUser?.uid}_${characterId}`;
+        const item = localStorage.getItem(localKey);
+        if (item) {
+            const prefs = JSON.parse(item);
+            if (prefs?.reaperRewards?.sortConfig) {
+                return prefs.reaperRewards.sortConfig;
+            }
+        }
+    } catch (e) { console.error("Failed to load sort config from local storage", e); }
+    return { key: 'level', direction: 'ascending' };
+  });
+
   const [onCormyr, setOnCormyr] = useState(false);
   const [showRaids, setShowRaids] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
@@ -145,9 +159,6 @@ export default function ReaperRewardsPage() {
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
-
-  const useLevelOffset = character?.preferences?.useLevelOffset ?? false;
-  const levelOffset = character?.preferences?.levelOffset ?? 0;
 
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
@@ -288,11 +299,11 @@ export default function ReaperRewardsPage() {
 
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
   
+  const effectiveCharacterLevel = character ? (character.preferences?.useLevelOffset ? character.level + (character.preferences?.levelOffset ?? 0) : character.level) : 0;
+
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
     
-    const effectiveCharacterLevelForFilter = useLevelOffset ? character.level + levelOffset : character.level;
-
     const calculateRXP = (quest: Quest, charLevel: number, skulls: number): number | null => {
       let baseRXP = 50 + (3 * quest.level * skulls);
       if (quest.level >= 20) { baseRXP *= 2; }
@@ -301,27 +312,28 @@ export default function ReaperRewardsPage() {
       const lengthAdjustment = durationCategory ? (reaperLengthAdjustments[durationCategory] ?? 1.0) : 1.0;
       let totalRXP = baseRXP * lengthAdjustment;
 
-      // RXP calculations are unaffected by character being over or under level for the quest.
       return Math.round(totalRXP);
     };
 
     const allProcessedQuests = quests.map(quest => {
         const skullData: Record<string, number | null> = {};
         for(let i = 1; i <= 10; i++) {
-            // Calculations use the character's *real* level.
             skullData[`skull-${i}`] = calculateRXP(quest, character.level, i);
         }
 
-        const charLvl = effectiveCharacterLevelForFilter; // Use effective level for filtering.
-        const questLvl = quest.level;
         const hiddenReasons: string[] = [];
         
-        // Reaper eligibility is based on the character's real level.
-        if (character.level < questLvl) hiddenReasons.push(`Character Level (${character.level}) < Quest Level (${questLvl})`);
+        if (effectiveCharacterLevel < quest.level) {
+          hiddenReasons.push(`Character's effective level (${effectiveCharacterLevel}) < Quest Level (${quest.level})`);
+        }
         
-        if (character.level >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
-        else if (questLvl >= 20 && character.level - questLvl > 6) hiddenReasons.push(`Level difference (${character.level - questLvl}) > 6 for epic levels.`);
-        else if (questLvl < 20 && character.level - questLvl > 4) hiddenReasons.push(`Level difference (${character.level - questLvl}) > 4 for heroic levels.`);
+        if (character.level >= 30 && quest.level < 30) {
+          hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
+        } else if (quest.level >= 20 && character.level - quest.level > 6) {
+          hiddenReasons.push(`Level difference (${character.level - quest.level}) > 6 for epic levels.`);
+        } else if (quest.level < 20 && character.level - quest.level > 4) {
+          hiddenReasons.push(`Level difference (${character.level - quest.level}) > 4 for heroic levels.`);
+        }
 
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
         const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
@@ -382,7 +394,7 @@ export default function ReaperRewardsPage() {
     });
 
     return { sortedQuests };
-  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids, isDebugMode, useLevelOffset, levelOffset]);
+  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, sortConfig, showRaids, isDebugMode, effectiveCharacterLevel]);
   
   const requestSort = (key: SortableReaperColumnKey) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -408,8 +420,6 @@ export default function ReaperRewardsPage() {
     }
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
   };
-  
-  const effectiveCharacterLevel = character ? (useLevelOffset ? character.level + levelOffset : character.level) : 0;
   
   const accountNameMap = useMemo(() => {
     return new Map(accounts.map(acc => [acc.id, acc.name]));
@@ -447,7 +457,7 @@ export default function ReaperRewardsPage() {
             <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}><Pencil className="mr-2 h-4 w-4" /> Edit Character</Button>
           </div>
            <CardDescription>
-                Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}
+                Level {character.level} {character.preferences?.useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}
                 <span className="mx-2 text-muted-foreground">|</span>
                 <Library className="inline-block h-4 w-4 mr-1.5 align-middle" />
                 Account: <span className="font-semibold">{accountName}</span>
@@ -483,9 +493,9 @@ export default function ReaperRewardsPage() {
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="use-level-offset-reaper" 
-                  checked={useLevelOffset} 
+                  checked={character.preferences?.useLevelOffset ?? false} 
                   onCheckedChange={(checked) => {
-                      saveSharedLevelOffset(!!checked, levelOffset);
+                      saveSharedLevelOffset(!!checked, character.preferences?.levelOffset ?? 0);
                   }} 
                   disabled={pageOverallLoading}
                 />
@@ -495,15 +505,15 @@ export default function ReaperRewardsPage() {
                 <Input
                   type="number"
                   id="level-offset-reaper"
-                  value={levelOffset}
+                  value={character.preferences?.levelOffset ?? 0}
                   onChange={(e) => {
                       const newOffset = parseInt(e.target.value, 10);
                       if (!isNaN(newOffset)) {
-                          saveSharedLevelOffset(useLevelOffset, newOffset);
+                          saveSharedLevelOffset(character.preferences?.useLevelOffset ?? false, newOffset);
                       }
                   }}
                   className="h-8 w-20"
-                  disabled={!useLevelOffset || pageOverallLoading}
+                  disabled={!(character.preferences?.useLevelOffset ?? false) || pageOverallLoading}
                 />
               </div>
             </div>
