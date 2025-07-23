@@ -112,28 +112,41 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
   return withoutThe.replace(/[^a-z0-9]/g, '');
 };
 
-const getRelevantQuestDetails = (quest: Quest, char: Character) => {
-    const useEpic = quest.epicBaseLevel != null && char.level >= 20;
-    return { tier: useEpic ? 'Epic' : 'Heroic', baseLevel: useEpic ? quest.epicBaseLevel! : quest.level, casualExp: useEpic ? quest.epicCasualExp : quest.casualExp, normalExp: useEpic ? quest.epicNormalExp : quest.normalExp, hardExp: useEpic ? quest.epicHardExp : quest.hardExp, eliteExp: useEpic ? quest.epicEliteExp : quest.eliteExp, casualNotAvailable: useEpic ? quest.epicCasualNotAvailable : quest.casualNotAvailable, normalNotAvailable: useEpic ? quest.epicNormalNotAvailable : quest.normalNotAvailable, hardNotAvailable: useEpic ? quest.epicHardNotAvailable : quest.hardNotAvailable, eliteNotAvailable: useEpic ? quest.epicEliteNotAvailable : quest.eliteNotAvailable, };
-};
-
-const calculateAdjustedExp = (quest: Quest, char: Character) => {
-    const details = getRelevantQuestDetails(quest, char);
+const calculateAdjustedExpForTier = (
+    quest: Quest,
+    charLevel: number,
+    tier: 'Heroic' | 'Epic'
+) => {
     const penalties = [0, -0.1, -0.25, -0.5, -0.9, -0.99];
+    let baseLevel, casualExp, normalExp, hardExp, eliteExp, casualNotAvailable, normalNotAvailable, hardNotAvailable, eliteNotAvailable;
+
+    if (tier === 'Epic') {
+        baseLevel = quest.epicBaseLevel!;
+        casualExp = quest.epicCasualExp;
+        normalExp = quest.epicNormalExp;
+        hardExp = quest.epicHardExp;
+        eliteExp = quest.epicEliteExp;
+        casualNotAvailable = quest.epicCasualNotAvailable;
+        normalNotAvailable = quest.epicNormalNotAvailable;
+        hardNotAvailable = quest.epicHardNotAvailable;
+        eliteNotAvailable = quest.epicEliteNotAvailable;
+    } else {
+        baseLevel = quest.level;
+        casualExp = quest.casualExp;
+        normalExp = quest.normalExp;
+        hardExp = quest.hardExp;
+        eliteExp = quest.eliteExp;
+        casualNotAvailable = quest.casualNotAvailable;
+        normalNotAvailable = quest.normalNotAvailable;
+        hardNotAvailable = quest.hardNotAvailable;
+        eliteNotAvailable = quest.eliteNotAvailable;
+    }
 
     const calc = (exp: number | null | undefined, notAvailable: boolean | null | undefined, difficultyLevel: number) => {
         if (!exp || notAvailable) return null;
+        if (charLevel < difficultyLevel) return exp; // No penalty if under level
 
-        if (details.tier === 'Epic') {
-            if (char.level < details.baseLevel) return null; // Too low for epic
-            if (char.level - difficultyLevel > 6) return null; // Too high for epic
-            return exp; // No penalty within range
-        }
-        
-        // Heroic
-        if (char.level < difficultyLevel) return exp; // No penalty if under level
-
-        const overLevel = char.level - difficultyLevel;
+        const overLevel = charLevel - difficultyLevel;
         if (overLevel <= 1) return exp;
 
         const penaltyIndex = Math.min(overLevel, penalties.length);
@@ -143,12 +156,13 @@ const calculateAdjustedExp = (quest: Quest, char: Character) => {
     };
 
     return {
-        adjustedCasualExp: calc(details.casualExp, details.casualNotAvailable, details.baseLevel - 1),
-        adjustedNormalExp: calc(details.normalExp, details.normalNotAvailable, details.baseLevel),
-        adjustedHardExp: calc(details.hardExp, details.hardNotAvailable, details.baseLevel + 1),
-        adjustedEliteExp: calc(details.eliteExp, details.eliteNotAvailable, details.baseLevel + 2),
+        adjustedCasualExp: calc(casualExp, casualNotAvailable, baseLevel - 1),
+        adjustedNormalExp: calc(normalExp, normalNotAvailable, baseLevel),
+        adjustedHardExp: calc(hardExp, hardNotAvailable, baseLevel + 1),
+        adjustedEliteExp: calc(eliteExp, eliteNotAvailable, baseLevel + 2),
     };
 };
+
 
 export default function LevelingGuidePage() {
   const params = useParams();
@@ -316,34 +330,72 @@ export default function LevelingGuidePage() {
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
 
-    const allProcessedQuests = quests.map(quest => {
-        const adjustedExps = calculateAdjustedExp(quest, character);
-        const allExps = Object.values(adjustedExps).filter(v => v !== null) as number[];
-        const maxExp = allExps.length > 0 ? Math.max(...allExps) : null;
-        const durationCategory = getDurationCategory(quest.duration);
-        const adjustmentFactor = durationCategory ? (durationAdjustments[durationCategory] ?? 1.0) : 1.0;
-        const experienceScore = maxExp !== null ? Math.round(maxExp * adjustmentFactor) : null;
+    const processedQuests = quests.flatMap(quest => {
+        const questEntries = [];
+        const trueCharLevel = character.level; // Always use true level for calculations
 
-        const hiddenReasons: string[] = [];
-        const isEligibleForFilter = quest.level > 0 && quest.level <= effectiveCharacterLevel;
-        if (!isEligibleForFilter) hiddenReasons.push('Level out of range (with offset).');
-        if (maxExp === null || maxExp <= 0) hiddenReasons.push('No eligible EXP for character\'s actual level.');
+        // Check for Heroic version
+        if (quest.level > 0 && trueCharLevel < 20) {
+            const adjustedExps = calculateAdjustedExpForTier(quest, trueCharLevel, 'Heroic');
+            const allExps = Object.values(adjustedExps).filter(v => v !== null) as number[];
+            const maxExp = allExps.length > 0 ? Math.max(...allExps) : null;
+            const durationCategory = getDurationCategory(quest.duration);
+            const adjustmentFactor = durationCategory ? (durationAdjustments[durationCategory] ?? 1.0) : 1.0;
+            const experienceScore = maxExp !== null ? Math.round(maxExp * adjustmentFactor) : null;
 
-        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        if (!isOwned) hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
+            const hiddenReasons: string[] = [];
+            if (quest.level > effectiveCharacterLevel) hiddenReasons.push(`Level out of range (with offset).`);
+            if (maxExp === null || maxExp <= 0) hiddenReasons.push('No eligible EXP for character\'s actual level.');
+            const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+            const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+            const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+            if (!isOwned) hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
+            if (onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
+            if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
+            if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
+            
+            questEntries.push({
+                ...quest,
+                id: `${quest.id}-heroic`,
+                name: `${quest.name} (Heroic)`,
+                level: quest.level,
+                ...adjustedExps, maxExp, experienceScore, hiddenReasons,
+            });
+        }
+        
+        // Check for Epic version
+        if (quest.epicBaseLevel != null && trueCharLevel >= 20) {
+             const adjustedExps = calculateAdjustedExpForTier(quest, trueCharLevel, 'Epic');
+             const allExps = Object.values(adjustedExps).filter(v => v !== null) as number[];
+             const maxExp = allExps.length > 0 ? Math.max(...allExps) : null;
+             const durationCategory = getDurationCategory(quest.duration);
+             const adjustmentFactor = durationCategory ? (durationAdjustments[durationCategory] ?? 1.0) : 1.0;
+             const experienceScore = maxExp !== null ? Math.round(maxExp * adjustmentFactor) : null;
 
-        if (!onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
-        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
-        if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
+             const hiddenReasons: string[] = [];
+             if (quest.epicBaseLevel > effectiveCharacterLevel) hiddenReasons.push('Level out of range (with offset).');
+             if (maxExp === null || maxExp <= 0) hiddenReasons.push('No eligible EXP for character\'s actual level.');
+             const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+             const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+             const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+             if (!isOwned) hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}`);
+             if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
+             if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
 
-        return { ...quest, ...adjustedExps, maxExp, experienceScore, hiddenReasons, isEligibleForFilter };
+            questEntries.push({
+                ...quest,
+                id: `${quest.id}-epic`,
+                name: `${quest.name} (Epic)`,
+                level: quest.epicBaseLevel,
+                ...adjustedExps, maxExp, experienceScore, hiddenReasons,
+            });
+        }
+
+        return questEntries;
     });
-    
-    // Perform filtering after calculations
-    const filteredQuests = allProcessedQuests.filter(quest => {
-        if (isDebugMode) return true; // Show all for debug
+
+    const filteredQuests = processedQuests.filter(quest => {
+        if (isDebugMode) return true;
         return quest.hiddenReasons.length === 0;
     });
 
@@ -617,7 +669,7 @@ export default function LevelingGuidePage() {
                               onClick={() => handleRowClick(quest)}
                             >
                               {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
-                              {columnVisibility['level'] && <TableCell className="text-center">{getRelevantQuestDetails(quest, character).baseLevel}</TableCell>}
+                              {columnVisibility['level'] && <TableCell className="text-center">{quest.level}</TableCell>}
                               {columnVisibility['adventurePackName'] && <TableCell className="whitespace-nowrap">{quest.adventurePackName || 'Free to Play'}</TableCell>}
                               {columnVisibility['location'] && <TableCell className="whitespace-nowrap">{quest.location || 'N/A'}</TableCell>}
                               {columnVisibility['questGiver'] && <TableCell className="whitespace-nowrap">{quest.questGiver || 'N/A'}</TableCell>}
