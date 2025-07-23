@@ -119,17 +119,27 @@ const getRelevantQuestDetails = (quest: Quest, char: Character) => {
 
 const calculateAdjustedExp = (quest: Quest, char: Character) => {
     const details = getRelevantQuestDetails(quest, char);
-    const calc = (exp: number | null | undefined, notAvailable: boolean | null | undefined, effectiveLevel: number) => {
+    const penalties = [0, -0.1, -0.25, -0.5, -0.9, -0.99];
+
+    const calc = (exp: number | null | undefined, notAvailable: boolean | null | undefined, difficultyLevel: number) => {
         if (!exp || notAvailable) return null;
+
         if (details.tier === 'Epic') {
             if (char.level < details.baseLevel) return null; // Too low for epic
-            if (char.level - effectiveLevel > 6) return null; // Too high for epic
+            if (char.level - difficultyLevel > 6) return null; // Too high for epic
             return exp; // No penalty within range
         }
+        
         // Heroic
-        if (char.level < effectiveLevel) return null; // Too low
-        // No over-level penalty applied, character gets full exp.
-        return exp;
+        if (char.level < difficultyLevel) return exp; // No penalty if under level
+
+        const overLevel = char.level - difficultyLevel;
+        if (overLevel <= 1) return exp;
+
+        const penaltyIndex = Math.min(overLevel, penalties.length);
+        const penalty = penalties[penaltyIndex - 1];
+
+        return Math.floor(exp * (1 + penalty));
     };
 
     return {
@@ -194,7 +204,6 @@ export default function LevelingGuidePage() {
     } catch (error) { console.error("Failed to save leveling guide preferences:", error); }
   }, [characterId, isDataLoaded, currentUser, character, updateCharacter]);
 
-  // Combined function to save shared level offset preferences
   const saveSharedLevelOffset = useCallback((offsetEnabled: boolean, offsetValue: number) => {
     if (!character) return;
     const newPrefs = {
@@ -206,6 +215,7 @@ export default function LevelingGuidePage() {
     setCharacter(updatedCharacter);
     updateCharacter(updatedCharacter);
   }, [character, updateCharacter]);
+
 
   // Load preferences
   useEffect(() => {
@@ -248,15 +258,16 @@ export default function LevelingGuidePage() {
   const handleCancelColumnSettings = () => setIsSettingsPopoverOpen(false);
   const handleSettingsPopoverOpenChange = (open: boolean) => { if (open) setPopoverColumnVisibility(columnVisibility); setIsSettingsPopoverOpen(open); };
 
-  const handleEditCharacterSubmit = async (data: CharacterFormData, id?: string, iconUrl?: string) => {
-    if (!id || !editingCharacter || !character) return;
-  
+  const handleEditCharacterSubmit = async (data: CharacterFormData) => {
+    if (!editingCharacter) return;
+    
     // Optimistic UI update
     const updatedCharacterData: Character = {
-      ...character,
-      name: data.name,
-      level: data.level,
-      iconUrl: iconUrl === undefined ? character.iconUrl : iconUrl,
+        ...editingCharacter,
+        name: data.name,
+        level: data.level,
+        accountId: data.accountId,
+        iconUrl: data.iconUrl,
     };
     setCharacter(updatedCharacterData);
     
@@ -306,7 +317,6 @@ export default function LevelingGuidePage() {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
 
     const allProcessedQuests = quests.map(quest => {
-        // Calculations always use the real character, NOT the one with the effective level.
         const adjustedExps = calculateAdjustedExp(quest, character);
         const allExps = Object.values(adjustedExps).filter(v => v !== null) as number[];
         const maxExp = allExps.length > 0 ? Math.max(...allExps) : null;
@@ -315,7 +325,6 @@ export default function LevelingGuidePage() {
         const experienceScore = maxExp !== null ? Math.round(maxExp * adjustmentFactor) : null;
 
         const hiddenReasons: string[] = [];
-        // Filtering is now done separately after all calculations.
         const isEligibleForFilter = quest.level > 0 && quest.level <= effectiveCharacterLevel;
         if (!isEligibleForFilter) hiddenReasons.push('Level out of range (with offset).');
         if (maxExp === null || maxExp <= 0) hiddenReasons.push('No eligible EXP for character\'s actual level.');
@@ -335,7 +344,7 @@ export default function LevelingGuidePage() {
     // Perform filtering after calculations
     const filteredQuests = allProcessedQuests.filter(quest => {
         if (isDebugMode) return true; // Show all for debug
-        return quest.isEligibleForFilter && quest.hiddenReasons.length === 0;
+        return quest.hiddenReasons.length === 0;
     });
 
     const sortedQuests = [...filteredQuests].sort((a, b) => {
