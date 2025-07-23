@@ -1,3 +1,4 @@
+
 // src/app/leveling-guide/[characterId]/page.tsx
 "use client";
 
@@ -112,14 +113,8 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
 };
 
 const getRelevantQuestDetails = (quest: Quest, char: Character) => {
-    const useEpic = quest.epicBaseLevel != null && char.level >= quest.epicBaseLevel;
+    const useEpic = quest.epicBaseLevel != null && char.level >= 20;
     return { tier: useEpic ? 'Epic' : 'Heroic', baseLevel: useEpic ? quest.epicBaseLevel! : quest.level, casualExp: useEpic ? quest.epicCasualExp : quest.casualExp, normalExp: useEpic ? quest.epicNormalExp : quest.normalExp, hardExp: useEpic ? quest.epicHardExp : quest.hardExp, eliteExp: useEpic ? quest.epicEliteExp : quest.eliteExp, casualNotAvailable: useEpic ? quest.epicCasualNotAvailable : quest.casualNotAvailable, normalNotAvailable: useEpic ? quest.epicNormalNotAvailable : quest.normalNotAvailable, hardNotAvailable: useEpic ? quest.epicHardNotAvailable : quest.hardNotAvailable, eliteNotAvailable: useEpic ? quest.epicEliteNotAvailable : quest.eliteNotAvailable, };
-};
-
-const getHeroicPenaltyPercent = (charLevel: number, questEffectiveLevel: number): number => {
-    if (charLevel >= 20) return 0; const levelDifference = charLevel - questEffectiveLevel;
-    if (levelDifference <= 1) return 0;
-    switch (levelDifference) { case 2: return 10; case 3: return 25; case 4: return 50; case 5: return 75; default: return 100; }
 };
 
 const calculateAdjustedExp = (quest: Quest, char: Character) => {
@@ -127,16 +122,14 @@ const calculateAdjustedExp = (quest: Quest, char: Character) => {
     const calc = (exp: number | null | undefined, notAvailable: boolean | null | undefined, effectiveLevel: number) => {
         if (!exp || notAvailable) return null;
         if (details.tier === 'Epic') {
-            if (char.level < details.baseLevel) return null;
-            const penalty = char.level - (effectiveLevel);
-            if (penalty > 6) return null;
-            return exp;
+            if (char.level < details.baseLevel) return null; // Too low for epic
+            if (char.level - effectiveLevel > 6) return null; // Too high for epic
+            return exp; // No penalty within range
         }
-        if (char.level < effectiveLevel) return null;
-        if (char.level >= 20) return exp;
-        const penaltyPercent = getHeroicPenaltyPercent(char.level, effectiveLevel);
-        if (penaltyPercent >= 100) return null;
-        return Math.round(exp * (1 - penaltyPercent / 100));
+        // Heroic
+        if (char.level < effectiveLevel) return null; // Too low
+        // No over-level penalty applied, character gets full exp.
+        return exp;
     };
 
     return {
@@ -174,10 +167,7 @@ export default function LevelingGuidePage() {
   const [selectedQuestForMap, setSelectedQuestForMap] = useState<Quest | null>(null);
 
   const pageOverallLoading = authIsLoading || appDataIsLoading;
-
-  const useLevelOffset = character?.preferences?.useLevelOffset ?? false;
-  const levelOffset = character?.preferences?.levelOffset ?? 0;
-
+  
   useEffect(() => {
     if (!authIsLoading && !currentUser) {
       router.replace('/login');
@@ -310,10 +300,10 @@ export default function LevelingGuidePage() {
 
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
   
+  const effectiveCharacterLevel = character ? ((character.preferences?.useLevelOffset ?? false) ? character.level + (character.preferences?.levelOffset ?? 0) : character.level) : 0;
+  
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
-
-    const effectiveCharacterLevelForFilter = useLevelOffset ? character.level + levelOffset : character.level;
 
     const allProcessedQuests = quests.map(quest => {
         // Calculations always use the real character, NOT the one with the effective level.
@@ -326,7 +316,7 @@ export default function LevelingGuidePage() {
 
         const hiddenReasons: string[] = [];
         // Filtering is now done separately after all calculations.
-        const isEligibleForFilter = quest.level > 0 && quest.level <= effectiveCharacterLevelForFilter;
+        const isEligibleForFilter = quest.level > 0 && quest.level <= effectiveCharacterLevel;
         if (!isEligibleForFilter) hiddenReasons.push('Level out of range (with offset).');
         if (maxExp === null || maxExp <= 0) hiddenReasons.push('No eligible EXP for character\'s actual level.');
 
@@ -384,7 +374,7 @@ export default function LevelingGuidePage() {
     });
 
     return { sortedQuests };
-  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig, isDebugMode, useLevelOffset, levelOffset]);
+  }, [quests, character, onCormyr, ownedPacksFuzzySet, isDataLoaded, showRaids, durationAdjustments, sortConfig, isDebugMode, effectiveCharacterLevel]);
 
   const requestSort = (key: SortableLevelingGuideColumnKey) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -408,8 +398,6 @@ export default function LevelingGuidePage() {
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
     return sortConfig.direction === 'ascending' ? <ArrowUp className="ml-2 h-3 w-3 text-accent" /> : <ArrowDown className="ml-2 h-3 w-3 text-accent" />;
   };
-  
-  const effectiveCharacterLevel = character ? (useLevelOffset ? character.level + levelOffset : character.level) : 0;
   
   const accountNameMap = useMemo(() => {
     return new Map(accounts.map(acc => [acc.id, acc.name]));
@@ -448,7 +436,7 @@ export default function LevelingGuidePage() {
                 <Button variant="outline" size="sm" onClick={() => openEditModal(character)} disabled={pageOverallLoading}><Pencil className="mr-2 h-4 w-4" /> Edit Character</Button>
             </div>
             <CardDescription>
-                Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}
+                Level {character.level} {(character.preferences?.useLevelOffset ?? false) ? `(Effective: ${effectiveCharacterLevel})` : ''}
                 <span className="mx-2 text-muted-foreground">|</span>
                 <Library className="inline-block h-4 w-4 mr-1.5 align-middle" />
                 Account: <span className="font-semibold">{accountName}</span>
@@ -484,9 +472,9 @@ export default function LevelingGuidePage() {
                 <div className="flex items-center space-x-2">
                   <Checkbox 
                     id="use-level-offset-leveling" 
-                    checked={useLevelOffset} 
+                    checked={character.preferences?.useLevelOffset ?? false} 
                     onCheckedChange={(checked) => {
-                        saveSharedLevelOffset(!!checked, levelOffset);
+                        saveSharedLevelOffset(!!checked, character.preferences?.levelOffset ?? 0);
                     }} 
                     disabled={pageOverallLoading}
                   />
@@ -496,15 +484,15 @@ export default function LevelingGuidePage() {
                   <Input
                     type="number"
                     id="level-offset-leveling"
-                    value={levelOffset}
+                    value={character.preferences?.levelOffset ?? 0}
                     onChange={(e) => {
                         const newOffset = parseInt(e.target.value, 10);
                         if (!isNaN(newOffset)) {
-                            saveSharedLevelOffset(useLevelOffset, newOffset);
+                            saveSharedLevelOffset(character.preferences?.useLevelOffset ?? false, newOffset);
                         }
                     }}
                     className="h-8 w-20"
-                    disabled={!useLevelOffset || pageOverallLoading}
+                    disabled={!(character.preferences?.useLevelOffset ?? false) || pageOverallLoading}
                   />
                 </div>
               </div>
