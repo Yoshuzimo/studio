@@ -590,6 +590,7 @@ export default function FavorTrackerPage() {
     if (!quests || quests.length === 0 || !character) return [];
     
     return quests.map(quest => {
+        // Calculations are always based on the character's true level.
         const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest, getQuestCompletion);
 
         const calculateAdjustedRemainingFavorScore = (q: Quest, remainingFavor: number): number => {
@@ -602,6 +603,7 @@ export default function FavorTrackerPage() {
         const hiddenReasons: string[] = [];
 
         if (quest.level <= 0) hiddenReasons.push('Invalid level.');
+        // Filtering is based on the effective level.
         if (quest.level > effectiveCharacterLevel) hiddenReasons.push(`Level ${quest.level} > effective level ${effectiveCharacterLevel}.`);
         
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
@@ -685,10 +687,10 @@ export default function FavorTrackerPage() {
   }, [questsToRender]);
 
   const sortedQuests = useMemo(() => {
-    const questsToSort = isDebugMode ? allQuestsWithCalculatedData : questsToRender;
-    if (!sortConfig) return questsToSort;
+    const questsToSort = allQuestsWithCalculatedData; // Always sort the full list
+    if (!sortConfig) return isDebugMode ? questsToSort : questsToSort.filter(q => q.hiddenReasons.length === 0);
   
-    return [...questsToSort].sort((a, b) => {
+    const sorted = [...questsToSort].sort((a, b) => {
       let aValue: any;
       let bValue: any;
   
@@ -731,7 +733,10 @@ export default function FavorTrackerPage() {
 
       return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
-  }, [allQuestsWithCalculatedData, questsToRender, sortConfig, areaSortSnapshot, isDebugMode]);
+
+    return isDebugMode ? sorted : sorted.filter(q => q.hiddenReasons.length === 0);
+
+  }, [allQuestsWithCalculatedData, sortConfig, areaSortSnapshot, isDebugMode]);
   
   const pageStats = useMemo(() => {
     if (!character || allQuestsWithCalculatedData.length === 0) {

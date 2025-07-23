@@ -291,7 +291,7 @@ export default function ReaperRewardsPage() {
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
     
-    const effectiveCharacterLevel = useLevelOffset ? character.level + levelOffset : character.level;
+    const effectiveCharacterLevelForFilter = useLevelOffset ? character.level + levelOffset : character.level;
 
     const calculateRXP = (quest: Quest, charLevel: number, skulls: number): number | null => {
       let baseRXP = 50 + (3 * quest.level * skulls);
@@ -301,26 +301,27 @@ export default function ReaperRewardsPage() {
       const lengthAdjustment = durationCategory ? (reaperLengthAdjustments[durationCategory] ?? 1.0) : 1.0;
       let totalRXP = baseRXP * lengthAdjustment;
 
-      if (quest.level < 20 && charLevel === quest.level + 4) { totalRXP *= 0.9; }
-
+      // RXP calculations are unaffected by character being over or under level for the quest.
       return Math.round(totalRXP);
     };
 
     const allProcessedQuests = quests.map(quest => {
         const skullData: Record<string, number | null> = {};
         for(let i = 1; i <= 10; i++) {
-            skullData[`skull-${i}`] = calculateRXP(quest, effectiveCharacterLevel, i);
+            // Calculations use the character's *real* level.
+            skullData[`skull-${i}`] = calculateRXP(quest, character.level, i);
         }
 
-        const charLvl = effectiveCharacterLevel;
+        const charLvl = effectiveCharacterLevelForFilter; // Use effective level for filtering.
         const questLvl = quest.level;
         const hiddenReasons: string[] = [];
         
-        if (charLvl < questLvl) hiddenReasons.push(`Character Level (${charLvl}) < Quest Level (${questLvl})`);
+        // Reaper eligibility is based on the character's real level.
+        if (character.level < questLvl) hiddenReasons.push(`Character Level (${character.level}) < Quest Level (${questLvl})`);
         
-        if (charLvl >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
-        else if (questLvl >= 20 && charLvl - questLvl > 6) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 6 for epic levels.`);
-        else if (questLvl < 20 && charLvl - questLvl > 4) hiddenReasons.push(`Level difference (${charLvl - questLvl}) > 4 for heroic levels.`);
+        if (character.level >= 30 && questLvl < 30) hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
+        else if (questLvl >= 20 && character.level - questLvl > 6) hiddenReasons.push(`Level difference (${character.level - questLvl}) > 6 for epic levels.`);
+        else if (questLvl < 20 && character.level - questLvl > 4) hiddenReasons.push(`Level difference (${character.level - questLvl}) > 4 for heroic levels.`);
 
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
         const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
@@ -335,7 +336,7 @@ export default function ReaperRewardsPage() {
 
         return {
             ...quest,
-            maxRXP: calculateRXP(quest, effectiveCharacterLevel, 10),
+            maxRXP: calculateRXP(quest, character.level, 10),
             ...skullData,
             hiddenReasons,
         };
