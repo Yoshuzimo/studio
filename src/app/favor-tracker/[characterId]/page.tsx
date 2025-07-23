@@ -60,6 +60,7 @@ type QuestWithCalculatedData = Quest & {
   remainingPossibleFavor: number;
   adjustedRemainingFavorScore: number;
   maxPotentialFavorSingleQuest: number;
+  hiddenReasons: string[];
 };
 
 // New Type for Area Snapshot
@@ -583,41 +584,57 @@ export default function FavorTrackerPage() {
 
   const ownedPacksFuzzySet = useMemo(() => new Set(ownedPacks.map(p => normalizeAdventurePackNameForComparison(p))), [ownedPacks]);
   
-  const questDataMap = useMemo(() => {
-    if (!quests || quests.length === 0) return new Map<string, QuestWithCalculatedData>();
-    
-    const newMap = new Map<string, QuestWithCalculatedData>();
-    for (const quest of quests) {
-      const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest, getQuestCompletion);
-
-      const calculateAdjustedRemainingFavorScore = (q: Quest, remainingFavor: number): number => {
-          if (remainingFavor <= 0) return 0;
-          const durationCategory = getDurationCategory(q.duration);
-          const adjustmentFactor = durationCategory ? (durationAdjustments[durationCategory] ?? 1.0) : 1.0;
-          return Math.round(remainingFavor * adjustmentFactor);
-      };
-
-      newMap.set(quest.id, {
-        ...quest,
-        casualCompleted: getQuestCompletion(quest.id, 'casualCompleted'),
-        normalCompleted: getQuestCompletion(quest.id, 'normalCompleted'),
-        hardCompleted: getQuestCompletion(quest.id, 'hardCompleted'),
-        eliteCompleted: getQuestCompletion(quest.id, 'eliteCompleted'),
-        remainingPossibleFavor: remainingPossibleFavor,
-        adjustedRemainingFavorScore: calculateAdjustedRemainingFavorScore(quest, remainingPossibleFavor),
-        maxPotentialFavorSingleQuest: (quest.baseFavor || 0) * 3,
-      });
-    }
-    return newMap;
-  }, [quests, getQuestCompletion, calculateFavorMetrics, durationAdjustments, activeCharacterQuestCompletions]);
+  const effectiveCharacterLevel = character ? (character.preferences?.useLevelOffset ?? false ? character.level + (character.preferences?.levelOffset ?? 0) : character.level) : 0;
   
-  const effectiveCharacterLevel = character && (character.preferences?.useLevelOffset ?? false) ? character.level + (character.preferences?.levelOffset ?? 0) : character?.level || 0;
+  const allQuestsWithCalculatedData = useMemo(() => {
+    if (!quests || quests.length === 0 || !character) return [];
+    
+    return quests.map(quest => {
+        const { remaining: remainingPossibleFavor } = calculateFavorMetrics(quest, getQuestCompletion);
+
+        const calculateAdjustedRemainingFavorScore = (q: Quest, remainingFavor: number): number => {
+            if (remainingFavor <= 0) return 0;
+            const durationCategory = getDurationCategory(q.duration);
+            const adjustmentFactor = durationCategory ? (durationAdjustments[durationCategory] ?? 1.0) : 1.0;
+            return Math.round(remainingFavor * adjustmentFactor);
+        };
+
+        const hiddenReasons: string[] = [];
+
+        if (quest.level <= 0) hiddenReasons.push('Invalid level.');
+        if (quest.level > effectiveCharacterLevel) hiddenReasons.push(`Level ${quest.level} > effective level ${effectiveCharacterLevel}.`);
+        
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+        if (!isOwned) hiddenReasons.push(`Pack not owned: ${quest.adventurePackName}.`);
+        
+        if (onCormyr && quest.name.toLowerCase() === "the curse of the five fangs") hiddenReasons.push('Hidden by "On Cormyr" filter.');
+        if (!showRaids && quest.name.toLowerCase().endsWith('(raid)')) hiddenReasons.push('Is a Raid (hidden by filter).');
+        if (quest.name.toLowerCase().includes("test")) hiddenReasons.push('Is a test quest.');
+        if (!showCompletedQuestsWithZeroRemainingFavor && remainingPossibleFavor <= 0) hiddenReasons.push('Completed with 0 favor remaining.');
+
+        return {
+            ...quest,
+            casualCompleted: getQuestCompletion(quest.id, 'casualCompleted'),
+            normalCompleted: getQuestCompletion(quest.id, 'normalCompleted'),
+            hardCompleted: getQuestCompletion(quest.id, 'hardCompleted'),
+            eliteCompleted: getQuestCompletion(quest.id, 'eliteCompleted'),
+            remainingPossibleFavor: remainingPossibleFavor,
+            adjustedRemainingFavorScore: calculateAdjustedRemainingFavorScore(quest, remainingPossibleFavor),
+            maxPotentialFavorSingleQuest: (quest.baseFavor || 0) * 3,
+            hiddenReasons,
+        };
+    });
+  }, [quests, getQuestCompletion, calculateFavorMetrics, durationAdjustments, activeCharacterQuestCompletions, character, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor]);
+  
 
   const requestSort = (key: SortableColumnKey) => {
     if (key === 'areaRemainingFavor' || key === 'areaAdjustedRemainingFavorScore') {
       const newSnapshot: AreaSnapshot = new Map();
-      const questsToSnapshot = Array.from(questDataMap.values()); // Use all quests for snapshot
-      questsToSnapshot.forEach(quest => {
+      // Use *all* quests for the snapshot, not just the currently rendered ones.
+      allQuestsWithCalculatedData.forEach(quest => {
+        if (quest.hiddenReasons.length > 0) return; // Only aggregate visible quests
         const primaryLocation = getPrimaryLocation(quest.location);
         if (primaryLocation) {
           const current = newSnapshot.get(primaryLocation) || { favor: 0, score: 0 };
@@ -646,21 +663,16 @@ export default function FavorTrackerPage() {
     savePreferences({ sortConfig: newSortConfig });
   };
   
+  const questsToRender = useMemo(() => {
+    if (isDebugMode) {
+      return allQuestsWithCalculatedData;
+    }
+    return allQuestsWithCalculatedData.filter(quest => quest.hiddenReasons.length === 0);
+  }, [allQuestsWithCalculatedData, isDebugMode]);
+  
   const liveAreaAggregates = useMemo(() => {
     const aggregates: AreaSnapshot = new Map();
-    const questsToAggregate = Array.from(questDataMap.values()).filter(quest => {
-        if (!character) return false;
-        const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
-        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-        const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
-        const isNotTest = !quest.name.toLowerCase().includes("test");
-        return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
-    });
-
-    questsToAggregate.forEach(quest => {
+    questsToRender.forEach(quest => {
         const primaryLocation = getPrimaryLocation(quest.location);
         if (primaryLocation) {
             const current = aggregates.get(primaryLocation) || { favor: 0, score: 0 };
@@ -670,13 +682,13 @@ export default function FavorTrackerPage() {
         }
     });
     return aggregates;
-  }, [questDataMap, character, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids]);
+  }, [questsToRender]);
 
   const sortedQuests = useMemo(() => {
-    const allQuests = Array.from(questDataMap.values());
-    if (!sortConfig) return allQuests;
+    const questsToSort = isDebugMode ? allQuestsWithCalculatedData : questsToRender;
+    if (!sortConfig) return questsToSort;
   
-    return [...allQuests].sort((a, b) => {
+    return [...questsToSort].sort((a, b) => {
       let aValue: any;
       let bValue: any;
   
@@ -719,40 +731,16 @@ export default function FavorTrackerPage() {
 
       return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
-  }, [questDataMap, sortConfig, areaSortSnapshot]);
-  
-  const questsToRender = useMemo(() => {
-    if (isDebugMode) {
-      return sortedQuests;
-    }
-    return sortedQuests.filter(quest => {
-        if (!character) return false;
-        
-        const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
-        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-        const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
-        const isNotTest = !quest.name.toLowerCase().includes("test");
-
-        const meetsPrimaryFilters = isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
-        if (!meetsPrimaryFilters) return false;
-
-        if (!showCompletedQuestsWithZeroRemainingFavor && quest.remainingPossibleFavor <= 0) return false;
-
-        return true;
-    });
-  }, [sortedQuests, isDebugMode, character, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor]);
+  }, [allQuestsWithCalculatedData, questsToRender, sortConfig, areaSortSnapshot, isDebugMode]);
   
   const pageStats = useMemo(() => {
-    if (!character || questDataMap.size === 0) {
+    if (!character || allQuestsWithCalculatedData.length === 0) {
         return { questsCompleted: 0, favorEarned: 0, favorRemaining: 0 };
     }
     let favorEarned = 0;
     let questsCompleted = 0;
     
-    questDataMap.forEach(quest => {
+    allQuestsWithCalculatedData.forEach(quest => {
         // Use actual character level for calculations, not effective level
         if (quest.level > 0 && quest.level <= character.level) {
             const metrics = calculateFavorMetrics(quest, getQuestCompletion);
@@ -770,7 +758,7 @@ export default function FavorTrackerPage() {
         favorEarned: Math.round(favorEarned),
         favorRemaining: Math.round(favorRemaining)
     };
-  }, [character, questDataMap, questsToRender, calculateFavorMetrics, getQuestCompletion]);
+  }, [character, allQuestsWithCalculatedData, questsToRender, calculateFavorMetrics, getQuestCompletion]);
 
   const getSortIndicator = (columnKey: SortableColumnKey) => {
     if (!sortConfig || sortConfig.key !== columnKey) return <ArrowUpDown className="ml-2 h-3 w-3 opacity-30" />;
@@ -944,7 +932,7 @@ export default function FavorTrackerPage() {
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline flex items-center">
               <ListOrdered className="mr-2 h-6 w-6 text-primary" /> Favor Tracker
-              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({questsToRender.length} quests)</span>}
+              {isDebugMode && <span className="ml-2 text-xs font-normal text-muted-foreground">({sortedQuests.length} quests shown)</span>}
             </CardTitle>
             <div className="flex items-center space-x-2">
               <Link href={`/reaper-rewards/${characterId}`} passHref><Button variant="outline" size="sm" disabled={pageOverallLoading}><Skull className="mr-2 h-4 w-4" />Reaper Rewards</Button></Link>
@@ -1003,7 +991,7 @@ export default function FavorTrackerPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0 flex-1 min-h-0">
-           {pageOverallLoading && questsToRender.length === 0 ? ( <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
+           {pageOverallLoading && sortedQuests.length === 0 ? ( <div className="p-6 text-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin mx-auto" /> <p>Filtering quests...</p></div> )
            : !pageOverallLoading && questsToRender.length === 0 && character ? ( <div className="p-6 text-center py-10"> <p className="text-xl text-muted-foreground mb-4">No quests available at or below LVL {effectiveCharacterLevel}, matching your owned packs/filters and completion status.</p> <img src="https://i.imgflip.com/2adszq.jpg" alt="Empty quest log" data-ai-hint="sad spongebob" className="mx-auto rounded-lg shadow-md max-w-xs" /> </div> )
            : ( 
             <div className="h-full overflow-y-auto">
@@ -1031,9 +1019,10 @@ export default function FavorTrackerPage() {
                     })}
                 </TableRow> </TableHeader>
                 <TableBody>
-                    {questsToRender.map((quest) => {
+                    {sortedQuests.map((quest) => {
                       if (!quest) return null;
                       const primaryLocation = getPrimaryLocation(quest.location);
+                      const isNormallyHidden = quest.hiddenReasons.length > 0;
                       
                       return (
                         <TooltipProvider key={quest.id} delayDuration={0}>
@@ -1042,9 +1031,9 @@ export default function FavorTrackerPage() {
                               <TableRow
                                 className={cn(
                                   clickAction !== 'none' && 'cursor-pointer',
-                                  isDebugMode && 'has-[[data-has-hidden-reasons=true]]:text-destructive/80'
+                                  isDebugMode && isNormallyHidden && 'text-destructive/80 opacity-60'
                                 )}
-                                data-has-hidden-reasons={false} // Placeholder
+                                data-has-hidden-reasons={isNormallyHidden}
                                 onClick={() => handleRowClick(quest)}
                               >
                                   {columnVisibility['name'] && <TableCell className="font-medium whitespace-nowrap">{quest.name}</TableCell>}
@@ -1071,6 +1060,14 @@ export default function FavorTrackerPage() {
                                   ))}
                               </TableRow>
                             </TooltipTrigger>
+                            {isDebugMode && isNormallyHidden && (
+                              <TooltipContent>
+                                <p className="font-bold">Normally hidden because:</p>
+                                <ul className="list-disc pl-4 text-xs">
+                                  {quest.hiddenReasons.map((reason, i) => <li key={i}>{reason}</li>)}
+                                </ul>
+                              </TooltipContent>
+                            )}
                           </Tooltip>
                         </TooltipProvider>
                       );
