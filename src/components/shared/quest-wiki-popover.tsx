@@ -12,7 +12,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { ExternalLink, AlertTriangle, X } from 'lucide-react';
+import { ExternalLink, AlertTriangle, X, ArrowLeft } from 'lucide-react';
 
 interface QuestWikiPopoverProps {
   isOpen: boolean;
@@ -53,6 +53,9 @@ export function QuestWikiPopover({
            <Button variant="ghost" size="sm" onClick={() => window.open(wikiUrl, '_blank', 'noopener,noreferrer')}>
             <ExternalLink className="mr-2 h-4 w-4" /> Open in New Tab
           </Button>
+           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back
+           </Button>
           <DialogClose asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
                 <X className="h-5 w-5" />
