@@ -1,7 +1,7 @@
 // src/components/shared/quest-wiki-popover.tsx
 "use client";
 
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { ExternalLink, AlertTriangle, X, ArrowLeft } from 'lucide-react';
+import { ExternalLink, AlertTriangle, X, ArrowLeft, Home } from 'lucide-react';
 
 interface QuestWikiPopoverProps {
   isOpen: boolean;
@@ -27,7 +27,19 @@ export function QuestWikiPopover({
   wikiUrl,
   questName,
 }: QuestWikiPopoverProps) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
   if (!wikiUrl) return null;
+
+  const handleGoBack = () => {
+    iframeRef.current?.contentWindow?.history.back();
+  };
+
+  const handleGoHome = () => {
+    if (iframeRef.current && wikiUrl) {
+      iframeRef.current.src = wikiUrl;
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -42,6 +54,7 @@ export function QuestWikiPopover({
         
         <div className="flex-grow bg-background overflow-hidden">
           <iframe
+            ref={iframeRef}
             src={wikiUrl}
             title={questName}
             className="w-full h-full border-0"
@@ -50,12 +63,15 @@ export function QuestWikiPopover({
         </div>
         
         <DialogFooter className="p-2 absolute top-0 left-1/2 -translate-x-1/2 z-20 bg-background/80 backdrop-blur-sm rounded-b-lg border border-t-0 flex flex-row items-center gap-2">
+           <Button variant="ghost" size="sm" onClick={handleGoBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back
+           </Button>
+           <Button variant="ghost" size="sm" onClick={handleGoHome}>
+              <Home className="mr-2 h-4 w-4" /> Home
+           </Button>
            <Button variant="ghost" size="sm" onClick={() => window.open(wikiUrl, '_blank', 'noopener,noreferrer')}>
             <ExternalLink className="mr-2 h-4 w-4" /> Open in New Tab
           </Button>
-           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back
-           </Button>
           <DialogClose asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
                 <X className="h-5 w-5" />
