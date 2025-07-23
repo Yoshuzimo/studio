@@ -117,6 +117,25 @@ const normalizeAdventurePackNameForComparison = (name?: string | null): string =
   return withoutThe.replace(/[^a-z0-9]/g, '');
 };
 
+const calculateRXP = (quest: Quest, charLevel: number, skulls: number): number | null => {
+    const isEpic = quest.epicBaseLevel != null && charLevel >= 20;
+    const questLevel = isEpic ? quest.epicBaseLevel! : quest.level;
+    const baseXP = isEpic ? quest.epicNormalExp : quest.normalExp;
+
+    if (baseXP === null || baseXP === undefined) return null; // Cannot calculate without base XP
+
+    // Formula: ((Base Quest XP * 0.2) + (Quest Level * 3)) * Skulls * Length_Modifier
+    let rxpBeforeModifiers = ((baseXP * 0.2) + (questLevel * 3)) * skulls;
+    
+    const durationCategory = getDurationCategory(quest.duration);
+    const lengthAdjustment = durationCategory ? (reaperLengthAdjustments[durationCategory] ?? 1.0) : 1.0;
+    
+    let totalRXP = rxpBeforeModifiers * lengthAdjustment;
+
+    return Math.round(totalRXP);
+};
+
+
 export default function ReaperRewardsPage() {
   const params = useParams();
   const router = useRouter();
@@ -303,19 +322,9 @@ export default function ReaperRewardsPage() {
 
   const sortedAndFilteredData = useMemo(() => {
     if (!character || !isDataLoaded || !quests) return { sortedQuests: [] };
-    
-    const calculateRXP = (quest: Quest, charLevel: number, skulls: number): number | null => {
-      let baseRXP = 50 + (3 * quest.level * skulls);
-      if (quest.level >= 20) { baseRXP *= 2; }
-      
-      const durationCategory = getDurationCategory(quest.duration);
-      const lengthAdjustment = durationCategory ? (reaperLengthAdjustments[durationCategory] ?? 1.0) : 1.0;
-      let totalRXP = baseRXP * lengthAdjustment;
-
-      return Math.round(totalRXP);
-    };
 
     const allProcessedQuests = quests.map(quest => {
+        // Calculations always use the real character, NOT the one with the effective level.
         const skullData: Record<string, number | null> = {};
         for(let i = 1; i <= 10; i++) {
             skullData[`skull-${i}`] = calculateRXP(quest, character.level, i);
@@ -323,16 +332,19 @@ export default function ReaperRewardsPage() {
 
         const hiddenReasons: string[] = [];
         
-        if (effectiveCharacterLevel < quest.level) {
-          hiddenReasons.push(`Character's effective level (${effectiveCharacterLevel}) < Quest Level (${quest.level})`);
+        // Filtering is now done separately after all calculations.
+        const questLevel = quest.level;
+
+        if (effectiveCharacterLevel < questLevel) {
+          hiddenReasons.push(`Character's effective level (${effectiveCharacterLevel}) < Quest Level (${questLevel})`);
         }
         
-        if (character.level >= 30 && quest.level < 30) {
+        if (character.level >= 30 && questLevel < 30) {
           hiddenReasons.push('Quest is not level 30+ for a level 30+ character.');
-        } else if (quest.level >= 20 && character.level - quest.level > 6) {
-          hiddenReasons.push(`Level difference (${character.level - quest.level}) > 6 for epic levels.`);
-        } else if (quest.level < 20 && character.level - quest.level > 4) {
-          hiddenReasons.push(`Level difference (${character.level - quest.level}) > 4 for heroic levels.`);
+        } else if (questLevel >= 20 && character.level - questLevel > 6) {
+          hiddenReasons.push(`Level difference (${character.level - questLevel}) > 6 for epic levels.`);
+        } else if (questLevel < 20 && character.level - questLevel > 4) {
+          hiddenReasons.push(`Level difference (${character.level - questLevel}) > 4 for heroic levels.`);
         }
 
         const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
