@@ -357,7 +357,7 @@ export default function LevelingGuidePage() {
             questEntries.push({
                 ...quest,
                 id: `${quest.id}-heroic`,
-                name: `${quest.name} (Heroic)`,
+                name: quest.name,
                 level: quest.level,
                 ...adjustedExps, maxExp, experienceScore, hiddenReasons,
             });
@@ -385,7 +385,7 @@ export default function LevelingGuidePage() {
             questEntries.push({
                 ...quest,
                 id: `${quest.id}-epic`,
-                name: `${quest.name} (Epic)`,
+                name: quest.name,
                 level: quest.epicBaseLevel,
                 ...adjustedExps, maxExp, experienceScore, hiddenReasons,
             });
