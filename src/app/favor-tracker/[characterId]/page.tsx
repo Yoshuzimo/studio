@@ -190,7 +190,23 @@ export default function FavorTrackerPage() {
   const [character, setCharacter] = useState<Character | null>(null);
   const characterId = params.characterId as string;
   
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(() => {
+    if (typeof window === 'undefined') return { key: 'name', direction: 'ascending' };
+    try {
+        const localKey = `ddoToolkit_charPrefs_${auth.currentUser?.uid}_${characterId}`;
+        const item = localStorage.getItem(localKey);
+        if (item) {
+            const prefs = JSON.parse(item);
+            if (prefs?.favorTracker?.sortConfig) {
+                return prefs.favorTracker.sortConfig;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load sort config from local storage", e);
+    }
+    return { key: 'name', direction: 'ascending' };
+  });
+
   const [areaSortSnapshot, setAreaSortSnapshot] = useState<AreaSnapshot | null>(null);
 
   const [showCompletedQuestsWithZeroRemainingFavor, setShowCompletedQuestsWithZeroRemainingFavor] = useState(false);
@@ -217,9 +233,6 @@ export default function FavorTrackerPage() {
   
   const pageOverallLoading = authIsLoading || appDataIsLoading || isCsvProcessing || isLoadingCompletions;
   
-  const useLevelOffset = character?.preferences?.useLevelOffset ?? false;
-  const levelOffset = character?.preferences?.levelOffset ?? 0;
-
   useEffect(() => { if (!authIsLoading && !currentUser) router.replace('/login'); }, [authIsLoading, currentUser, router]);
 
   const savePreferences = useCallback((newPrefs: Partial<FavorTrackerPreferences>, isShared: boolean = false) => {
@@ -279,7 +292,9 @@ export default function FavorTrackerPage() {
                     setShowRaids(favorPrefs.showRaids ?? false);
                     setClickAction(favorPrefs.clickAction ?? 'none');
 
-                    setSortConfig(favorPrefs.sortConfig ?? { key: 'name', direction: 'ascending' });
+                    if(favorPrefs.sortConfig) {
+                        setSortConfig(favorPrefs.sortConfig);
+                    }
                     
                     const defaultVis = getDefaultColumnVisibility();
                     const mergedVisibility = { ...defaultVis, ...(favorPrefs.columnVisibility || {}) };
@@ -596,27 +611,13 @@ export default function FavorTrackerPage() {
     return newMap;
   }, [quests, getQuestCompletion, calculateFavorMetrics, durationAdjustments, activeCharacterQuestCompletions]);
   
-  const effectiveCharacterLevel = character && useLevelOffset ? character.level + levelOffset : character?.level || 0;
-
-  const filteredQuests = useMemo(() => {
-    if (pageOverallLoading || !character) return [];
-
-    return Array.from(questDataMap.values()).filter(quest => {
-        const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
-        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
-        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
-        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
-        const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
-        const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
-        const isNotTest = !quest.name.toLowerCase().includes("test");
-        return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
-    });
-  }, [pageOverallLoading, character, questDataMap, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids]);
+  const effectiveCharacterLevel = character && (character.preferences?.useLevelOffset ?? false) ? character.level + (character.preferences?.levelOffset ?? 0) : character?.level || 0;
 
   const requestSort = (key: SortableColumnKey) => {
     if (key === 'areaRemainingFavor' || key === 'areaAdjustedRemainingFavorScore') {
       const newSnapshot: AreaSnapshot = new Map();
-      filteredQuests.forEach(quest => {
+      const questsToSnapshot = Array.from(questDataMap.values()); // Use all quests for snapshot
+      questsToSnapshot.forEach(quest => {
         const primaryLocation = getPrimaryLocation(quest.location);
         if (primaryLocation) {
           const current = newSnapshot.get(primaryLocation) || { favor: 0, score: 0 };
@@ -645,10 +646,21 @@ export default function FavorTrackerPage() {
     savePreferences({ sortConfig: newSortConfig });
   };
   
-  // New memoized calculation for LIVE area data for display
   const liveAreaAggregates = useMemo(() => {
     const aggregates: AreaSnapshot = new Map();
-    filteredQuests.forEach(quest => {
+    const questsToAggregate = Array.from(questDataMap.values()).filter(quest => {
+        if (!character) return false;
+        const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+        const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
+        const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
+        const isNotTest = !quest.name.toLowerCase().includes("test");
+        return isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
+    });
+
+    questsToAggregate.forEach(quest => {
         const primaryLocation = getPrimaryLocation(quest.location);
         if (primaryLocation) {
             const current = aggregates.get(primaryLocation) || { favor: 0, score: 0 };
@@ -658,12 +670,13 @@ export default function FavorTrackerPage() {
         }
     });
     return aggregates;
-  }, [filteredQuests]);
+  }, [questDataMap, character, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids]);
 
   const sortedQuests = useMemo(() => {
-    if (!sortConfig) return filteredQuests;
+    const allQuests = Array.from(questDataMap.values());
+    if (!sortConfig) return allQuests;
   
-    return [...filteredQuests].sort((a, b) => {
+    return [...allQuests].sort((a, b) => {
       let aValue: any;
       let bValue: any;
   
@@ -706,15 +719,31 @@ export default function FavorTrackerPage() {
 
       return getSortableName(a.name).localeCompare(getSortableName(b.name));
     });
-  }, [filteredQuests, sortConfig, areaSortSnapshot]);
+  }, [questDataMap, sortConfig, areaSortSnapshot]);
   
   const questsToRender = useMemo(() => {
+    if (isDebugMode) {
+      return sortedQuests;
+    }
     return sortedQuests.filter(quest => {
-        if (isDebugMode) return true;
+        if (!character) return false;
+        
+        const isEligibleLevel = quest.level > 0 && quest.level <= effectiveCharacterLevel;
+        const fuzzyQuestPackKey = normalizeAdventurePackNameForComparison(quest.adventurePackName);
+        const isActuallyFreeToPlay = fuzzyQuestPackKey === normalizeAdventurePackNameForComparison(FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+        const isOwned = isActuallyFreeToPlay || !quest.adventurePackName || ownedPacksFuzzySet.has(fuzzyQuestPackKey);
+        const isNotOnCormyr = !onCormyr || quest.name.toLowerCase() !== "the curse of the five fangs";
+        const isNotRaid = !showRaids || !quest.name.toLowerCase().endsWith('(raid)');
+        const isNotTest = !quest.name.toLowerCase().includes("test");
+
+        const meetsPrimaryFilters = isEligibleLevel && isOwned && isNotOnCormyr && isNotRaid && isNotTest;
+        if (!meetsPrimaryFilters) return false;
+
         if (!showCompletedQuestsWithZeroRemainingFavor && quest.remainingPossibleFavor <= 0) return false;
+
         return true;
     });
-  }, [sortedQuests, showCompletedQuestsWithZeroRemainingFavor, isDebugMode]);
+  }, [sortedQuests, isDebugMode, character, effectiveCharacterLevel, ownedPacksFuzzySet, onCormyr, showRaids, showCompletedQuestsWithZeroRemainingFavor]);
   
   const pageStats = useMemo(() => {
     if (!character || questDataMap.size === 0) {
@@ -797,7 +826,7 @@ export default function FavorTrackerPage() {
                 </Button>
             </div>
             <CardDescription>
-                Level {character.level} {useLevelOffset ? `(Effective: ${effectiveCharacterLevel})` : ''}
+                Level {character.level} {(character.preferences?.useLevelOffset ?? false) ? `(Effective: ${effectiveCharacterLevel})` : ''}
                 <span className="mx-2 text-muted-foreground">|</span>
                 <Library className="inline-block h-4 w-4 mr-1.5 align-middle" />
                 Account: <span className="font-semibold">{accountName}</span>
@@ -882,9 +911,9 @@ export default function FavorTrackerPage() {
                   <div className="flex items-center space-x-2">
                         <Checkbox 
                             id="use-level-offset" 
-                            checked={useLevelOffset} 
+                            checked={character.preferences?.useLevelOffset ?? false} 
                             onCheckedChange={(checked) => {
-                                saveSharedLevelOffset(!!checked, levelOffset);
+                                saveSharedLevelOffset(!!checked, character.preferences?.levelOffset ?? 0);
                             }} 
                             disabled={pageOverallLoading}
                         />
@@ -894,15 +923,15 @@ export default function FavorTrackerPage() {
                         <Input
                             type="number"
                             id="level-offset"
-                            value={levelOffset}
+                            value={character.preferences?.levelOffset ?? 0}
                             onChange={(e) => {
                                 const newOffset = parseInt(e.target.value, 10);
                                 if (!isNaN(newOffset)) {
-                                    saveSharedLevelOffset(useLevelOffset, newOffset);
+                                    saveSharedLevelOffset(character.preferences?.useLevelOffset ?? false, newOffset);
                                 }
                             }}
                             className="h-8 w-20"
-                            disabled={!useLevelOffset || pageOverallLoading}
+                            disabled={!(character.preferences?.useLevelOffset ?? false) || pageOverallLoading}
                         />
                     </div>
                 </div>
