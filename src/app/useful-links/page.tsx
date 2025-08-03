@@ -30,6 +30,11 @@ const links: UsefulLink[] = [
     url: 'https://github.com/Maetrim/DDOBuilder',
     description: "A tool for planning your character's gear, sentient weapons, filigree, feats, ect. Please don't ask me how to work it, I'm still figureing it out, lol.",
   },
+  {
+    name: 'DDO-ML',
+    url: 'https://github.com/DDO-ML/DDO-ML',
+    description: "A Mini Launcher for DDO that will log you into specific character ect.",
+  },
 ];
 
 export default function UsefulLinksPage() {
