@@ -118,7 +118,7 @@ export default function UsefulLinksPage() {
                     aria-label={`Open link for ${link.name}`}
                   >
                     <h3 className={cn(
-                        "text-lg font-semibold text-destructive",
+                        "text-lg font-semibold text-accent",
                         !openInOverlay && "group-hover:underline"
                       )}>
                         {link.name}
