@@ -1,3 +1,4 @@
+
 // src/data/adventure-packs.ts
 import type { AdventurePack } from '@/types';
 
@@ -40,7 +41,17 @@ export const ADVENTURE_PACKS_DATA: AdventurePack[] = [
   { id: 'pack_033', name: 'Slice of Life', pointsCost: 450, totalFavor: 54 },
   { id: 'pack_034', name: 'Sorrowdusk Isle', pointsCost: 450, totalFavor: 117 },
   { id: 'pack_035', name: 'Tangleroot Gorge', pointsCost: 550, totalFavor: 99 },
-  { id: 'pack_036', name: 'Tavern Tales', pointsCost: 250, totalFavor: 66 },
+  { 
+    id: 'pack_036', 
+    name: 'Tavern Tales', 
+    pointsCost: 250, 
+    totalFavor: 66,
+    subPacks: [
+      { id: 'pack_067', name: 'Toil and Trouble', pointsCost: 175, totalFavor: null },
+      { id: 'pack_068', name: 'The Covered Culvert', pointsCost: 175, totalFavor: null },
+      { id: 'pack_069', name: 'Sleeping with the Fishes', pointsCost: 175, totalFavor: null },
+    ]
+  },
   { id: 'pack_037', name: 'The Catacombs', pointsCost: 250, totalFavor: 66 },
   { id: 'pack_038', name: 'The Devil\'s Gambit', pointsCost: 450, totalFavor: 66 },
   { id: 'pack_039', name: 'The Devils of Shavarath', pointsCost: 550, totalFavor: 147 },

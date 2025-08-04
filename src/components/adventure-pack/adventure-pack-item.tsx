@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Package, Gem, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Separator } from '../ui/separator';
 
 interface AdventurePackItemProps {
   pack: AdventurePack;
@@ -68,6 +69,30 @@ export function AdventurePackItem({ pack, isChecked, onCheckedChange, disabled =
               </div>
             )}
           </div>
+        )}
+        {pack.subPacks && pack.subPacks.length > 0 && (
+            <div className="mt-3 pt-3 pl-6 border-t border-dashed">
+                 <p className="text-xs font-semibold text-muted-foreground mb-2">Also available individually:</p>
+                <div className="space-y-3">
+                    {pack.subPacks.map(subPack => (
+                        <div key={subPack.id} className="flex items-center space-x-3">
+                             <Checkbox
+                                id={`sub-pack-${subPack.id}`}
+                                checked={isChecked} // Sub-packs are checked if parent is checked
+                                onCheckedChange={(checkedState) => onCheckedChange(subPack.name, !!checkedState)}
+                                disabled={disabled}
+                            />
+                            <Label htmlFor={`sub-pack-${subPack.id}`} className="font-normal text-sm flex-1 cursor-pointer">{subPack.name}</Label>
+                             {subPack.pointsCost && (
+                                <div className="flex items-center text-xs text-muted-foreground">
+                                    <Gem className="h-3 w-3 mr-1.5" />
+                                    <span>{subPack.pointsCost}</span>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
         )}
       </CardContent>
     </Card>

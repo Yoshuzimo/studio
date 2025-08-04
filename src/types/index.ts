@@ -1,3 +1,4 @@
+
 // Cache-busting comment to force rebuild of dependents: V11
 import type { Timestamp as FirestoreTimestampType, FieldValue } from 'firebase/firestore';
 import type { z } from 'zod';
@@ -96,6 +97,7 @@ export interface AdventurePack {
   name: string;
   pointsCost?: number | null;
   totalFavor?: number | null;
+  subPacks?: AdventurePack[];
 }
 
 export interface Quest {

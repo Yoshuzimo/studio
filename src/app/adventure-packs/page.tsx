@@ -1,3 +1,4 @@
+
 // src/app/adventure-packs/page.tsx
 "use client";
 
@@ -192,27 +193,41 @@ export default function AdventurePacksPage() {
     setOwnedPacks((prevOwnedPacks) => {
       const normalizedPackName = normalizeAdventurePackNameForStorage(packName);
       if (!normalizedPackName) return prevOwnedPacks;
-
-      const newOwnedPacks = isOwned
-        ? [...prevOwnedPacks, normalizedPackName]
-        : prevOwnedPacks.filter((pName) => normalizeAdventurePackNameForStorage(pName)?.toLowerCase() !== normalizedPackName.toLowerCase());
-      return [...new Set(newOwnedPacks)];
+  
+      const newOwnedSet = new Set(prevOwnedPacks);
+      const packData = adventurePacks.find(p => p.name === normalizedPackName);
+  
+      if (isOwned) {
+        newOwnedSet.add(normalizedPackName);
+        // If it's a parent pack, add its sub-packs
+        if (packData?.subPacks) {
+          packData.subPacks.forEach(subPack => newOwnedSet.add(subPack.name));
+        }
+      } else {
+        newOwnedSet.delete(normalizedPackName);
+        // If it's a parent pack, remove its sub-packs
+        if (packData?.subPacks) {
+          packData.subPacks.forEach(subPack => newOwnedSet.delete(subPack.name));
+        }
+      }
+      
+      return Array.from(newOwnedSet);
     });
   };
 
   const { owned, unowned } = useMemo(() => {
     if (!adventurePacks) return { owned: [], unowned: [] };
 
+    const ownedSet = new Set(ownedPacks.map(opName => normalizeAdventurePackNameForComparison(opName)));
+    const allDisplayPacks = adventurePacks.filter(p => p.name.toLowerCase() !== FREE_TO_PLAY_PACK_NAME_LOWERCASE);
+  
     const ownedList: AdventurePack[] = [];
     const unownedList: AdventurePack[] = [];
-
-    adventurePacks.forEach(pack => {
-      if (pack.name.toLowerCase() === FREE_TO_PLAY_PACK_NAME_LOWERCASE) {
-        return; // Skip the "Free to Play" pack
-      }
-
-      const isOwned = ownedPacks.some(opName => normalizeAdventurePackNameForComparison(opName)?.toLowerCase() === pack.name.toLowerCase());
-      if (isOwned) {
+  
+    allDisplayPacks.forEach(pack => {
+      const isPackOwned = ownedSet.has(normalizeAdventurePackNameForComparison(pack.name));
+      
+      if (isPackOwned) {
         ownedList.push(pack);
       } else {
         unownedList.push(pack);
