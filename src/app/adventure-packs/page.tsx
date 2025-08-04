@@ -44,6 +44,16 @@ const normalizeAdventurePackNameForStorage = (name?: string | null): string | nu
   return trimmedName;
 };
 
+const normalizeAdventurePackNameForComparison = (name?: string | null): string => {
+  if (!name) return "";
+  const trimmedName = name.trim();
+  const lowerName = trimmedName.toLowerCase();
+  const withoutThe = lowerName.startsWith("the ") ? lowerName.substring(4) : lowerName;
+  return withoutThe.replace(/[^a-z0-9]/g, '');
+};
+
+const FREE_TO_PLAY_PACK_NAME_LOWERCASE = "free to play";
+
 // New Component for Migration Dialog
 function LegacyPacksMigrationDialog({
     isOpen,
@@ -197,6 +207,10 @@ export default function AdventurePacksPage() {
     const unownedList: AdventurePack[] = [];
 
     adventurePacks.forEach(pack => {
+      if (pack.name.toLowerCase() === FREE_TO_PLAY_PACK_NAME_LOWERCASE) {
+        return; // Skip the "Free to Play" pack
+      }
+
       const isOwned = ownedPacks.some(opName => normalizeAdventurePackNameForComparison(opName)?.toLowerCase() === pack.name.toLowerCase());
       if (isOwned) {
         ownedList.push(pack);
