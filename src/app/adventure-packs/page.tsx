@@ -7,7 +7,7 @@ import { AdventurePackItem } from '@/components/adventure-pack/adventure-pack-it
 import type { AdventurePack, AdventurePackCsvUploadResult, Account } from '@/types';
 import { AdventurePackCsvUploaderDialog } from '@/components/adventure-pack/adventure-pack-csv-uploader-dialog';
 import { Button } from '@/components/ui/button';
-import { Package, Info, Loader2, Upload, AlertTriangle, Move } from 'lucide-react';
+import { Package, Info, Loader2, Upload, AlertTriangle, Move, Gem, Star } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
@@ -197,7 +197,7 @@ export default function AdventurePacksPage() {
     const unownedList: AdventurePack[] = [];
 
     adventurePacks.forEach(pack => {
-      const isOwned = ownedPacks.some(opName => normalizeAdventurePackNameForStorage(opName)?.toLowerCase() === pack.name.toLowerCase());
+      const isOwned = ownedPacks.some(opName => normalizeAdventurePackNameForComparison(opName)?.toLowerCase() === pack.name.toLowerCase());
       if (isOwned) {
         ownedList.push(pack);
       } else {
@@ -212,6 +212,15 @@ export default function AdventurePacksPage() {
 
     return { owned: ownedList, unowned: unownedList };
   }, [adventurePacks, ownedPacks]);
+
+  const unownedTotals = useMemo(() => {
+    return unowned.reduce((acc, pack) => {
+      acc.pointsCost += pack.pointsCost || 0;
+      acc.totalFavor += pack.totalFavor || 0;
+      return acc;
+    }, { pointsCost: 0, totalFavor: 0 });
+  }, [unowned]);
+
 
   const handleAdventurePackCsvUpload = async (file: File): Promise<AdventurePackCsvUploadResult> => {
     setIsCsvProcessing(true);
@@ -396,7 +405,21 @@ export default function AdventurePacksPage() {
         <div className="space-y-8">
           {unowned.length > 0 && (
             <div>
-              <h2 className="font-headline text-2xl font-semibold mb-4 border-b pb-2">Available Packs</h2>
+              <div className="flex justify-between items-center mb-4 border-b pb-2">
+                <h2 className="font-headline text-2xl font-semibold">Available Packs</h2>
+                <div className="flex items-center space-x-4 text-sm">
+                  <div className="flex items-center text-muted-foreground">
+                    <Gem className="mr-1.5 h-4 w-4 text-primary" />
+                    <span className="font-semibold">Total Points Cost:</span>
+                    <span className="ml-1 font-bold text-foreground">{unownedTotals.pointsCost.toLocaleString()}</span>
+                  </div>
+                   <div className="flex items-center text-muted-foreground">
+                    <Star className="mr-1.5 h-4 w-4 text-primary" />
+                    <span className="font-semibold">Total Favor:</span>
+                    <span className="ml-1 font-bold text-foreground">{unownedTotals.totalFavor.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
                 {unowned.map(pack => (
                   <AdventurePackItem
