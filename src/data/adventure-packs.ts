@@ -12,7 +12,6 @@ export const ADVENTURE_PACKS_DATA: AdventurePack[] = [
   { id: 'pack_004', name: 'Demon Sands', pointsCost: 950, totalFavor: 213 },
   { id: 'pack_005', name: 'Devil Assault', pointsCost: 350, totalFavor: 30 },
   { id: 'pack_006', name: 'Disciples of Rage', pointsCost: 725, totalFavor: 78 },
-  { id: 'pack_007', name: 'Disciples of Shadow', pointsCost: null, totalFavor: 51 },
   { id: 'pack_008', name: 'Dragonblood Prophecy', pointsCost: 595, totalFavor: 57 },
   { id: 'pack_009', name: 'Eveningstar Challenge Pack', pointsCost: 695, totalFavor: 36 },
   { id: 'pack_010', name: 'Fables of the Feywild', pointsCost: 2495, totalFavor: 138 },
@@ -34,9 +33,18 @@ export const ADVENTURE_PACKS_DATA: AdventurePack[] = [
   { id: 'pack_026', name: 'Ruins of Gianthold', pointsCost: 950, totalFavor: 240 },
   { id: 'pack_027', name: 'Secrets of the Artificers', pointsCost: 650, totalFavor: 159 },
   { id: 'pack_028', name: 'Sentinels of Stormreach', pointsCost: 450, totalFavor: 66 },
-  { id: 'pack_029', name: 'Shadow Over Wheloon', pointsCost: null, totalFavor: 102 },
   { id: 'pack_030', name: 'Shadow Under Thunderholme', pointsCost: 550, totalFavor: 54 },
-  { id: 'pack_031', name: 'Shadowfell Conspiracy', pointsCost: 2495, totalFavor: 216 },
+  { 
+    id: 'pack_031', 
+    name: 'Shadowfell Conspiracy', 
+    pointsCost: 2495, 
+    totalFavor: 216,
+    subPacks: [
+      { id: 'pack_007', name: 'Disciples of Shadow', pointsCost: null, totalFavor: 51 },
+      { id: 'pack_029', name: 'Shadow Over Wheloon', pointsCost: null, totalFavor: 102 },
+      { id: 'pack_056', name: 'The Secret of the Storm Horns', pointsCost: null, totalFavor: 96 }
+    ]
+  },
   { id: 'pack_032', name: 'Sinister Secret of Saltmarsh', pointsCost: 1999, totalFavor: 90 },
   { id: 'pack_033', name: 'Slice of Life', pointsCost: 450, totalFavor: 54 },
   { id: 'pack_034', name: 'Sorrowdusk Isle', pointsCost: 450, totalFavor: 117 },
@@ -44,7 +52,7 @@ export const ADVENTURE_PACKS_DATA: AdventurePack[] = [
   { 
     id: 'pack_036', 
     name: 'Tavern Tales', 
-    pointsCost: 250, 
+    pointsCost: 450, 
     totalFavor: 66,
     subPacks: [
       { id: 'pack_067', name: 'Toil and Trouble', pointsCost: 175, totalFavor: null },
@@ -71,7 +79,6 @@ export const ADVENTURE_PACKS_DATA: AdventurePack[] = [
   { id: 'pack_053', name: 'The Restless Isles', pointsCost: 350, totalFavor: 84 },
   { id: 'pack_054', name: 'The Ruins of Threnal', pointsCost: 450, totalFavor: 108 },
   { id: 'pack_055', name: 'The Seal of Shan-To-Kor', pointsCost: 250, totalFavor: 48 },
-  { id: 'pack_056', name: 'The Secret of the Storm Horns', pointsCost: null, totalFavor: 96 },
   { id: 'pack_057', name: 'The Sharn Syndicate', pointsCost: 350, totalFavor: 36 },
   { id: 'pack_058', name: 'The Soul Splitter', pointsCost: 650, totalFavor: 114 },
   { id: 'pack_059', name: 'The Temple of Elemental Evil', pointsCost: 650, totalFavor: 105 },

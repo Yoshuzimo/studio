@@ -1,3 +1,4 @@
+
 // src/context/app-data-context.tsx
 "use client";
 
@@ -83,12 +84,21 @@ const normalizeAdventurePackNameForStorage = (name?: string | null): string | nu
   return trimmedName;
 };
 
+// --- Composite Pack Definitions ---
 const SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED = normalizeAdventurePackNameForStorage("Shadowfell Conspiracy");
 const SHADOWFELL_CONSPIRACY_CHILDREN_NORMALIZED = [
   normalizeAdventurePackNameForStorage("Disciples of Shadow"),
   normalizeAdventurePackNameForStorage("Shadow Over Wheloon"),
   normalizeAdventurePackNameForStorage("The Secret of the Storm Horns")
 ].filter((name): name is string => name !== null);
+
+const TAVERN_TALES_PARENT_NORMALIZED = normalizeAdventurePackNameForStorage("Tavern Tales");
+const TAVERN_TALES_CHILDREN_NORMALIZED = [
+    normalizeAdventurePackNameForStorage("Toil and Trouble"),
+    normalizeAdventurePackNameForStorage("The Covered Culvert"),
+    normalizeAdventurePackNameForStorage("Sleeping with the Fishes")
+].filter((name): name is string => name !== null);
+
 
 const adventurePacks: AdventurePack[] = ADVENTURE_PACKS_DATA.map(p => ({
   ...p,
@@ -232,40 +242,44 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   }, [currentUser, userData, toast, setActiveAccountId, isDataLoaded]);
   
+  const handleCompositePacks = (packs: string[]): string[] => {
+    let finalPacks = new Set(packs);
+  
+    // Shadowfell Conspiracy
+    if (SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED && finalPacks.has(SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED)) {
+      SHADOWFELL_CONSPIRACY_CHILDREN_NORMALIZED.forEach(child => finalPacks.add(child));
+    }
+  
+    // Tavern Tales
+    if (TAVERN_TALES_PARENT_NORMALIZED && finalPacks.has(TAVERN_TALES_PARENT_NORMALIZED)) {
+      TAVERN_TALES_CHILDREN_NORMALIZED.forEach(child => finalPacks.add(child));
+    }
+    
+    return Array.from(finalPacks);
+  };
+  
   const setOwnedPacks = useCallback<React.Dispatch<React.SetStateAction<string[]>>>((valueOrFn) => {
     if (!currentUser || !activeAccountId) return;
     
-    // Clear any pending save operations
     if (ownedPacksSaveTimerRef.current) {
       clearTimeout(ownedPacksSaveTimerRef.current);
     }
 
-    // Update the state optimistically
     const newPacks = typeof valueOrFn === 'function' ? valueOrFn(ownedPacks) : valueOrFn;
     
-    // Normalize and handle composite packs before setting state
     const normalizedNewPacks = newPacks
         .map(name => normalizeAdventurePackNameForStorage(name))
         .filter((name): name is string => name !== null);
 
-    let finalPacks = [...new Set(normalizedNewPacks)];
-
-    if (SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED && finalPacks.some(p => p.toLowerCase() === SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED.toLowerCase())) {
-      SHADOWFELL_CONSPIRACY_CHILDREN_NORMALIZED.forEach(childPackName => {
-        if (!finalPacks.some(p => p.toLowerCase() === childPackName.toLowerCase())) {
-          finalPacks.push(childPackName);
-        }
-      });
-    }
+    const packsWithCompositesHandled = handleCompositePacks(normalizedNewPacks);
     
-    setOwnedPacksInternal([...new Set(finalPacks)]);
+    setOwnedPacksInternal(packsWithCompositesHandled);
 
-    // Set a new timeout to save the data
     ownedPacksSaveTimerRef.current = setTimeout(async () => {
       setIsUpdating(true);
       try {
         const ownedPacksDocRef = doc(db, USER_CONFIGURATION_COLLECTION, currentUser.uid, OWNED_PACKS_INFO_SUBCOLLECTION, activeAccountId);
-        await setDoc(ownedPacksDocRef, { names: finalPacks }, { merge: true });
+        await setDoc(ownedPacksDocRef, { names: packsWithCompositesHandled }, { merge: true });
         toast({ title: "Adventure Packs Saved", description: "Your owned packs for this account have been saved."});
       } catch (error) {
         console.error("Error saving owned packs: ", error);
@@ -276,7 +290,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }, 1500);
   }, [currentUser, activeAccountId, toast, ownedPacks]);
   
-  // Fetch owned packs when activeAccountId changes
   useEffect(() => {
     if (!currentUser || !activeAccountId) {
       setOwnedPacksInternal([]);
@@ -290,20 +303,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const ownedPacksDocSnap = await getDoc(ownedPacksDocRef);
         const rawOwnedPacks = ownedPacksDocSnap.exists() ? (ownedPacksDocSnap.data()?.names || []) as string[] : [];
         
-        // Normalize and handle composite packs after fetching
-        const normalizedNewPacks = rawOwnedPacks
+        const normalizedPacks = rawOwnedPacks
           .map(name => normalizeAdventurePackNameForStorage(name))
           .filter((name): name is string => name !== null);
 
-        let finalPacks = [...new Set(normalizedNewPacks)];
-        if (SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED && finalPacks.some(p => p.toLowerCase() === SHADOWFELL_CONSPIRACY_PARENT_NORMALIZED.toLowerCase())) {
-            SHADOWFELL_CONSPIRACY_CHILDREN_NORMALIZED.forEach(childPackName => {
-            if (!finalPacks.some(p => p.toLowerCase() === childPackName.toLowerCase())) {
-                finalPacks.push(childPackName);
-            }
-            });
-        }
-        setOwnedPacksInternal([...new Set(finalPacks)]);
+        const finalPacks = handleCompositePacks(normalizedPacks);
+        setOwnedPacksInternal(finalPacks);
 
       } catch (error) {
          toast({ title: "Error Loading Packs", description: (error as Error).message, variant: "destructive" });

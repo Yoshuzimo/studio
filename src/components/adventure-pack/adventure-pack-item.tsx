@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Package, Gem, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
+import { ScrollArea } from '../ui/scroll-area';
 
 interface AdventurePackItemProps {
   pack: AdventurePack;
@@ -26,10 +27,10 @@ export function AdventurePackItem({ pack, isChecked, onCheckedChange, disabled =
 
   return (
     <Card className={cn(
-        "hover:shadow-md transition-shadow",
+        "hover:shadow-md transition-shadow flex flex-col h-full", // Added flex, flex-col, h-full
         checkboxIsActuallyDisabled && "opacity-70 cursor-not-allowed"
       )}>
-      <CardContent className="p-4">
+      <CardContent className="p-4 flex-grow flex flex-col">
         <div className="flex items-center space-x-3">
           <Checkbox
             id={uniqueId}
@@ -71,27 +72,29 @@ export function AdventurePackItem({ pack, isChecked, onCheckedChange, disabled =
           </div>
         )}
         {pack.subPacks && pack.subPacks.length > 0 && (
-            <div className="mt-3 pt-3 pl-6 border-t border-dashed">
+            <div className="mt-3 pt-3 pl-6 border-t border-dashed flex-grow min-h-0">
                  <p className="text-xs font-semibold text-muted-foreground mb-2">Also available individually:</p>
-                <div className="space-y-3">
-                    {pack.subPacks.map(subPack => (
-                        <div key={subPack.id} className="flex items-center space-x-3">
-                             <Checkbox
-                                id={`sub-pack-${subPack.id}`}
-                                checked={isChecked} // Sub-packs are checked if parent is checked
-                                onCheckedChange={(checkedState) => onCheckedChange(subPack.name, !!checkedState)}
-                                disabled={disabled}
-                            />
-                            <Label htmlFor={`sub-pack-${subPack.id}`} className="font-normal text-sm flex-1 cursor-pointer">{subPack.name}</Label>
-                             {subPack.pointsCost && (
-                                <div className="flex items-center text-xs text-muted-foreground">
-                                    <Gem className="h-3 w-3 mr-1.5" />
-                                    <span>{subPack.pointsCost}</span>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
+                <ScrollArea className="h-24 pr-4">
+                  <div className="space-y-3">
+                      {pack.subPacks.map(subPack => (
+                          <div key={subPack.id} className="flex items-center space-x-3">
+                              <Checkbox
+                                  id={`sub-pack-${subPack.id}`}
+                                  checked={isChecked} // Sub-packs are checked if parent is checked
+                                  onCheckedChange={(checkedState) => onCheckedChange(subPack.name, !!checkedState)}
+                                  disabled={disabled}
+                              />
+                              <Label htmlFor={`sub-pack-${subPack.id}`} className="font-normal text-sm flex-1 cursor-pointer">{subPack.name}</Label>
+                              {subPack.pointsCost && (
+                                  <div className="flex items-center text-xs text-muted-foreground">
+                                      <Gem className="h-3 w-3 mr-1.5" />
+                                      <span>{subPack.pointsCost}</span>
+                                  </div>
+                              )}
+                          </div>
+                      ))}
+                  </div>
+                </ScrollArea>
             </div>
         )}
       </CardContent>
